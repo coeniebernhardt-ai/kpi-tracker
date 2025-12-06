@@ -48,6 +48,8 @@ export interface Ticket {
   estate_or_building?: string;
   cml_location?: string;
   updates?: { text: string; timestamp: string }[];
+  time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
+  total_time_minutes?: number;
   // Joined data
   profile?: Profile;
 }
@@ -309,6 +311,47 @@ export async function addTicketUpdate(ticketId: string, updateText: string) {
   const { data, error } = await supabase
     .from('tickets')
     .update({ updates: updatedUpdates })
+    .eq('id', ticketId)
+    .select()
+    .single();
+
+  return { data, error };
+}
+
+export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {
+  // First get the current ticket to get existing time logs
+  const { data: ticket, error: fetchError } = await supabase
+    .from('tickets')
+    .select('time_logs, total_time_minutes')
+    .eq('id', ticketId)
+    .single();
+
+  if (fetchError) {
+    return { data: null, error: fetchError };
+  }
+
+  // Create new time log entry
+  const newTimeLog = {
+    minutes,
+    description,
+    timestamp: new Date().toISOString(),
+    logged_by: loggedBy
+  };
+
+  // Append to existing time logs or create new array
+  const existingLogs = ticket?.time_logs || [];
+  const updatedLogs = [...existingLogs, newTimeLog];
+
+  // Calculate total time
+  const totalTime = updatedLogs.reduce((sum, log) => sum + log.minutes, 0);
+
+  // Update the ticket
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ 
+      time_logs: updatedLogs,
+      total_time_minutes: totalTime
+    })
     .eq('id', ticketId)
     .select()
     .single();
