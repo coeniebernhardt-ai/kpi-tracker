@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, Ticket } from '../lib/supabase';
+import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, logTicketTime, Ticket } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -40,6 +40,11 @@ export default function DashboardPage() {
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
 
+  // Time logging state
+  const [loggingTimeTicketId, setLoggingTimeTicketId] = useState<string | null>(null);
+  const [timeLogMinutes, setTimeLogMinutes] = useState('');
+  const [timeLogDescription, setTimeLogDescription] = useState('');
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) {
@@ -47,12 +52,12 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  // Load tickets
+  // Load tickets - only when user ID changes
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       loadTickets();
     }
-  }, [user]);
+  }, [user?.id]);
 
   const loadTickets = async () => {
     if (!user) return;
@@ -99,7 +104,8 @@ export default function DashboardPage() {
       }
       
       if (data) {
-        setTickets(prev => [data, ...prev]);
+        // Reload tickets from database to avoid duplicates
+        await loadTickets();
         setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '', ticketType: '', estateOrBuilding: '', cmlLocation: '' });
         setShowNewTicketForm(false);
       }
@@ -114,11 +120,35 @@ export default function DashboardPage() {
     const { data, error } = await addTicketUpdate(ticketId, newUpdateText.trim());
 
     if (!error && data) {
-      setTickets(tickets.map(t => t.id === ticketId ? data : t));
+      await loadTickets();
       setNewUpdateText('');
       setUpdatingTicketId(null);
     } else if (error) {
       alert('Error adding update: ' + (error as Error).message);
+    }
+  };
+
+  const handleLogTime = async (ticketId: string) => {
+    const minutes = parseInt(timeLogMinutes);
+    if (!minutes || minutes <= 0) {
+      alert('Please enter a valid number of minutes');
+      return;
+    }
+
+    const { data, error } = await logTicketTime(
+      ticketId, 
+      minutes, 
+      timeLogDescription.trim() || 'Time logged',
+      profile?.full_name
+    );
+
+    if (!error && data) {
+      await loadTickets();
+      setTimeLogMinutes('');
+      setTimeLogDescription('');
+      setLoggingTimeTicketId(null);
+    } else if (error) {
+      alert('Error logging time: ' + (error as Error).message);
     }
   };
 
@@ -138,7 +168,7 @@ export default function DashboardPage() {
     );
 
     if (!error && data) {
-      setTickets(tickets.map(t => t.id === ticketId ? data : t));
+      await loadTickets();
       setClosingTicketId(null);
       setCloseTicketData({ resolution: '' });
     }
@@ -623,6 +653,74 @@ export default function DashboardPage() {
                       </button>
                     )}
 
+                    {/* Time Tracker Section */}
+                    <div className="mb-4 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-violet-400 font-medium">⏱️ Time Tracked</span>
+                        <span className="text-sm font-bold text-violet-300">
+                          {ticket.total_time_minutes ? `${Math.floor(ticket.total_time_minutes / 60)}h ${ticket.total_time_minutes % 60}m` : '0h 0m'}
+                        </span>
+                      </div>
+                      
+                      {/* Time Logs */}
+                      {ticket.time_logs && ticket.time_logs.length > 0 && (
+                        <div className="mb-3 max-h-24 overflow-y-auto">
+                          {ticket.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }, idx: number) => (
+                            <div key={idx} className="text-xs py-1 border-b border-violet-500/10 last:border-0">
+                              <span className="text-violet-300">{log.minutes}m</span>
+                              <span className="text-slate-400 mx-1">-</span>
+                              <span className="text-slate-300">{log.description}</span>
+                              <span className="text-slate-500 ml-1">({new Date(log.timestamp).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' })})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {loggingTimeTicketId === ticket.id ? (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              value={timeLogMinutes}
+                              onChange={(e) => setTimeLogMinutes(e.target.value)}
+                              placeholder="Minutes"
+                              className="w-24 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm focus:border-violet-500 outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={timeLogDescription}
+                              onChange={(e) => setTimeLogDescription(e.target.value)}
+                              placeholder="What did you work on?"
+                              className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm focus:border-violet-500 outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleLogTime(ticket.id)}
+                              disabled={!timeLogMinutes}
+                              className="flex-1 px-3 py-2 rounded-lg bg-violet-500 text-white text-xs font-medium disabled:opacity-50"
+                            >
+                              Log Time
+                            </button>
+                            <button
+                              onClick={() => { setLoggingTimeTicketId(null); setTimeLogMinutes(''); setTimeLogDescription(''); }}
+                              className="px-3 py-2 rounded-lg bg-slate-700 text-slate-300 text-xs"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setLoggingTimeTicketId(ticket.id)}
+                          className="w-full px-3 py-2 rounded-lg border border-violet-500/50 text-violet-400 text-xs hover:bg-violet-500/10 transition-colors"
+                        >
+                          + Log Time
+                        </button>
+                      )}
+                    </div>
+
                     {closingTicketId === ticket.id ? (
                       <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
                         <div className="flex items-center justify-between mb-4">
@@ -749,6 +847,29 @@ export default function DashboardPage() {
                         <p className="text-sm text-slate-300">{ticket.resolution}</p>
                       </div>
                     </div>
+
+                    {/* Time Tracked for closed tickets */}
+                    {(ticket.total_time_minutes || (ticket.time_logs && ticket.time_logs.length > 0)) && (
+                      <div className="mt-4 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-violet-400 font-medium">⏱️ Total Time Tracked</span>
+                          <span className="text-sm font-bold text-violet-300">
+                            {ticket.total_time_minutes ? `${Math.floor(ticket.total_time_minutes / 60)}h ${ticket.total_time_minutes % 60}m` : '0h 0m'}
+                          </span>
+                        </div>
+                        {ticket.time_logs && ticket.time_logs.length > 0 && (
+                          <div className="max-h-20 overflow-y-auto">
+                            {ticket.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }, idx: number) => (
+                              <div key={idx} className="text-xs py-1 border-b border-violet-500/10 last:border-0">
+                                <span className="text-violet-300">{log.minutes}m</span>
+                                <span className="text-slate-400 mx-1">-</span>
+                                <span className="text-slate-300">{log.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
