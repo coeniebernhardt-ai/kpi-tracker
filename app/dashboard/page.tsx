@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -63,44 +64,47 @@ export default function DashboardPage() {
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleCreateTicket called with:', newTicketData);
     
-    if (!user) { console.log('No user'); return; }
-    if (!newTicketData.issue.trim()) { console.log('No issue'); return; }
-    if (!newTicketData.client.trim()) { console.log('No client'); return; }
-    if (!newTicketData.ticketType) { console.log('No ticketType'); return; }
-    if (!newTicketData.estateOrBuilding.trim()) { console.log('No estateOrBuilding'); return; }
-    if (!newTicketData.cmlLocation.trim()) { console.log('No cmlLocation'); return; }
-    if (newTicketData.hasDependencies && !newTicketData.dependencyName.trim()) { console.log('No dependencyName'); return; }
+    // Prevent double submission
+    if (isSubmitting) return;
+    
+    if (!user) return;
+    if (!newTicketData.issue.trim()) return;
+    if (!newTicketData.client.trim()) return;
+    if (!newTicketData.ticketType) return;
+    if (!newTicketData.estateOrBuilding.trim()) return;
+    if (!newTicketData.cmlLocation.trim()) return;
+    if (newTicketData.hasDependencies && !newTicketData.dependencyName.trim()) return;
 
-    console.log('Validation passed, creating ticket...');
+    setIsSubmitting(true);
     
-    const { data, error } = await createTicket({
-      user_id: user.id,
-      client: newTicketData.client.trim(),
-      clickup_ticket: newTicketData.clickupTicket.trim() || undefined,
-      location: newTicketData.location,
-      issue: newTicketData.issue.trim(),
-      created_by: user.id,
-      has_dependencies: newTicketData.hasDependencies,
-      dependency_name: newTicketData.hasDependencies ? newTicketData.dependencyName.trim() : undefined,
-      ticket_type: newTicketData.ticketType,
-      estate_or_building: newTicketData.estateOrBuilding.trim(),
-      cml_location: newTicketData.cmlLocation.trim()
-    });
-
-    console.log('createTicket result:', { data, error });
-    
-    if (error) {
-      console.error('Error creating ticket:', error);
-      alert('Error creating ticket: ' + (error as Error).message);
-      return;
-    }
-    
-    if (data) {
-      setTickets([data, ...tickets]);
-      setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '', ticketType: '', estateOrBuilding: '', cmlLocation: '' });
-      setShowNewTicketForm(false);
+    try {
+      const { data, error } = await createTicket({
+        user_id: user.id,
+        client: newTicketData.client.trim(),
+        clickup_ticket: newTicketData.clickupTicket.trim() || undefined,
+        location: newTicketData.location,
+        issue: newTicketData.issue.trim(),
+        created_by: user.id,
+        has_dependencies: newTicketData.hasDependencies,
+        dependency_name: newTicketData.hasDependencies ? newTicketData.dependencyName.trim() : undefined,
+        ticket_type: newTicketData.ticketType,
+        estate_or_building: newTicketData.estateOrBuilding.trim(),
+        cml_location: newTicketData.cmlLocation.trim()
+      });
+      
+      if (error) {
+        alert('Error creating ticket: ' + (error as Error).message);
+        return;
+      }
+      
+      if (data) {
+        setTickets(prev => [data, ...prev]);
+        setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '', ticketType: '', estateOrBuilding: '', cmlLocation: '' });
+        setShowNewTicketForm(false);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -458,10 +462,10 @@ export default function DashboardPage() {
             <div className="mt-6 flex gap-3">
               <button
                 type="submit"
-                disabled={!newTicketData.issue.trim() || !newTicketData.client.trim() || !newTicketData.ticketType || !newTicketData.estateOrBuilding.trim() || !newTicketData.cmlLocation.trim() || (newTicketData.hasDependencies && !newTicketData.dependencyName.trim())}
+                disabled={isSubmitting || !newTicketData.issue.trim() || !newTicketData.client.trim() || !newTicketData.ticketType || !newTicketData.estateOrBuilding.trim() || !newTicketData.cmlLocation.trim() || (newTicketData.hasDependencies && !newTicketData.dependencyName.trim())}
                 className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium disabled:opacity-50"
               >
-                Open Ticket
+                {isSubmitting ? 'Creating...' : 'Open Ticket'}
               </button>
               <button
                 type="button"
