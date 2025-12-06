@@ -1,457 +1,330 @@
-import { createClient } from '@supabase/supabase-js';
+'use client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
+import { resetPassword } from '../lib/supabase';
+import Link from 'next/link';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    storageKey: 'kpi-tracker-auth',
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
-
-// Types for our database
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-  avatar: string;
-  avatar_url?: string;
-  definition?: string;
-  responsibilities?: string[];
-  is_admin: boolean;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Ticket {
-  id: string;
-  ticket_number: string;
-  user_id: string;
-  client: string;
-  clickup_ticket?: string;
-  location: 'on-site' | 'remote';
-  status: 'open' | 'closed';
-  issue: string;
-  resolution?: string;
-  response_time_minutes?: number;
-  created_at: string;
-  closed_at?: string;
-  created_by?: string;
-  has_dependencies?: boolean;
-  dependency_name?: string;
-  ticket_type?: 'Hardware' | 'Software';
-  estate_or_building?: string;
-  cml_location?: string;
-  updates?: { text: string; timestamp: string }[];
-  time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
-  total_time_minutes?: number;
-  // Joined data
-  profile?: Profile;
-}
-
-// Auth helpers
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  return { data, error };
-}
-
-export async function signUp(email: string, password: string, metadata: { full_name: string; role: string; avatar: string }) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: metadata
-    }
-  });
-  return { data, error };
-}
-
-export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  return { error };
-}
-
-export async function getCurrentUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
-
-export async function getCurrentProfile(userId?: string): Promise<Profile | null> {
-  try {
-    let uid = userId;
-    
-    if (!uid) {
-      const user = await getCurrentUser();
-      uid = user?.id;
-      console.log('getCurrentProfile: got user from auth =', uid);
-    } else {
-      console.log('getCurrentProfile: using provided userId =', uid);
-    }
-    
-    if (!uid) {
-      console.log('getCurrentProfile: No user found');
-      return null;
-    }
-
-    console.log('getCurrentProfile: Fetching profile for user', uid);
-    
-    // Add timeout to prevent hanging
-    const timeoutPromise = new Promise<null>((resolve) => {
-      setTimeout(() => {
-        console.log('getCurrentProfile: TIMEOUT after 5 seconds');
-        resolve(null);
-      }, 5000);
-    });
-
-    const fetchPromise = supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', uid)
-      .single()
-      .then(({ data, error }) => {
-        console.log('getCurrentProfile: Result =', { data, error });
-        if (error) {
-          console.error('getCurrentProfile: Error:', error.message, error.details, error.hint);
-          return null;
-        }
-        return data;
-      });
-
-    const result = await Promise.race([fetchPromise, timeoutPromise]);
-    return result;
-  } catch (err) {
-    console.error('getCurrentProfile: Exception:', err);
-    return null;
-  }
-}
-
-// Profile helpers
-export async function getAllProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('is_active', true)
-    .order('full_name');
-
-  if (error) {
-    console.error('Error fetching profiles:', error);
-    return [];
-  }
-
-  return data || [];
-}
-
-export async function getProfileById(id: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    console.error('Error fetching profile:', error);
-    return null;
-  }
-
-  return data;
-}
-
-export async function updateProfile(id: string, updates: Partial<Profile>) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-// Ticket helpers
-export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching tickets:', error);
-    return [];
-  }
-
-  return data || [];
-}
-
-export async function getAllTickets(): Promise<Ticket[]> {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select(`
-      *,
-      profile:profiles!tickets_user_id_fkey(*)
-    `)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching all tickets:', error);
-    return [];
-  }
-
-  return data || [];
-}
-
-export async function createTicket(ticket: {
-  user_id: string;
-  client: string;
-  clickup_ticket?: string;
-  location: 'on-site' | 'remote';
-  issue: string;
-  created_by?: string;
-  has_dependencies?: boolean;
-  dependency_name?: string;
-  ticket_type?: 'Hardware' | 'Software';
-  estate_or_building?: string;
-  cml_location?: string;
-}): Promise<{ data: Ticket | null; error: Error | null }> {
-  // Get user profile to get avatar for ticket number
-  const profile = await getProfileById(ticket.user_id);
-  if (!profile) {
-    return { data: null, error: new Error('User profile not found') };
-  }
-
-  // Generate ticket number
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+export default function LoginPage() {
+  const router = useRouter();
+  const { signIn, signUp } = useAuth();
   
-  // Get count of tickets for this user today
-  const { count } = await supabase
-    .from('tickets')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', ticket.user_id)
-    .like('ticket_number', `${profile.avatar}-${dateStr}%`);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [success, setSuccess] = useState('');
 
-  const sequence = String((count || 0) + 1).padStart(3, '0');
-  const ticketNumber = `${profile.avatar}-${dateStr}-${sequence}`;
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
 
-  const insertData = {
-    ...ticket,
-    ticket_number: ticketNumber,
-    status: 'open'
-  };
-  console.log('Inserting ticket:', insertData);
+    try {
+      if (!email.trim()) {
+        setError('Please enter your email address');
+        setLoading(false);
+        return;
+      }
 
-  const { data, error } = await supabase
-    .from('tickets')
-    .insert(insertData)
-    .select()
-    .single();
-
-  console.log('Insert result:', { data, error });
-  return { data, error: error as Error | null };
-}
-
-export async function updateTicket(id: string, updates: Partial<Ticket>) {
-  const { data, error } = await supabase
-    .from('tickets')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function closeTicket(id: string, resolution: string, responseTimeMinutes?: number) {
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({
-      status: 'closed',
-      resolution,
-      response_time_minutes: responseTimeMinutes,
-      closed_at: new Date().toISOString()
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function addTicketUpdate(ticketId: string, updateText: string) {
-  // First get the current ticket to get existing updates
-  const { data: ticket, error: fetchError } = await supabase
-    .from('tickets')
-    .select('updates')
-    .eq('id', ticketId)
-    .single();
-
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  // Create new update with timestamp
-  const newUpdate = {
-    text: updateText,
-    timestamp: new Date().toISOString()
-  };
-
-  // Append to existing updates or create new array
-  const existingUpdates = ticket?.updates || [];
-  const updatedUpdates = [...existingUpdates, newUpdate];
-
-  // Update the ticket
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({ updates: updatedUpdates })
-    .eq('id', ticketId)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {
-  // First get the current ticket to get existing time logs
-  const { data: ticket, error: fetchError } = await supabase
-    .from('tickets')
-    .select('time_logs, total_time_minutes')
-    .eq('id', ticketId)
-    .single();
-
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  // Create new time log entry
-  const newTimeLog = {
-    minutes,
-    description,
-    timestamp: new Date().toISOString(),
-    logged_by: loggedBy
-  };
-
-  // Append to existing time logs or create new array
-  const existingLogs = ticket?.time_logs || [];
-  const updatedLogs = [...existingLogs, newTimeLog];
-
-  // Calculate total time
-  const totalTime = updatedLogs.reduce((sum, log) => sum + log.minutes, 0);
-
-  // Update the ticket
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({ 
-      time_logs: updatedLogs,
-      total_time_minutes: totalTime
-    })
-    .eq('id', ticketId)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function deleteTicket(id: string) {
-  const { error } = await supabase
-    .from('tickets')
-    .delete()
-    .eq('id', id);
-
-  return { error };
-}
-
-// Profile picture upload
-export async function uploadProfilePicture(userId: string, file: File): Promise<{ url: string | null; error: Error | null }> {
-  try {
-    // Generate a unique filename
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
-
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
-      .from('profiles')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return { url: null, error: uploadError as Error };
+      const { error } = await resetPassword(email);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess('Password reset email sent! Check your inbox and follow the link to reset your password.');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-
-    // Get public URL
-    const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
-
-    // Update profile with new avatar URL
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() })
-      .eq('id', userId);
-
-    if (updateError) {
-      console.error('Profile update error:', updateError);
-      return { url: null, error: updateError as Error };
-    }
-
-    return { url: data.publicUrl, error: null };
-  } catch (err) {
-    console.error('Upload exception:', err);
-    return { url: null, error: err as Error };
-  }
-}
-
-// Stats helpers
-export async function getTicketStats(userId?: string, dateFrom?: string, dateTo?: string) {
-  let query = supabase.from('tickets').select('*');
-
-  if (userId) {
-    query = query.eq('user_id', userId);
-  }
-
-  if (dateFrom) {
-    query = query.gte('created_at', dateFrom);
-  }
-
-  if (dateTo) {
-    query = query.lte('created_at', dateTo + 'T23:59:59');
-  }
-
-  const { data, error } = await query;
-
-  if (error || !data) {
-    return {
-      total: 0,
-      open: 0,
-      closed: 0,
-      onSite: 0,
-      remote: 0,
-      avgResponseTime: 0
-    };
-  }
-
-  const closed = data.filter(t => t.status === 'closed');
-  const withResponseTime = closed.filter(t => t.response_time_minutes && t.response_time_minutes > 0);
-  const avgResponseTime = withResponseTime.length > 0
-    ? withResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / withResponseTime.length
-    : 0;
-
-  return {
-    total: data.length,
-    open: data.filter(t => t.status === 'open').length,
-    closed: closed.length,
-    onSite: data.filter(t => t.location === 'on-site').length,
-    remote: data.filter(t => t.location === 'remote').length,
-    avgResponseTime: Math.round(avgResponseTime)
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      if (isSignUp) {
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+        
+        const { error } = await signUp(email, password, fullName, role);
+        if (error) {
+          setError(error.message);
+        } else {
+          setSuccess('Account created! Check your email to confirm your account, then sign in.');
+          setIsSignUp(false);
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          setError(error.message);
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center shadow-lg mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">KPI Tracker</h1>
+          <p className="text-slate-400">
+            {isForgotPassword ? 'Reset your password' : isSignUp ? 'Create your account' : 'Sign in to your account'}
+          </p>
+        </div>
+
+        {isForgotPassword ? (
+          /* Forgot Password Form */
+          <form onSubmit={handleForgotPassword} className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm space-y-4">
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </div>
+              <p className="text-sm text-slate-400">Enter your email address and we&apos;ll send you a link to reset your password.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-colors"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 text-sm flex items-center gap-2">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm flex items-center gap-2">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {success}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-medium shadow-lg hover:shadow-amber-500/25 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                'Send Reset Link'
+              )}
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setError('');
+                  setSuccess('');
+                }}
+                className="text-sm text-slate-400 hover:text-cyan-400 transition-colors"
+              >
+                ← Back to Sign In
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Sign In / Sign Up Form */
+          <form onSubmit={handleSubmit} className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm space-y-4">
+            {isSignUp && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                    placeholder="Your full name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Role / Position</label>
+                  <input
+                    type="text"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                    placeholder="e.g. Support Technician"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors pr-12"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Confirm Password</label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
+
+            {!isSignUp && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(true);
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="text-sm text-amber-400 hover:text-amber-300 transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 text-sm flex items-center gap-2">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm flex items-center gap-2">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {success}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                isSignUp ? 'Create Account' : 'Sign In'
+              )}
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError('');
+                  setSuccess('');
+                }}
+                className="text-sm text-slate-400 hover:text-cyan-400 transition-colors"
+              >
+                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-6 text-center text-xs text-slate-600">
+          <p>KPI Tracker • Digital Solutions Team</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
