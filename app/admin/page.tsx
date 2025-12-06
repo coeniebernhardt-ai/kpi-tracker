@@ -39,6 +39,9 @@ export default function AdminPage() {
   const [uploadingFor, setUploadingFor] = useState<Profile | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // User management state
+  const [showUserManagement, setShowUserManagement] = useState(false);
+
   // Redirect if not admin
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
@@ -347,6 +350,12 @@ export default function AdminPage() {
             </div>
             
             <div className="flex items-center gap-3">
+              <button onClick={() => setShowUserManagement(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/20 border border-violet-500/30 text-violet-400 hover:bg-violet-500/30 transition-all">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Manage Users
+              </button>
               <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-all">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -759,6 +768,88 @@ export default function AdminPage() {
                       className="hidden" 
                     />
                   </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Management Modal */}
+      {showUserManagement && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowUserManagement(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-slate-700/50 sticky top-0 bg-slate-900">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">Manage Users</h2>
+                  <button onClick={() => setShowUserManagement(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {/* Password Management Info */}
+                <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <h3 className="text-sm font-semibold text-amber-400 mb-2">🔐 Password Management</h3>
+                  <p className="text-xs text-slate-300 mb-3">
+                    To reset a team member&apos;s password, go to your Supabase Dashboard:
+                  </p>
+                  <a 
+                    href="https://supabase.com/dashboard/project/csbliwkldlglbniqmdin/auth/users" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 text-sm hover:bg-amber-500/30 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Open Supabase Auth Dashboard
+                  </a>
+                </div>
+
+                {/* Team Members List */}
+                <h3 className="text-sm font-semibold text-slate-300 mb-4">Team Members ({profiles.length})</h3>
+                <div className="space-y-3">
+                  {profiles.map(p => (
+                    <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                      <div className="flex items-center gap-3">
+                        {p.avatar_url ? (
+                          <Image src={p.avatar_url} alt={p.full_name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(p.full_name)} flex items-center justify-center text-white font-bold text-sm`}>
+                            {p.avatar}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-white">{p.full_name}</p>
+                          <p className="text-xs text-slate-500">{p.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300">{p.role}</span>
+                        {p.is_admin && (
+                          <span className="px-2 py-1 rounded text-xs bg-rose-500/20 text-rose-400">Admin</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add New User Info */}
+                <div className="mt-6 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                  <h3 className="text-sm font-semibold text-slate-300 mb-2">➕ Add New Team Member</h3>
+                  <p className="text-xs text-slate-400 mb-3">
+                    New team members can sign up at:
+                  </p>
+                  <code className="block p-2 rounded bg-slate-900 text-cyan-400 text-xs break-all">
+                    https://kpi-tracker-six.vercel.app/login
+                  </code>
+                  <p className="text-xs text-slate-500 mt-2">
+                    They click &quot;Sign up&quot; and create their account. Then you can update their role in Supabase if needed.
+                  </p>
                 </div>
               </div>
             </div>
