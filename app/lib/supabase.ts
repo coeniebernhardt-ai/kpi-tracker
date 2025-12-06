@@ -58,7 +58,6 @@ export interface Ticket {
   updates?: { text: string; timestamp: string }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
-  // Joined data
   profile?: Profile;
 }
 
@@ -115,14 +114,9 @@ export async function getCurrentProfile(userId?: string): Promise<Profile | null
     
     if (!uid) {
       const user = await getCurrentUser();
-      if (!user) {
-        console.log('getCurrentProfile: No user found');
-        return null;
-      }
+      if (!user) return null;
       uid = user.id;
     }
-
-    console.log('getCurrentProfile: Fetching profile for user', uid);
 
     const { data, error } = await supabase
       .from('profiles')
@@ -130,14 +124,10 @@ export async function getCurrentProfile(userId?: string): Promise<Profile | null
       .eq('id', uid)
       .single();
 
-    if (error) {
-      console.error('getCurrentProfile: Error:', error.message);
-      return null;
-    }
+    if (error) return null;
 
     return data;
-  } catch (err) {
-    console.error('getCurrentProfile: Exception:', err);
+  } catch {
     return null;
   }
 }
@@ -149,12 +139,7 @@ export async function getAllProfiles(): Promise<Profile[]> {
     .select('*')
     .order('full_name');
   
-  if (error) {
-    console.error('Error fetching profiles:', error);
-    return [];
-  }
-  
-  return data || [];
+  return error ? [] : (data || []);
 }
 
 export async function getProfileById(id: string): Promise<Profile | null> {
@@ -164,12 +149,7 @@ export async function getProfileById(id: string): Promise<Profile | null> {
     .eq('id', id)
     .single();
   
-  if (error) {
-    console.error('Error fetching profile:', error);
-    return null;
-  }
-  
-  return data;
+  return error ? null : data;
 }
 
 export async function updateProfile(id: string, updates: Partial<Profile>) {
@@ -183,43 +163,31 @@ export async function updateProfile(id: string, updates: Partial<Profile>) {
   return { data, error };
 }
 
-export async function uploadProfilePicture(userId: string, file: File): Promise<{ publicUrl: string | null; error: Error | null }> {
+export async function uploadProfilePicture(userId: string, file: File) {
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}-${Date.now()}.${fileExt}`;
   const filePath = `avatars/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('profiles')
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
+    .upload(filePath, file);
 
-  if (uploadError) {
-    console.error('Error uploading file:', uploadError);
-    return { publicUrl: null, error: uploadError };
-  }
+  if (uploadError) return { publicUrl: null, error: uploadError };
 
   const { data: publicUrlData } = supabase.storage
     .from('profiles')
     .getPublicUrl(filePath);
 
-  if (!publicUrlData || !publicUrlData.publicUrl) {
-    return { publicUrl: null, error: new Error('Could not get public URL for uploaded file.') };
-  }
+  const publicUrl = publicUrlData?.publicUrl ?? null;
 
-  // Update profile with new avatar_url
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ avatar_url: publicUrlData.publicUrl })
+    .update({ avatar_url: publicUrl })
     .eq('id', userId);
 
-  if (updateError) {
-    console.error('Error updating profile with avatar URL:', updateError);
-    return { publicUrl: null, error: updateError };
-  }
+  if (updateError) return { publicUrl: null, error: updateError };
 
-  return { publicUrl: publicUrlData.publicUrl, error: null };
+  return { publicUrl, error: null };
 }
 
 // Ticket helpers
@@ -228,196 +196,5 @@ export async function getAllTickets(): Promise<Ticket[]> {
     .from('tickets')
     .select('*, profile:profiles(*)')
     .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error('Error fetching tickets:', error);
-    return [];
-  }
-  
-  return data || [];
-}
 
-export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error('Error fetching user tickets:', error);
-    return [];
-  }
-  
-  return data || [];
-}
-
-export async function createTicket(ticket: {
-  user_id: string;
-  client: string;
-  clickup_ticket?: string;
-  location: 'on-site' | 'remote';
-  issue: string;
-  created_by?: string;
-  has_dependencies?: boolean;
-  dependency_name?: string;
-  ticket_type?: 'Hardware' | 'Software';
-  estate_or_building?: string;
-  cml_location?: string;
-}): Promise<{ data: Ticket | null; error: Error | null }> {
-  // Generate ticket number
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-  
-  // Get user's initials from profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', ticket.user_id)
-    .single();
-  
-  const initials = profile?.full_name
-    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
-    : 'XX';
-  
-  // Get count of tickets for this user today
-  const { count } = await supabase
-    .from('tickets')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', ticket.user_id)
-    .gte('created_at', today.toISOString().slice(0, 10));
-  
-  const seq = String((count || 0) + 1).padStart(3, '0');
-  const ticketNumber = `${initials}-${dateStr}-${seq}`;
-
-  const { data, error } = await supabase
-    .from('tickets')
-    .insert({
-      ...ticket,
-      ticket_number: ticketNumber,
-      status: 'open',
-      updates: [],
-      time_logs: [],
-      total_time_minutes: 0,
-    })
-    .select()
-    .single();
-
-  return { data, error: error as Error | null };
-}
-
-export async function closeTicket(ticketId: string, resolution: string) {
-  // Get the ticket to calculate response time
-  const { data: ticket, error: fetchError } = await supabase
-    .from('tickets')
-    .select('created_at')
-    .eq('id', ticketId)
-    .single();
-
-  if (fetchError || !ticket) {
-    console.error('Error fetching ticket:', fetchError);
-    return { data: null, error: fetchError };
-  }
-
-  // Calculate response time in minutes
-  const createdAt = new Date(ticket.created_at);
-  const closedAt = new Date();
-  const responseTimeMinutes = Math.round((closedAt.getTime() - createdAt.getTime()) / (1000 * 60));
-
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({
-      status: 'closed',
-      resolution,
-      response_time_minutes: responseTimeMinutes,
-      closed_at: closedAt.toISOString(),
-    })
-    .eq('id', ticketId)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function deleteTicket(ticketId: string) {
-  const { error } = await supabase
-    .from('tickets')
-    .delete()
-    .eq('id', ticketId);
-
-  return { error };
-}
-
-export async function addTicketUpdate(ticketId: string, updateText: string) {
-  // First get the current ticket to get existing updates
-  const { data: ticket, error: fetchError } = await supabase
-    .from('tickets')
-    .select('updates')
-    .eq('id', ticketId)
-    .single();
-
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  // Create new update with timestamp
-  const newUpdate = {
-    text: updateText,
-    timestamp: new Date().toISOString()
-  };
-
-  // Append to existing updates or create new array
-  const existingUpdates = ticket?.updates || [];
-  const updatedUpdates = [...existingUpdates, newUpdate];
-
-  // Update the ticket
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({ updates: updatedUpdates })
-    .eq('id', ticketId)
-    .select()
-    .single();
-
-  return { data, error };
-}
-
-export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {
-  // First get the current ticket to get existing time logs
-  const { data: ticket, error: fetchError } = await supabase
-    .from('tickets')
-    .select('time_logs, total_time_minutes')
-    .eq('id', ticketId)
-    .single();
-
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  // Create new time log entry
-  const newTimeLog = {
-    minutes,
-    description,
-    timestamp: new Date().toISOString(),
-    logged_by: loggedBy
-  };
-
-  // Append to existing time logs or create new array
-  const existingLogs = ticket?.time_logs || [];
-  const updatedLogs = [...existingLogs, newTimeLog];
-
-  // Calculate total time
-  const totalTime = updatedLogs.reduce((sum: number, log: { minutes: number }) => sum + log.minutes, 0);
-
-  // Update the ticket
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({ 
-      time_logs: updatedLogs,
-      total_time_minutes: totalTime
-    })
-    .eq('id', ticketId)
-    .select()
-    .single();
-
-  return { data, error };
-}
+  return error ? [] : (data ||
