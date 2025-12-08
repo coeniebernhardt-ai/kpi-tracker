@@ -197,4 +197,5 @@ export async function getAllTickets(): Promise<Ticket[]> {
     .select('*, profile:profiles(*)')
     .order('created_at', { ascending: false });
 
-  return error ? [] : (data ||
+  return error ? [] : (data || []);
+
