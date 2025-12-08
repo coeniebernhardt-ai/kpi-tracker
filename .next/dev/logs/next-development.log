@@ -2,3 +2,4 @@
 [00:00:01.879] Server  ERROR   c:\Users\coenie\kpi-tracker\node_modules\next\dist\lib\verify-typescript-setup.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
 [00:00:01.880] Server  ERROR   c:\Users\coenie\kpi-tracker\node_modules\next\dist\server\lib\router-utils\setup-dev-bundler.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
 [00:00:01.881] Server  ERROR   Unhandled Rejection: SyntaxError: Unexpected token <
+[00:19:58.733] Server  LOG      ✓ Compiled in 44ms
