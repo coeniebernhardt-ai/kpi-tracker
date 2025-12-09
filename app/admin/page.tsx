@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
+import Logo from '../components/Logo';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function AdminPage() {
     client: '',
     clickupTicket: '',
     ticketType: '' as 'Hardware' | 'Software' | '',
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
     estateOrBuilding: '',
     cmlLocation: ''
   });
@@ -96,6 +98,7 @@ export default function AdminPage() {
       clickup_ticket: newTicketData.clickupTicket.trim() || undefined,
       location: newTicketData.location,
       issue: newTicketData.issue.trim(),
+      severity: newTicketData.severity,
       created_by: user?.id,
       ticket_type: newTicketData.ticketType,
       estate_or_building: newTicketData.estateOrBuilding.trim(),
@@ -104,7 +107,7 @@ export default function AdminPage() {
 
     if (!error && data) {
       await loadData();
-      setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', ticketType: '', estateOrBuilding: '', cmlLocation: '' });
+      setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', ticketType: '', severity: 'MEDIUM', estateOrBuilding: '', cmlLocation: '' });
       setSelectedUserId('');
       setShowCreateForm(false);
     }
@@ -326,10 +329,8 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+              <Link href="/" className="shrink-0">
+                <Logo width={140} height={32} />
               </Link>
               
               <div className="relative group">
@@ -656,6 +657,21 @@ export default function AdminPage() {
                     <option value="">Select type...</option>
                     <option value="Hardware">Hardware</option>
                     <option value="Software">Software</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Severity <span className="text-rose-400">*</span></label>
+                  <select
+                    value={newTicketData.severity}
+                    onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })}
+                    required
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white appearance-none cursor-pointer"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
                   </select>
                 </div>
 

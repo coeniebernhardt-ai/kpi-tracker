@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
+import Logo from '../components/Logo';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -47,6 +48,7 @@ export default function DashboardPage() {
     hasDependencies: false,
     dependencyName: '',
     ticketType: '' as 'Hardware' | 'Software' | 'New Site' | '',
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
     estateOrBuilding: '',
     cmlLocation: '',
     // New Site fields
@@ -125,6 +127,7 @@ export default function DashboardPage() {
         clickup_ticket: newTicketData.clickupTicket.trim() || undefined,
         location: newTicketData.location,
         issue: newTicketData.issue.trim(),
+        severity: newTicketData.severity,
         created_by: user.id,
         ticket_type: newTicketData.ticketType,
       };
@@ -198,7 +201,8 @@ export default function DashboardPage() {
         issue: '', 
         location: 'remote', 
         client: '', 
-        clickupTicket: '', 
+        clickupTicket: '',
+        severity: 'MEDIUM', 
         hasDependencies: false, 
         dependencyName: '', 
         ticketType: '', 
@@ -351,6 +355,9 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
+            <Link href="/" className="shrink-0">
+              <Logo width={140} height={32} />
+            </Link>
             <div className="relative group">
               {profile.avatar_url ? (
                 <Image
@@ -515,6 +522,21 @@ export default function DashboardPage() {
                   <option value="Hardware">Hardware</option>
                   <option value="Software">Software</option>
                   <option value="New Site">New Site</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Severity <span className="text-rose-400">*</span></label>
+                <select
+                  value={newTicketData.severity}
+                  onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 outline-none appearance-none cursor-pointer"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
                 </select>
               </div>
 
@@ -903,7 +925,8 @@ export default function DashboardPage() {
                     issue: '', 
                     location: 'remote', 
                     client: '', 
-                    clickupTicket: '', 
+                    clickupTicket: '',
+                    severity: 'MEDIUM', 
                     hasDependencies: false, 
                     dependencyName: '', 
                     ticketType: '', 
@@ -978,6 +1001,19 @@ export default function DashboardPage() {
                           }`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
                           </span>
+                          {ticket.severity && (
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                              ticket.severity === 'CRITICAL' ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50' :
+                              ticket.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400' :
+                              ticket.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {ticket.severity === 'CRITICAL' ? '🔴 CRITICAL' :
+                               ticket.severity === 'HIGH' ? '🟠 HIGH' :
+                               ticket.severity === 'MEDIUM' ? '🟡 MEDIUM' :
+                               '🟢 LOW'}
+                            </span>
+                          )}
                           {ticket.clickup_ticket && (
                             <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 text-xs">
                               🔗 {ticket.clickup_ticket}
@@ -1314,6 +1350,19 @@ export default function DashboardPage() {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
                             {ticket.client}
                           </span>
+                          {ticket.severity && (
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                              ticket.severity === 'CRITICAL' ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50' :
+                              ticket.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400' :
+                              ticket.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {ticket.severity === 'CRITICAL' ? '🔴 CRITICAL' :
+                               ticket.severity === 'HIGH' ? '🟠 HIGH' :
+                               ticket.severity === 'MEDIUM' ? '🟡 MEDIUM' :
+                               '🟢 LOW'}
+                            </span>
+                          )}
                           {ticket.response_time_minutes && ticket.response_time_minutes > 0 && (
                             <span className={`px-2.5 py-1 rounded-lg text-xs ${
                               ticket.response_time_minutes <= 60 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'

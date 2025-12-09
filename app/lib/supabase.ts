@@ -1,15 +1,57 @@
+'use client';
+
 import { createClient } from '@supabase/supabase-js';
+import { validateUUID, validateEmail, sanitizeInput, validateFileUpload } from './security';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Validate environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+// Validate URL format
+try {
+  new URL(supabaseUrl);
+} catch {
+  throw new Error('Invalid Supabase URL format');
+}
+
+// Create Supabase client with security configurations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce', // Use PKCE flow for better security
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'kpi-tracker-web',
+    },
+  },
+  db: {
+    schema: 'public',
   },
 });
+
+// Request interceptor for additional validation
+if (typeof window !== 'undefined') {
+  // Validate origin on client-side
+  const currentOrigin = window.location.origin;
+  const allowedOrigins = [
+    'https://kpi-tracker-six.vercel.app',
+    'https://kpi-tracker.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ];
+
+  if (!allowedOrigins.includes(currentOrigin)) {
+    console.warn('Application running from unauthorized origin:', currentOrigin);
+  }
+}
 
 // Types
 export interface Profile {
@@ -44,6 +86,7 @@ export interface Ticket {
   clickup_ticket?: string;
   location: 'on-site' | 'remote';
   status: 'open' | 'closed';
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   issue: string;
   resolution?: string;
   response_time_minutes?: number;
@@ -72,8 +115,27 @@ export interface Ticket {
 
 // Auth helpers
 export async function signIn(email: string, password: string) {
+  // Validate input
+  if (!email || !password) {
+    return { 
+      data: null, 
+      error: { message: 'Email and password are required' } as Error 
+    };
+  }
+
+  // Validate email format
+  if (!validateEmail(email)) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid email format' } as Error 
+    };
+  }
+
+  // Sanitize email
+  const sanitizedEmail = sanitizeInput(email.trim().toLowerCase());
+
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: sanitizedEmail,
     password,
   });
   return { data, error };
@@ -128,13 +190,16 @@ export async function getCurrentProfile(userId?: string): Promise<Profile | null
     if (!uid) {
       const user = await getCurrentUser();
       if (!user) {
-        console.log('getCurrentProfile: No user found');
         return null;
       }
       uid = user.id;
     }
 
-    console.log('getCurrentProfile: Fetching profile for user', uid);
+    // Validate UUID format
+    if (!validateUUID(uid)) {
+      console.error('getCurrentProfile: Invalid user ID format');
+      return null;
+    }
 
     const { data, error } = await supabase
       .from('profiles')
@@ -196,6 +261,27 @@ export async function updateProfile(id: string, updates: Partial<Profile>) {
 }
 
 export async function uploadProfilePicture(userId: string, file: File): Promise<{ publicUrl: string | null; error: Error | null }> {
+  // Validate user ID
+  if (!validateUUID(userId)) {
+    return { 
+      publicUrl: null, 
+      error: new Error('Invalid user ID format') 
+    };
+  }
+
+  // Validate file upload
+  const fileValidation = validateFileUpload(file, {
+    maxSize: 5 * 1024 * 1024, // 5MB
+    allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  });
+
+  if (!fileValidation.valid) {
+    return { 
+      publicUrl: null, 
+      error: new Error(fileValidation.error || 'Invalid file') 
+    };
+  }
+
   const fileExt = file.name.split('.').pop();
   // Use consistent filename to allow overwriting
   const fileName = `${userId}.${fileExt}`;
@@ -263,6 +349,43 @@ export async function uploadTicketAttachment(
   fileType: 'attachment' | 'site_file',
   label?: string
 ): Promise<{ url: string | null; error: Error | null }> {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      url: null, 
+      error: new Error('Invalid ticket ID format') 
+    };
+  }
+
+  // Validate file type parameter
+  if (!['attachment', 'site_file'].includes(fileType)) {
+    return { 
+      url: null, 
+      error: new Error('Invalid file type') 
+    };
+  }
+
+  // Validate file upload
+  const maxSize = fileType === 'site_file' ? 10 * 1024 * 1024 : 5 * 1024 * 1024; // 10MB for site files, 5MB for attachments
+  const allowedTypes = fileType === 'site_file' 
+    ? ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    : ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+  const fileValidation = validateFileUpload(file, {
+    maxSize,
+    allowedTypes,
+  });
+
+  if (!fileValidation.valid) {
+    return { 
+      url: null, 
+      error: new Error(fileValidation.error || 'Invalid file') 
+    };
+  }
+
+  // Sanitize label if provided
+  const sanitizedLabel = label ? sanitizeInput(label.trim()) : undefined;
+
   const fileExt = file.name.split('.').pop();
   const timestamp = Date.now();
   const fileName = `${ticketId}-${timestamp}.${fileExt}`;
@@ -382,6 +505,7 @@ export async function createTicket(ticket: {
   clickup_ticket?: string;
   location: 'on-site' | 'remote';
   issue: string;
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   created_by?: string;
   has_dependencies?: boolean;
   dependency_name?: string;
@@ -397,6 +521,83 @@ export async function createTicket(ticket: {
   // Attachments for regular tickets
   attachments?: { url: string; name: string; type: string }[];
 }): Promise<{ data: Ticket | null; error: Error | null }> {
+  // Validate required fields
+  if (!ticket.user_id || !ticket.client || !ticket.issue) {
+    return { 
+      data: null, 
+      error: new Error('Missing required fields: user_id, client, and issue are required') 
+    };
+  }
+
+  // Validate UUID format
+  if (!validateUUID(ticket.user_id)) {
+    return { 
+      data: null, 
+      error: new Error('Invalid user ID format') 
+    };
+  }
+
+  if (ticket.created_by && !validateUUID(ticket.created_by)) {
+    return { 
+      data: null, 
+      error: new Error('Invalid created_by ID format') 
+    };
+  }
+
+  // Validate and sanitize text fields
+  const sanitizedClient = sanitizeInput(ticket.client.trim());
+  const sanitizedIssue = sanitizeInput(ticket.issue.trim());
+  
+  if (sanitizedClient.length === 0 || sanitizedIssue.length === 0) {
+    return { 
+      data: null, 
+      error: new Error('Client and issue cannot be empty') 
+    };
+  }
+
+  if (sanitizedIssue.length > 5000) {
+    return { 
+      data: null, 
+      error: new Error('Issue description is too long (max 5000 characters)') 
+    };
+  }
+
+  // Validate location
+  if (!['on-site', 'remote'].includes(ticket.location)) {
+    return { 
+      data: null, 
+      error: new Error('Invalid location value') 
+    };
+  }
+
+  // Validate ticket type if provided
+  if (ticket.ticket_type && !['Hardware', 'Software', 'New Site'].includes(ticket.ticket_type)) {
+    return { 
+      data: null, 
+      error: new Error('Invalid ticket type') 
+    };
+  }
+
+  // Validate severity if provided
+  if (ticket.severity && !['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(ticket.severity)) {
+    return { 
+      data: null, 
+      error: new Error('Invalid severity value') 
+    };
+  }
+
+  // Sanitize optional fields
+  const sanitizedTicket = {
+    ...ticket,
+    client: sanitizedClient,
+    issue: sanitizedIssue,
+    clickup_ticket: ticket.clickup_ticket ? sanitizeInput(ticket.clickup_ticket.trim()) : undefined,
+    estate_or_building: ticket.estate_or_building ? sanitizeInput(ticket.estate_or_building.trim()) : undefined,
+    cml_location: ticket.cml_location ? sanitizeInput(ticket.cml_location.trim()) : undefined,
+    site_name: ticket.site_name ? sanitizeInput(ticket.site_name.trim()) : undefined,
+    dependency_name: ticket.dependency_name ? sanitizeInput(ticket.dependency_name.trim()) : undefined,
+  };
+
   // Generate ticket number
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -435,16 +636,16 @@ export async function createTicket(ticket: {
   const { data, error } = await supabase
     .from('tickets')
     .insert({
-      ...ticket,
+      ...sanitizedTicket,
       ticket_number: ticketNumber,
       status: 'open',
       updates: [],
       time_logs: [initialTimeLog],
       total_time_minutes: 0,
-      installers: ticket.installers || [],
-      dependencies: ticket.dependencies || [],
-      site_files: ticket.site_files || [],
-      attachments: ticket.attachments || [],
+      installers: sanitizedTicket.installers || [],
+      dependencies: sanitizedTicket.dependencies || [],
+      site_files: sanitizedTicket.site_files || [],
+      attachments: sanitizedTicket.attachments || [],
     })
     .select()
     .single();
@@ -453,9 +654,50 @@ export async function createTicket(ticket: {
 }
 
 export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid ticket ID format' } as Error 
+    };
+  }
+
+  // Sanitize text fields in updates
+  const sanitizedUpdates: Partial<Ticket> = { ...updates };
+  
+  if (sanitizedUpdates.issue) {
+    sanitizedUpdates.issue = sanitizeInput(sanitizedUpdates.issue.trim());
+    if (sanitizedUpdates.issue.length === 0) {
+      return { 
+        data: null, 
+        error: { message: 'Issue cannot be empty' } as Error 
+      };
+    }
+  }
+
+  if (sanitizedUpdates.resolution) {
+    sanitizedUpdates.resolution = sanitizeInput(sanitizedUpdates.resolution.trim());
+  }
+
+  if (sanitizedUpdates.client) {
+    sanitizedUpdates.client = sanitizeInput(sanitizedUpdates.client.trim());
+  }
+
+  if (sanitizedUpdates.estate_or_building) {
+    sanitizedUpdates.estate_or_building = sanitizeInput(sanitizedUpdates.estate_or_building.trim());
+  }
+
+  if (sanitizedUpdates.cml_location) {
+    sanitizedUpdates.cml_location = sanitizeInput(sanitizedUpdates.cml_location.trim());
+  }
+
+  if (sanitizedUpdates.site_name) {
+    sanitizedUpdates.site_name = sanitizeInput(sanitizedUpdates.site_name.trim());
+  }
+
   const { data, error } = await supabase
     .from('tickets')
-    .update(updates)
+    .update(sanitizedUpdates)
     .eq('id', ticketId)
     .select()
     .single();
@@ -464,6 +706,30 @@ export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
 }
 
 export async function closeTicket(ticketId: string, resolution: string) {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid ticket ID format' } as Error 
+    };
+  }
+
+  // Validate and sanitize resolution
+  if (!resolution || resolution.trim().length === 0) {
+    return { 
+      data: null, 
+      error: { message: 'Resolution is required' } as Error 
+    };
+  }
+
+  const sanitizedResolution = sanitizeInput(resolution.trim());
+  
+  if (sanitizedResolution.length > 2000) {
+    return { 
+      data: null, 
+      error: { message: 'Resolution is too long (max 2000 characters)' } as Error 
+    };
+  }
   // Get the ticket to calculate response time
   const { data: ticket, error: fetchError } = await supabase
     .from('tickets')
@@ -485,7 +751,7 @@ export async function closeTicket(ticketId: string, resolution: string) {
     .from('tickets')
     .update({
       status: 'closed',
-      resolution,
+      resolution: sanitizedResolution,
       response_time_minutes: responseTimeMinutes,
       closed_at: closedAt.toISOString(),
     })
@@ -497,15 +763,49 @@ export async function closeTicket(ticketId: string, resolution: string) {
 }
 
 export async function deleteTicket(ticketId: string) {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      error: { message: 'Invalid ticket ID format' } as Error 
+    };
+  }
+
   const { error } = await supabase
     .from('tickets')
     .delete()
     .eq('id', ticketId);
-
+  
   return { error };
 }
 
 export async function addTicketUpdate(ticketId: string, updateText: string, loggedBy?: string) {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid ticket ID format' } as Error 
+    };
+  }
+
+  // Validate and sanitize update text
+  if (!updateText || updateText.trim().length === 0) {
+    return { 
+      data: null, 
+      error: { message: 'Update text is required' } as Error 
+    };
+  }
+
+  const sanitizedUpdateText = sanitizeInput(updateText.trim());
+  
+  if (sanitizedUpdateText.length > 2000) {
+    return { 
+      data: null, 
+      error: { message: 'Update text is too long (max 2000 characters)' } as Error 
+    };
+  }
+
+  // Sanitize loggedBy if provided
+  const sanitizedLoggedBy = loggedBy ? sanitizeInput(loggedBy.trim()) : undefined;
   // Get the current ticket with all necessary fields
   const { data: ticket, error: fetchError } = await supabase
     .from('tickets')
@@ -559,9 +859,9 @@ export async function addTicketUpdate(ticketId: string, updateText: string, logg
     // Add new time log entry for this update
     const newTimeLog = {
       minutes: timeMinutes,
-      description: `Time tracked for update: "${updateText.substring(0, 50)}${updateText.length > 50 ? '...' : ''}"`,
+      description: `Time tracked for update: "${sanitizedUpdateText.substring(0, 50)}${sanitizedUpdateText.length > 50 ? '...' : ''}"`,
       timestamp: now.toISOString(),
-      logged_by: loggedBy || 'System'
+      logged_by: sanitizedLoggedBy || 'System'
     };
     updatedLogs = [...existingLogs, newTimeLog];
   }
@@ -589,6 +889,33 @@ export async function addTicketUpdate(ticketId: string, updateText: string, logg
 }
 
 export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {
+  // Validate ticket ID
+  if (!validateUUID(ticketId)) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid ticket ID format' } as Error 
+    };
+  }
+
+  // Validate minutes
+  if (typeof minutes !== 'number' || minutes < 0 || minutes > 1440) {
+    return { 
+      data: null, 
+      error: { message: 'Invalid time value (must be between 0 and 1440 minutes)' } as Error 
+    };
+  }
+
+  // Validate and sanitize description
+  if (!description || description.trim().length === 0) {
+    return { 
+      data: null, 
+      error: { message: 'Description is required' } as Error 
+    };
+  }
+
+  const sanitizedDescription = sanitizeInput(description.trim());
+  const sanitizedLoggedBy = loggedBy ? sanitizeInput(loggedBy.trim()) : undefined;
+
   // First get the current ticket to get existing time logs
   const { data: ticket, error: fetchError } = await supabase
     .from('tickets')
@@ -605,7 +932,7 @@ export async function logTicketTime(ticketId: string, minutes: number, descripti
     minutes,
     description,
     timestamp: new Date().toISOString(),
-    logged_by: loggedBy
+    logged_by: sanitizedLoggedBy
   };
 
   // Append to existing time logs or create new array
