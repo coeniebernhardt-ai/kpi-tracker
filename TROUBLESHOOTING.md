@@ -129,3 +129,4 @@ Test-Path app\components\Logo.tsx
 ✅ New tickets default to MEDIUM severity  
 ✅ All existing tickets show MEDIUM severity after migration
 
+

@@ -121,3 +121,4 @@ git ls-files public/thinkdigital-logo.png
 
 Both should show the logo file is now in the repository.
 
+

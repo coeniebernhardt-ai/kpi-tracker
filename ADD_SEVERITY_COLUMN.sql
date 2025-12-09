@@ -14,3 +14,4 @@ WHERE severity IS NULL;
 ALTER TABLE tickets 
 ALTER COLUMN severity SET NOT NULL;
 
+
