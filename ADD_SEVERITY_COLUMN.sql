@@ -13,3 +13,4 @@ WHERE severity IS NULL;
 -- Make severity NOT NULL after setting defaults
 ALTER TABLE tickets 
 ALTER COLUMN severity SET NOT NULL;
+
