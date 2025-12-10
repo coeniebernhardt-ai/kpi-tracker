@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Explicitly use webpack (not Turbopack) for build
+  experimental: {
+    turbo: undefined,
+  },
   images: {
     remotePatterns: [
       {
