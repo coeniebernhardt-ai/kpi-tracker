@@ -1595,7 +1595,6 @@ export default function DashboardPage() {
                     onChange={(e) => setNewTravelLog({ ...newTravelLog, reason: e.target.value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                    style={{ focusBorderColor: '#007fff', focusRingColor: '#007fff' }}
                     onFocus={(e) => e.target.style.borderColor = '#007fff'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. Client site visit, Training, Conference"
