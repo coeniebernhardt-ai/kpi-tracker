@@ -3,24 +3,26 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-// Dynamically import Leaflet components to avoid SSR issues
-const MapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import('react-leaflet').then((mod) => mod.Marker), { ssr: false });
-// useMapEvents will be imported directly in the component
-
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
 
-// Fix for default marker icon in Next.js
-if (typeof window !== 'undefined') {
-  const L = require('leaflet');
-  delete (L.Icon.Default.prototype as any)._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  });
-}
+// Dynamically import Leaflet components to avoid SSR issues
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+const useMapEvents = dynamic(
+  () => import('react-leaflet').then((mod) => mod.useMapEvents),
+  { ssr: false }
+);
 
 interface MapPinSelectorProps {
   isOpen: boolean;
@@ -32,11 +34,10 @@ interface MapPinSelectorProps {
 
 // Component to handle map clicks
 function MapClickHandler({ onClick }: { onClick: (e: any) => void }) {
-  // This will be dynamically imported, so we need to handle it differently
   if (typeof window === 'undefined') return null;
   
-  const { useMapEvents } = require('react-leaflet');
-  useMapEvents({
+  const { useMapEvents: useMapEventsHook } = require('react-leaflet');
+  const map = useMapEventsHook({
     click: onClick,
   });
   return null;
@@ -46,18 +47,42 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
   const [position, setPosition] = useState<[number, number]>([-26.2041, 28.0473]); // Default: Johannesburg center
   const [isLoading, setIsLoading] = useState(false);
   const [address, setAddress] = useState('');
+  const [isClient, setIsClient] = useState(false);
+
+  // Set up Leaflet marker icon fix on client side
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsClient(true);
+      
+      // Fix Leaflet default icon paths for Next.js
+      const L = require('leaflet');
+      
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      });
+    }
+  }, []);
 
   // Initialize position from initial address if provided
   useEffect(() => {
-    if (isOpen && initialAddress && initialAddress.trim()) {
-      // Try to geocode the initial address
-      geocodeAddress(initialAddress);
-    } else if (isOpen) {
-      // Default to Johannesburg center
-      setPosition([-26.2041, 28.0473]);
-      reverseGeocode([-26.2041, 28.0473]);
+    if (isOpen && isClient) {
+      if (initialAddress && initialAddress.trim()) {
+        // Try to geocode the initial address
+        geocodeAddress(initialAddress);
+      } else {
+        // Default to Johannesburg center
+        setPosition([-26.2041, 28.0473]);
+        reverseGeocode([-26.2041, 28.0473]);
+      }
     }
-  }, [isOpen, initialAddress]);
+  }, [isOpen, initialAddress, isClient]);
 
   // Geocode address to get coordinates
   const geocodeAddress = async (addressQuery: string) => {
@@ -66,10 +91,21 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
       const response = await fetch(`/api/geocode?q=${encodeURIComponent(addressQuery)}`);
       if (response.ok) {
         const data = await response.json();
-        if (data.length > 0 && data[0].geometry) {
-          const coords = data[0].geometry.coordinates; // [lng, lat] format
-          const newPosition: [number, number] = [coords[1], coords[0]]; // Convert to [lat, lng]
-          setPosition(newPosition);
+        if (data.length > 0) {
+          // Try different geometry formats
+          let coords: [number, number];
+          if (data[0].geometry && data[0].geometry.coordinates) {
+            const geomCoords = data[0].geometry.coordinates; // [lng, lat] format
+            coords = [geomCoords[1], geomCoords[0]]; // Convert to [lat, lng]
+          } else if (data[0].lat && data[0].lon) {
+            coords = [data[0].lat, data[0].lon];
+          } else if (data[0].lat && data[0].lng) {
+            coords = [data[0].lat, data[0].lng];
+          } else {
+            console.error('Unknown coordinate format:', data[0]);
+            return;
+          }
+          setPosition(coords);
           setAddress(data[0].display_name);
         }
       }
@@ -101,7 +137,8 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
 
   // Handle marker drag end
   const handleMarkerDragEnd = (e: any) => {
-    const newPosition: [number, number] = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+    const latlng = e.target.getLatLng();
+    const newPosition: [number, number] = [latlng.lat, latlng.lng];
     setPosition(newPosition);
     reverseGeocode(newPosition);
   };
@@ -115,11 +152,13 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
 
   // Handle select button
   const handleSelect = () => {
-    onSelect(address, { lat: position[0], lng: position[1] });
-    onClose();
+    if (address) {
+      onSelect(address, { lat: position[0], lng: position[1] });
+      onClose();
+    }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !isClient) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -146,34 +185,30 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
 
           {/* Map Container */}
           <div className="flex-1 relative min-h-[400px] bg-slate-800">
-            {typeof window !== 'undefined' && (
-              <MapContainer
-                center={position}
-                zoom={13}
-                style={{ height: '100%', width: '100%', zIndex: 0 }}
-                className="rounded-b-2xl"
-                key={`map-${position[0]}-${position[1]}`}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker
-                  position={position}
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: handleMarkerDragEnd,
-                  }}
-                />
-                {typeof window !== 'undefined' && (
-                  <MapClickHandler onClick={handleMapClick} />
-                )}
-              </MapContainer>
-            )}
+            <MapContainer
+              center={position}
+              zoom={13}
+              style={{ height: '100%', width: '100%', zIndex: 0 }}
+              className="rounded-b-2xl"
+              scrollWheelZoom={true}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <Marker
+                position={position}
+                draggable={true}
+                eventHandlers={{
+                  dragend: handleMarkerDragEnd,
+                }}
+              />
+              <MapClickHandler onClick={handleMapClick} />
+            </MapContainer>
             
             {/* Loading overlay */}
             {isLoading && (
-              <div className="absolute top-4 left-4 bg-slate-900/90 px-4 py-2 rounded-lg flex items-center gap-2 z-10">
+              <div className="absolute top-4 left-4 bg-slate-900/90 px-4 py-2 rounded-lg flex items-center gap-2 z-[1000]">
                 <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                 <span className="text-sm text-white">Getting address...</span>
               </div>
