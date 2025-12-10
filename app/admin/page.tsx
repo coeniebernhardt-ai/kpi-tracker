@@ -282,7 +282,7 @@ export default function AdminPage() {
   };
 
   const getAvatarGradient = (name: string) => {
-    const colors = ['from-cyan-400 to-blue-500', 'from-violet-400 to-purple-500', 'from-rose-400 to-pink-500', 'from-amber-400 to-orange-500', 'from-emerald-400 to-teal-500'];
+    const colors = ['from-blue-400 to-blue-600', 'from-blue-500 to-indigo-600', 'from-indigo-400 to-blue-500', 'from-blue-600 to-cyan-500', 'from-cyan-400 to-blue-500'];
     return colors[name.charCodeAt(0) % colors.length];
   };
 
@@ -293,18 +293,18 @@ export default function AdminPage() {
   const debugInfo = (
     <div className="fixed bottom-4 right-4 p-4 bg-slate-800 border border-slate-600 rounded-xl text-xs font-mono z-50">
       <p className="text-slate-400">Debug Info:</p>
-      <p className={loading ? 'text-amber-400' : 'text-emerald-400'}>loading: {String(loading)}</p>
-      <p className={!user ? 'text-amber-400' : 'text-emerald-400'}>user: {user ? 'yes' : 'no'}</p>
-      <p className={!profile ? 'text-amber-400' : 'text-emerald-400'}>profile: {profile ? 'yes' : 'no'}</p>
-      <p className={!isAdmin ? 'text-amber-400' : 'text-emerald-400'}>isAdmin: {String(isAdmin)}</p>
-      <p className={loadingData ? 'text-amber-400' : 'text-emerald-400'}>loadingData: {String(loadingData)}</p>
+      <p className={loading ? 'text-blue-400' : 'text-blue-300'}>loading: {String(loading)}</p>
+      <p className={!user ? 'text-blue-400' : 'text-blue-300'}>user: {user ? 'yes' : 'no'}</p>
+      <p className={!profile ? 'text-blue-400' : 'text-blue-300'}>profile: {profile ? 'yes' : 'no'}</p>
+      <p className={!isAdmin ? 'text-blue-400' : 'text-blue-300'}>isAdmin: {String(isAdmin)}</p>
+      <p className={loadingData ? 'text-blue-400' : 'text-blue-300'}>loadingData: {String(loadingData)}</p>
     </div>
   );
 
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-slate-400">Checking authentication...</p>
         {debugInfo}
       </div>
@@ -315,7 +315,7 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
         <p className="text-slate-400">No user found.</p>
-        <Link href="/login" className="text-cyan-400">Go to Login</Link>
+        <Link href="/login" className="text-blue-400">Go to Login</Link>
         {debugInfo}
       </div>
     );
@@ -324,7 +324,7 @@ export default function AdminPage() {
   if (loadingData) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-slate-400">Loading tickets and team data...</p>
         {debugInfo}
       </div>
@@ -351,14 +351,14 @@ export default function AdminPage() {
                 {profile?.avatar_url ? (
                   <Image src={profile.avatar_url} alt={profile.full_name} width={48} height={48} className="w-12 h-12 rounded-xl object-cover shadow-lg" />
                 ) : (
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500 to-orange-600 flex items-center justify-center text-white font-bold shadow-lg`}>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg`}>
                     {profile?.avatar || 'A'}
                   </div>
                 )}
                 {profile && (
                   <button 
                     onClick={() => setUploadingFor(profile)}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-cyan-400"
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-400"
                     title="Upload profile picture"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -376,13 +376,13 @@ export default function AdminPage() {
             </div>
             
             <div className="flex items-center gap-3">
-              <button onClick={() => setShowUserManagement(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/20 border border-violet-500/30 text-violet-400 hover:bg-violet-500/30 transition-all">
+              <button onClick={() => setShowUserManagement(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
                 Manage Users
               </button>
-              <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-all">
+              <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -394,7 +394,7 @@ export default function AdminPage() {
                 </svg>
                 Export Travel Logs
               </button>
-              <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium shadow-lg hover:shadow-cyan-500/25 transition-all">
+              <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg hover:shadow-blue-500/25 transition-all">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
@@ -415,13 +415,13 @@ export default function AdminPage() {
             <p className="text-xs text-slate-500 mb-1">Total Tickets</p>
             <p className="text-3xl font-bold text-white">{tickets.length}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-            <p className="text-xs text-amber-400 mb-1">Open</p>
-            <p className="text-3xl font-bold text-amber-400">{totalOpen}</p>
+          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-400 mb-1">Open</p>
+            <p className="text-3xl font-bold text-blue-400">{totalOpen}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
-            <p className="text-xs text-emerald-400 mb-1">Closed</p>
-            <p className="text-3xl font-bold text-emerald-400">{totalClosed}</p>
+          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-300 mb-1">Closed</p>
+            <p className="text-3xl font-bold text-blue-300">{totalClosed}</p>
           </div>
           <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-xs text-slate-500 mb-1">Team Members</p>
@@ -450,7 +450,7 @@ export default function AdminPage() {
                       )}
                       <button 
                         onClick={() => setUploadingFor(p)}
-                        className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-cyan-400"
+                        className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-400"
                         title="Upload profile picture"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -465,11 +465,11 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-amber-400">{openCount} open</span>
+                    <span className="text-blue-400">{openCount} open</span>
                     <span className="text-slate-600">•</span>
-                    <span className="text-emerald-400">{closedCount} closed</span>
+                    <span className="text-blue-300">{closedCount} closed</span>
                   </div>
-                  {p.is_admin && <span className="mt-2 inline-block px-2 py-0.5 rounded text-xs bg-rose-500/20 text-rose-400">Admin</span>}
+                  {p.is_admin && <span className="mt-2 inline-block px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">Admin</span>}
                 </div>
               );
             })}
@@ -510,7 +510,7 @@ export default function AdminPage() {
               {filteredTickets.map(ticket => {
                 const memberProfile = profiles.find(p => p.id === ticket.user_id);
                 return (
-                  <div key={ticket.id} className={`p-4 rounded-xl border ${ticket.status === 'open' ? 'bg-slate-800/40 border-amber-500/30' : 'bg-slate-800/30 border-slate-700/50'}`}>
+                  <div key={ticket.id} className={`p-4 rounded-xl border ${ticket.status === 'open' ? 'bg-slate-800/40 border-blue-500/30' : 'bg-slate-800/30 border-slate-700/50'}`}>
                     <div className="flex items-start gap-4">
                       {memberProfile?.avatar_url ? (
                         <Image src={memberProfile.avatar_url} alt={memberProfile.full_name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
@@ -522,13 +522,13 @@ export default function AdminPage() {
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-2 mb-2">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'open' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-300'}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-300'}`}>
                             {ticket.ticket_number}
                           </span>
                           <span className="text-xs text-slate-500">{memberProfile?.full_name}</span>
                           {ticket.client && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{ticket.client}</span>}
-                          {ticket.clickup_ticket && <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">🔗 {ticket.clickup_ticket}</span>}
-                          <span className={`px-2 py-0.5 rounded text-xs ${ticket.location === 'on-site' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-violet-500/20 text-violet-400'}`}>
+                          {ticket.clickup_ticket && <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">🔗 {ticket.clickup_ticket}</span>}
+                          <span className={`px-2 py-0.5 rounded text-xs ${ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
                           </span>
                           {ticket.severity && (

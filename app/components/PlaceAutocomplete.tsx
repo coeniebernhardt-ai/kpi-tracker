@@ -45,29 +45,16 @@ export default function PlaceAutocomplete({
 
     setIsLoading(true);
     try {
-      // Use Nominatim API (OpenStreetMap) - free, no API key required
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=za&limit=5&addressdetails=1`;
-      
-      console.log('Searching for:', query);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Think-Q/1.0 (contact: webmaster@thinkdigital.co.za)', // Required by Nominatim
-          'Accept-Language': 'en',
-        },
-      });
-
-      console.log('Response status:', response.status);
+      // Use Next.js API route to proxy Nominatim requests (avoids CORS issues)
+      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
 
       if (response.ok) {
         const data: NominatimResult[] = await response.json();
-        console.log('Suggestions received:', data.length);
         setSuggestions(data);
         setShowSuggestions(data.length > 0);
         setSelectedIndex(-1);
       } else {
-        console.error('Nominatim API error:', response.status, response.statusText);
+        console.error('Geocoding API error:', response.status, response.statusText);
         setSuggestions([]);
         setShowSuggestions(false);
       }
