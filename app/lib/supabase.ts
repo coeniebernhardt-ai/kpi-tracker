@@ -638,6 +638,9 @@ export interface TravelLog {
   user_id: string;
   reason: string;
   destination: string;
+  start_address?: string;
+  end_address?: string;
+  is_return_trip?: boolean;
   comments?: string;
   distance_travelled?: number;
   attachments?: { url: string; name: string; type: string }[];
@@ -690,15 +693,25 @@ export async function createTravelLog(travelLog: {
   user_id: string;
   reason: string;
   destination: string;
+  start_address?: string;
+  end_address?: string;
+  is_return_trip?: boolean;
   comments?: string;
   distance_travelled?: number;
   attachments?: { url: string; name: string; type: string }[];
 }): Promise<{ data: TravelLog | null; error: Error | null }> {
   try {
+    // If return trip is checked, double the distance
+    let finalDistance = travelLog.distance_travelled;
+    if (travelLog.is_return_trip && finalDistance) {
+      finalDistance = finalDistance * 2;
+    }
+
     const { data, error } = await supabase
       .from('travel_logs')
       .insert({
         ...travelLog,
+        distance_travelled: finalDistance,
         attachments: travelLog.attachments || [],
         updated_at: new Date().toISOString(),
       })
