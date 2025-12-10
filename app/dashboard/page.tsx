@@ -917,7 +917,7 @@ export default function DashboardPage() {
                     onClick={() => setNewTicketData({ ...newTicketData, location: 'on-site' })}
                     className={`flex-1 px-4 py-3 rounded-xl border transition-all ${
                       newTicketData.location === 'on-site'
-                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
+                        ? 'bg-blue-500/20 border-blue-500 text-blue-400'
                         : 'bg-slate-900/50 border-slate-700 text-slate-400'
                     }`}
                   >
@@ -928,7 +928,7 @@ export default function DashboardPage() {
                     onClick={() => setNewTicketData({ ...newTicketData, location: 'remote' })}
                     className={`flex-1 px-4 py-3 rounded-xl border transition-all ${
                       newTicketData.location === 'remote'
-                        ? 'bg-violet-500/20 border-violet-500 text-violet-400'
+                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400'
                         : 'bg-slate-900/50 border-slate-700 text-slate-400'
                     }`}
                   >
@@ -1214,14 +1214,14 @@ export default function DashboardPage() {
                     {ticket.ticket_type === 'New Site' && (
                       <div className="mb-4 space-y-3">
                         {ticket.site_name && (
-                          <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                            <p className="text-xs text-cyan-400 mb-1">Site Name</p>
+                          <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                            <p className="text-xs text-blue-400 mb-1">Site Name</p>
                             <p className="text-sm text-slate-300">{ticket.site_name}</p>
                           </div>
                         )}
                         {ticket.installers && ticket.installers.length > 0 && (
-                          <div className="p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
-                            <p className="text-xs text-violet-400 mb-2">Installers</p>
+                          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                            <p className="text-xs text-indigo-400 mb-2">Installers</p>
                             <div className="flex flex-wrap gap-2">
                               {ticket.installers.map((installer, idx) => (
                                 <span key={idx} className="px-2 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
