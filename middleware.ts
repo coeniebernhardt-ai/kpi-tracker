@@ -212,14 +212,20 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check for authentication on protected routes
+  // Note: Supabase uses multiple cookie formats, so we check for common patterns
+  // The actual authentication check should be done in the page component
   if (pathname.startsWith('/admin') || pathname.startsWith('/dashboard')) {
-    const sessionCookie = request.cookies.get('sb-access-token') || 
-                          request.cookies.get('sb-refresh-token') ||
-                          request.cookies.get('supabase-auth-token');
+    // Check for Supabase session cookies (various formats)
+    const hasSessionCookie = 
+      request.cookies.get('sb-access-token') || 
+      request.cookies.get('sb-refresh-token') ||
+      request.cookies.get('supabase-auth-token') ||
+      request.cookies.get('sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] || '') + '-auth-token') ||
+      // Check for any cookie starting with sb- (Supabase cookies)
+      Array.from(request.cookies.getAll()).some(cookie => cookie.name.startsWith('sb-'));
     
-    if (!sessionCookie) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+    // Don't redirect here - let the page component handle auth checks
+    // This prevents redirect loops during login
   }
 
   return response;

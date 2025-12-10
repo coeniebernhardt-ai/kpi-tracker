@@ -79,8 +79,12 @@ export default function LoginPage() {
         const { error } = await signIn(email, password);
         if (error) {
           setError(error.message);
+          setLoading(false);
         } else {
-          router.push('/dashboard');
+          // Wait a moment for session to be saved and auth state to update
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Use window.location for a hard redirect to ensure cookies are sent
+          window.location.href = '/dashboard';
         }
       }
     } catch (err) {
