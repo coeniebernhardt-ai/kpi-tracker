@@ -13,6 +13,7 @@ export default function AdminPage() {
   
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showStatsExport, setShowStatsExport] = useState(false);
