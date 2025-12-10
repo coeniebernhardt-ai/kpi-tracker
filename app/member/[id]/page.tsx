@@ -740,7 +740,7 @@ export default function MemberPage() {
                 type="button"
                 onClick={() => {
                   setShowNewTicketForm(false);
-                  setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '' });
+                  setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '', severity: 'MEDIUM' });
                 }}
                 className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300 font-medium hover:bg-slate-600 transition-colors"
               >
