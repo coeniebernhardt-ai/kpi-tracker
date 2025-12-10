@@ -281,6 +281,70 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  // Calculate distance between two addresses using OpenStreetMap Nominatim (free, no API key)
+  const calculateDistanceBetweenAddresses = async (startAddr: string, endAddr: string): Promise<number | null> => {
+    try {
+      // Geocode start address
+      const startResponse = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(startAddr)}&limit=1`,
+        { headers: { 'User-Agent': 'KPI-Tracker/1.0' } }
+      );
+      const startData = await startResponse.json();
+      
+      // Geocode end address
+      const endResponse = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endAddr)}&limit=1`,
+        { headers: { 'User-Agent': 'KPI-Tracker/1.0' } }
+      );
+      const endData = await endResponse.json();
+
+      if (startData.length === 0 || endData.length === 0) {
+        return null;
+      }
+
+      const lat1 = parseFloat(startData[0].lat);
+      const lon1 = parseFloat(startData[0].lon);
+      const lat2 = parseFloat(endData[0].lat);
+      const lon2 = parseFloat(endData[0].lon);
+
+      // Haversine formula to calculate distance in km
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+
+      return Math.round(distance * 100) / 100; // Round to 2 decimal places
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      return null;
+    }
+  };
+
+  const handleCalculateDistance = async () => {
+    if (!newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()) {
+      alert('Please enter both start and end addresses');
+      return;
+    }
+
+    setCalculatingDistance(true);
+    const distance = await calculateDistanceBetweenAddresses(
+      newTravelLog.startAddress,
+      newTravelLog.endAddress
+    );
+
+    if (distance !== null) {
+      setNewTravelLog({ ...newTravelLog, distanceTravelled: distance.toString() });
+    } else {
+      alert('Could not calculate distance. Please enter the distance manually.');
+    }
+    setCalculatingDistance(false);
+  };
+
   const handleCreateTravelLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newTravelLog.reason.trim() || !newTravelLog.destination.trim()) return;
@@ -309,6 +373,9 @@ export default function DashboardPage() {
         user_id: user.id,
         reason: newTravelLog.reason.trim(),
         destination: newTravelLog.destination.trim(),
+        start_address: newTravelLog.startAddress.trim() || undefined,
+        end_address: newTravelLog.endAddress.trim() || undefined,
+        is_return_trip: newTravelLog.isReturnTrip,
         comments: newTravelLog.comments.trim() || undefined,
         distance_travelled: newTravelLog.distanceTravelled ? parseFloat(newTravelLog.distanceTravelled) : undefined,
         attachments: attachmentUrls.length > 0 ? attachmentUrls : undefined
