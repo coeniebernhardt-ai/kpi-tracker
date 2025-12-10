@@ -1602,6 +1602,21 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Distance Travelled (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newTravelLog.distanceTravelled}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, distanceTravelled: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-colors"
+                    placeholder="e.g. 150.5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
                     Comments
                   </label>
                   <textarea
