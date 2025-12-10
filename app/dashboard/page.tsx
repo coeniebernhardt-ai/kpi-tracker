@@ -1635,7 +1635,7 @@ export default function DashboardPage() {
             <button
               onClick={() => setShowTravelLogForm(!showTravelLogForm)}
               className="px-4 py-2 rounded-xl text-white text-sm font-medium hover:shadow-lg transition-all flex items-center gap-2"
-              style={{ background: 'linear-gradient(to right, #007fff, #ff4d54)' }}
+              style={{ backgroundColor: '#1e3a5f' }}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1721,7 +1721,7 @@ export default function DashboardPage() {
                         onClick={handleCalculateDistance}
                         disabled={calculatingDistance || !newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()}
                         className="px-4 py-3 rounded-xl text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        style={{ backgroundColor: '#06b6d4' }}
+                        style={{ backgroundColor: '#1e3a5f' }}
                       >
                         {calculatingDistance ? 'Calculating...' : 'Calculate'}
                       </button>
@@ -1781,11 +1781,11 @@ export default function DashboardPage() {
                   />
                   <style jsx>{`
                     input[type="file"]::file-selector-button {
-                      background: #06b6d4;
+                      background: #1e3a5f;
                       border: none;
                     }
                     input[type="file"]::file-selector-button:hover {
-                      background: #0891b2;
+                      background: #2d4a6f;
                     }
                   `}</style>
                   {travelLogAttachments.length > 0 && (
@@ -1797,7 +1797,7 @@ export default function DashboardPage() {
                             type="button"
                             onClick={() => setTravelLogAttachments(travelLogAttachments.filter((_, i) => i !== idx))}
                             className="hover:opacity-70"
-                            style={{ color: '#007fff' }}
+                            style={{ color: '#60a5fa' }}
                           >
                             ×
                           </button>
@@ -1812,7 +1812,7 @@ export default function DashboardPage() {
                     type="submit"
                     disabled={isSubmitting}
                     className="flex-1 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: '#f97316' }}
+                    style={{ backgroundColor: '#1e3a5f' }}
                   >
                     {isSubmitting ? 'Creating...' : 'Create Travel Log'}
                   </button>
