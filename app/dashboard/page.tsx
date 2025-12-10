@@ -621,18 +621,18 @@ export default function DashboardPage() {
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <p className="text-xs text-slate-500 mb-1">Open / Closed</p>
                 <p className="text-2xl font-bold text-white">
-                  <span className="text-amber-400">{kpis.openTickets}</span>
+                  <span className="text-blue-400">{kpis.openTickets}</span>
                   <span className="text-slate-600 mx-1">/</span>
-                  <span className="text-emerald-400">{kpis.closedTickets}</span>
+                  <span className="text-blue-300">{kpis.closedTickets}</span>
                 </p>
                 <p className="text-xs text-slate-600 mt-1">Total: {kpis.totalTickets}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <p className="text-xs text-slate-500 mb-1">Location Split</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-cyan-400">{kpis.onSiteTickets} On-site</span>
+                  <span className="text-sm text-blue-400">{kpis.onSiteTickets} On-site</span>
                   <span className="text-slate-600">|</span>
-                  <span className="text-sm text-violet-400">{kpis.remoteTickets} Remote</span>
+                  <span className="text-sm text-indigo-400">{kpis.remoteTickets} Remote</span>
                 </div>
               </div>
             </div>
