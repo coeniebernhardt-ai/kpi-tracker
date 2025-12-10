@@ -2,8 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Add empty turbopack config to silence error (we're using webpack)
-  turbopack: {},
   images: {
     remotePatterns: [
       {
