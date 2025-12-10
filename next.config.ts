@@ -35,20 +35,6 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   // Compress responses
   compress: true,
-  // Webpack config - minimal to avoid breaking Next.js entry handling
-  webpack: (config, { isServer }) => {
-    // Only add fallbacks for client-side, don't modify entries
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
-    
-    return config;
-  },
 };
 
 export default nextConfig;
