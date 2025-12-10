@@ -35,23 +35,9 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   // Compress responses
   compress: true,
-  // Webpack config to fix file.split error
+  // Webpack config - minimal to avoid breaking Next.js entry handling
   webpack: (config, { isServer }) => {
-    // Fix for file.split error - ensure file paths are always strings
-    const originalEntry = config.entry;
-    config.entry = async () => {
-      const entries = await originalEntry();
-      // Ensure all entry points are properly formatted
-      if (entries && typeof entries === 'object') {
-        Object.keys(entries).forEach((key) => {
-          if (entries[key] && !Array.isArray(entries[key])) {
-            entries[key] = [entries[key]].filter(Boolean);
-          }
-        });
-      }
-      return entries;
-    };
-    
+    // Only add fallbacks for client-side, don't modify entries
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
