@@ -7,6 +7,7 @@ import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadP
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
+import PlaceAutocomplete from '../components/PlaceAutocomplete';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
