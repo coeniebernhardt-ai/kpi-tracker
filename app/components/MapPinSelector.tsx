@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 const MapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((mod) => mod.Marker), { ssr: false });
-const useMapEvents = dynamic(() => import('react-leaflet').then((mod) => mod.useMapEvents), { ssr: false });
+// useMapEvents will be imported directly in the component
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
@@ -32,7 +32,11 @@ interface MapPinSelectorProps {
 
 // Component to handle map clicks
 function MapClickHandler({ onClick }: { onClick: (e: any) => void }) {
-  const MapEvents = useMapEvents({
+  // This will be dynamically imported, so we need to handle it differently
+  if (typeof window === 'undefined') return null;
+  
+  const { useMapEvents } = require('react-leaflet');
+  useMapEvents({
     click: onClick,
   });
   return null;
@@ -161,7 +165,9 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
                     dragend: handleMarkerDragEnd,
                   }}
                 />
-                <MapClickHandler onClick={handleMapClick} />
+                {typeof window !== 'undefined' && (
+                  <MapClickHandler onClick={handleMapClick} />
+                )}
               </MapContainer>
             )}
             
