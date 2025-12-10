@@ -49,3 +49,5 @@ prisma/.env
 
 # --- Redis / Other local caches ---
 *.pid
+
+git-filter-repo/
