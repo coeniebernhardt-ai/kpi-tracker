@@ -138,10 +138,13 @@ export default function PlaceAutocomplete({
     onChange(address);
   };
 
+  // Remove w-full from className if present, as we're using flex-1 instead
+  const inputClassName = className?.replace(/\bw-full\b/g, '') || '';
+  
   return (
     <>
-      <div className="relative" ref={containerRef}>
-        <div className="flex gap-2">
+      <div className="relative w-full" ref={containerRef}>
+        <div className="flex gap-2 w-full">
           <input
             ref={inputRef}
             type="text"
@@ -166,7 +169,7 @@ export default function PlaceAutocomplete({
             }}
             placeholder={placeholder}
             required={required}
-            className={`flex-1 ${className}`}
+            className={`flex-1 min-w-0 ${inputClassName}`}
             autoComplete="off"
           />
           <button
@@ -174,17 +177,18 @@ export default function PlaceAutocomplete({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              console.log('Map button clicked');
               setShowMap(true);
             }}
-            className="px-4 py-3 rounded-xl text-white font-medium transition-all flex items-center gap-2 shrink-0 hover:opacity-90"
-            style={{ background: '#1e3a5f' }}
+            className="px-4 py-3 rounded-xl text-white font-medium transition-all flex items-center justify-center gap-2 shrink-0 hover:opacity-90 whitespace-nowrap"
+            style={{ background: '#1e3a5f', minWidth: '80px' }}
             title="Select location on map"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>Map</span>
+            <span className="hidden sm:inline">Map</span>
           </button>
         </div>
         {isLoading && (
