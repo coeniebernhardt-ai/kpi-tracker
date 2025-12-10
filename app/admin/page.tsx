@@ -867,7 +867,7 @@ export default function AdminPage() {
                       : travelLogs.filter(log => log.user_id === exportUser);
                     
                     // Create CSV
-                    const headers = ['Date & Time', 'User', 'Reason', 'Destination', 'Distance (km)', 'Comments', 'Attachments'];
+                    const headers = ['Date & Time', 'User', 'Reason', 'Destination', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
                     const rows = filteredLogs.map(log => [
                       new Date(log.created_at).toLocaleString('en-ZA', {
                         year: 'numeric',
@@ -879,7 +879,10 @@ export default function AdminPage() {
                       }),
                       log.profile?.full_name || 'Unknown',
                       log.reason,
-                      log.destination,
+                      log.destination || '',
+                      log.start_address || '',
+                      log.end_address || '',
+                      log.is_return_trip ? 'Yes' : 'No',
                       log.distance_travelled?.toString() || '',
                       log.comments || '',
                       log.attachments && log.attachments.length > 0 
