@@ -1795,10 +1795,6 @@ export default function DashboardPage() {
                       setTravelLogAttachments(files);
                     }}
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:text-white"
-                    style={{ 
-                      fileBackground: 'linear-gradient(to right, #007fff, #ff4d54)',
-                      fileHoverBackground: '#007fff'
-                    }}
                     onFocus={(e) => e.target.style.borderColor = '#007fff'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                   />
