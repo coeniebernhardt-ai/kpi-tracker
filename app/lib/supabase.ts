@@ -631,3 +631,92 @@ export async function logTicketTime(ticketId: string, minutes: number, descripti
 
   return { data, error };
 }
+
+// Travel Log Types
+export interface TravelLog {
+  id: string;
+  user_id: string;
+  reason: string;
+  destination: string;
+  comments?: string;
+  created_at: string;
+  updated_at: string;
+  profile?: Profile;
+}
+
+// Travel Log Functions
+export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('travel_logs')
+      .select('*, profile:profiles!user_id(*)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching travel logs:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getTravelLogsByUserId:', err);
+    return [];
+  }
+}
+
+export async function getAllTravelLogs(): Promise<TravelLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('travel_logs')
+      .select('*, profile:profiles!user_id(*)')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching all travel logs:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getAllTravelLogs:', err);
+    return [];
+  }
+}
+
+export async function createTravelLog(travelLog: {
+  user_id: string;
+  reason: string;
+  destination: string;
+  comments?: string;
+}): Promise<{ data: TravelLog | null; error: Error | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('travel_logs')
+      .insert({
+        ...travelLog,
+        updated_at: new Date().toISOString(),
+      })
+      .select('*, profile:profiles!user_id(*)')
+      .single();
+    
+    return { data, error: error as Error | null };
+  } catch (err) {
+    console.error('Exception in createTravelLog:', err);
+    return { data: null, error: err as Error };
+  }
+}
+
+export async function deleteTravelLog(travelLogId: string): Promise<{ error: Error | null }> {
+  try {
+    const { error } = await supabase
+      .from('travel_logs')
+      .delete()
+      .eq('id', travelLogId);
+    
+    return { error: error as Error | null };
+  } catch (err) {
+    console.error('Exception in deleteTravelLog:', err);
+    return { error: err as Error };
+  }
+}

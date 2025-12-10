@@ -3,9 +3,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket } from '../lib/supabase';
+import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
+import Logo from '../components/Logo';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -34,6 +35,14 @@ export default function DashboardPage() {
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
+  const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
+  const [loadingTravelLogs, setLoadingTravelLogs] = useState(true);
+  const [showTravelLogForm, setShowTravelLogForm] = useState(false);
+  const [newTravelLog, setNewTravelLog] = useState({
+    reason: '',
+    destination: '',
+    comments: ''
+  });
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -77,10 +86,11 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  // Load tickets - only when user ID changes
+  // Load tickets and travel logs - only when user ID changes
   useEffect(() => {
     if (user?.id) {
       loadTickets();
+      loadTravelLogs();
     }
   }, [user?.id]);
 
@@ -90,6 +100,14 @@ export default function DashboardPage() {
     const data = await getTicketsByUserId(user.id);
     setTickets(data);
     setLoadingTickets(false);
+  };
+
+  const loadTravelLogs = async () => {
+    if (!user) return;
+    setLoadingTravelLogs(true);
+    const data = await getTravelLogsByUserId(user.id);
+    setTravelLogs(data);
+    setLoadingTravelLogs(false);
   };
 
   const handleCreateTicket = async (e: React.FormEvent) => {
@@ -257,6 +275,37 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const handleCreateTravelLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newTravelLog.reason.trim() || !newTravelLog.destination.trim()) return;
+
+    const { error } = await createTravelLog({
+      user_id: user.id,
+      reason: newTravelLog.reason.trim(),
+      destination: newTravelLog.destination.trim(),
+      comments: newTravelLog.comments.trim() || undefined
+    });
+
+    if (!error) {
+      await loadTravelLogs();
+      setNewTravelLog({ reason: '', destination: '', comments: '' });
+      setShowTravelLogForm(false);
+    } else {
+      alert('Error creating travel log: ' + (error as Error).message);
+    }
+  };
+
+  const handleDeleteTravelLog = async (logId: string) => {
+    if (!confirm('Are you sure you want to delete this travel log?')) return;
+
+    const { error } = await deleteTravelLog(logId);
+    if (!error) {
+      await loadTravelLogs();
+    } else {
+      alert('Error deleting travel log: ' + (error as Error).message);
+    }
+  };
+
   const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -369,6 +418,10 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="flex-shrink-0">
+              <Logo width={120} height={30} className="opacity-90 hover:opacity-100 transition-opacity" />
+            </Link>
+            <div className="flex-1" />
             <div className="relative group">
               {profile.avatar_url ? (
                 <Image
@@ -1460,6 +1513,151 @@ export default function DashboardPage() {
                 ))}
               </div>
             )
+          )}
+        </section>
+
+        {/* Travel Logs Section */}
+        <section className="mb-8 animate-fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Travel Logs
+            </h2>
+            <button
+              onClick={() => setShowTravelLogForm(!showTravelLogForm)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-medium hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {showTravelLogForm ? 'Cancel' : 'Add Travel Log'}
+            </button>
+          </div>
+
+          {/* Travel Log Form */}
+          {showTravelLogForm && (
+            <form onSubmit={handleCreateTravelLog} className="mb-6 p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 animate-fade-in">
+              <h3 className="text-lg font-semibold text-white mb-6">New Travel Log</h3>
+              
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Reason for Travel <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newTravelLog.reason}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, reason: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-colors"
+                    placeholder="e.g. Client site visit, Training, Conference"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Destination <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newTravelLog.destination}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, destination: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-colors"
+                    placeholder="e.g. Johannesburg, Cape Town, Durban"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Comments
+                  </label>
+                  <textarea
+                    value={newTravelLog.comments}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, comments: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-colors resize-none"
+                    placeholder="Additional notes or details about the travel..."
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium hover:shadow-lg transition-all"
+                  >
+                    Create Travel Log
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTravelLogForm(false);
+                      setNewTravelLog({ reason: '', destination: '', comments: '' });
+                    }}
+                    className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300 font-medium hover:bg-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Travel Logs List */}
+          {loadingTravelLogs ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            </div>
+          ) : travelLogs.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
+              <svg className="w-12 h-12 text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              <p className="text-slate-400">No travel logs yet. Add your first travel log above.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {travelLogs.map((log) => (
+                <div key={log.id} className="p-5 rounded-2xl bg-slate-800/40 border border-violet-500/30">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-base font-semibold text-white">{log.reason}</h3>
+                        <span className="px-2.5 py-1 rounded-lg bg-violet-500/20 text-violet-400 text-xs font-medium">
+                          {log.destination}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {new Date(log.created_at).toLocaleDateString('en-ZA', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTravelLog(log.id)}
+                      className="p-2 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors"
+                      title="Delete travel log"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                  {log.comments && (
+                    <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                      <p className="text-sm text-slate-300">{log.comments}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </section>
       </main>

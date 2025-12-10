@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket } from '../lib/supabase';
+import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -78,8 +78,13 @@ export default function AdminPage() {
       const ticketsData = await getAllTickets();
       console.log('loadData: Tickets result:', ticketsData);
       
+      console.log('loadData: Fetching travel logs...');
+      const travelLogsData = await getAllTravelLogs();
+      console.log('loadData: Travel logs result:', travelLogsData);
+      
       setProfiles(profilesData);
       setTickets(ticketsData);
+      setTravelLogs(travelLogsData);
     } catch (err) {
       console.error('loadData: Error:', err);
     }
@@ -328,6 +333,9 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <Link href="/dashboard" className="flex-shrink-0">
+                <Logo width={120} height={30} className="opacity-90 hover:opacity-100 transition-opacity" />
+              </Link>
               <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -374,6 +382,12 @@ export default function AdminPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Export Stats
+              </button>
+              <button onClick={() => setShowTravelLogExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/20 border border-violet-500/30 text-violet-400 hover:bg-violet-500/30 transition-all">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Export Travel Logs
               </button>
               <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium shadow-lg hover:shadow-cyan-500/25 transition-all">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -795,6 +809,87 @@ export default function AdminPage() {
                 </div>
 
                 <button onClick={exportToCSV} className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Download CSV Report
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Travel Log Export Modal */}
+      {showTravelLogExport && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowTravelLogExport(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
+              <div className="p-6 border-b border-slate-700/50">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">Export Travel Logs</h2>
+                  <button onClick={() => setShowTravelLogExport(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-2">Team Member</label>
+                  <select value={exportUser} onChange={(e) => setExportUser(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white">
+                    <option value="all">All Members</option>
+                    {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                  </select>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                  <h3 className="text-sm font-semibold text-slate-300 mb-3">Preview</h3>
+                  {(() => {
+                    const filteredLogs = exportUser === 'all' 
+                      ? travelLogs 
+                      : travelLogs.filter(log => log.user_id === exportUser);
+                    return (
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-white">{filteredLogs.length}</p>
+                        <p className="text-xs text-slate-500">Total Travel Logs</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <button 
+                  onClick={() => {
+                    const filteredLogs = exportUser === 'all' 
+                      ? travelLogs 
+                      : travelLogs.filter(log => log.user_id === exportUser);
+                    
+                    // Create CSV
+                    const headers = ['Date', 'User', 'Reason', 'Destination', 'Comments'];
+                    const rows = filteredLogs.map(log => [
+                      new Date(log.created_at).toLocaleDateString('en-ZA'),
+                      log.profile?.full_name || 'Unknown',
+                      log.reason,
+                      log.destination,
+                      log.comments || ''
+                    ]);
+                    
+                    const csvContent = [
+                      headers.join(','),
+                      ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+                    ].join('\n');
+                    
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `travel-logs-${new Date().toISOString().split('T')[0]}.csv`);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium flex items-center justify-center gap-2"
+                >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Download CSV Report
                 </button>
