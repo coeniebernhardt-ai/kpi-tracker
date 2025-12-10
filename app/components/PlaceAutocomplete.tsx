@@ -129,9 +129,12 @@ export default function PlaceAutocomplete({
         }}
         onBlur={(e) => {
           // Delay hiding suggestions to allow click events
-          setTimeout(() => {
-            setShowSuggestions(false);
-          }, 200);
+          const relatedTarget = (e.relatedTarget as HTMLElement);
+          if (!relatedTarget || !relatedTarget.closest('.autocomplete-suggestions')) {
+            setTimeout(() => {
+              setShowSuggestions(false);
+            }, 200);
+          }
           onBlur?.(e);
         }}
         placeholder={placeholder}
@@ -140,11 +143,15 @@ export default function PlaceAutocomplete({
         autoComplete="off"
       />
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+        <div className="autocomplete-suggestions absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <button
-              key={suggestion.place_id}
+              key={`${suggestion.place_id}-${index}`}
               type="button"
+              onMouseDown={(e) => {
+                // Prevent input blur from firing before click
+                e.preventDefault();
+              }}
               onClick={() => handleSelectSuggestion(suggestion)}
               className={`w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors ${
                 index === selectedIndex ? 'bg-slate-700' : ''

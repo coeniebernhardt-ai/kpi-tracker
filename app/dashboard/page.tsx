@@ -1686,13 +1686,12 @@ export default function DashboardPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     End Address <span className="text-rose-400">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <PlaceAutocomplete
                     value={newTravelLog.endAddress}
-                    onChange={(e) => setNewTravelLog({ ...newTravelLog, endAddress: e.target.value })}
+                    onChange={(value) => setNewTravelLog({ ...newTravelLog, endAddress: value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                    onFocus={(e) => e.target.style.borderColor = '#007fff'}
+                    onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. 456 Oak Ave, Cape Town, South Africa"
                   />
