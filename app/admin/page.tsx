@@ -541,7 +541,7 @@ export default function AdminPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
                             {ticket.status === 'open' ? 'Open' : 'Closed'}
                           </span>
                         </div>
@@ -604,8 +604,8 @@ export default function AdminPage() {
                         )}
                         
                         {ticket.status === 'closed' && ticket.resolution && (
-                          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mt-2">
-                            <p className="text-xs text-emerald-400 mb-1">Resolution:</p>
+                          <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 mt-2">
+                            <p className="text-xs text-blue-400 mb-1">Resolution:</p>
                             <p className="text-sm text-slate-300">{ticket.resolution}</p>
                           </div>
                         )}
@@ -711,7 +711,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Estate or Building <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Estate or Building <span className="text-blue-400">*</span></label>
                   <input
                     type="text"
                     value={newTicketData.estateOrBuilding}
@@ -723,7 +723,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Location <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Location <span className="text-blue-400">*</span></label>
                   <p className="text-xs text-slate-500 mb-2">as per CML</p>
                   <input
                     type="text"
@@ -743,8 +743,8 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">Location</label>
                   <div className="flex gap-3">
-                    <button type="button" onClick={() => setNewTicketData({ ...newTicketData, location: 'on-site' })} className={`flex-1 px-4 py-3 rounded-xl border ${newTicketData.location === 'on-site' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>📍 On-Site</button>
-                    <button type="button" onClick={() => setNewTicketData({ ...newTicketData, location: 'remote' })} className={`flex-1 px-4 py-3 rounded-xl border ${newTicketData.location === 'remote' ? 'bg-violet-500/20 border-violet-500 text-violet-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>🌐 Remote</button>
+                    <button type="button" onClick={() => setNewTicketData({ ...newTicketData, location: 'on-site' })} className={`flex-1 px-4 py-3 rounded-xl border ${newTicketData.location === 'on-site' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>📍 On-Site</button>
+                    <button type="button" onClick={() => setNewTicketData({ ...newTicketData, location: 'remote' })} className={`flex-1 px-4 py-3 rounded-xl border ${newTicketData.location === 'remote' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>🌐 Remote</button>
                   </div>
                 </div>
 
@@ -805,7 +805,7 @@ export default function AdminPage() {
                     return (
                       <div className="grid grid-cols-4 gap-4 text-center">
                         <div><p className="text-2xl font-bold text-white">{stats.total}</p><p className="text-xs text-slate-500">Total</p></div>
-                        <div><p className="text-2xl font-bold text-emerald-400">{stats.closed}</p><p className="text-xs text-slate-500">Closed ({stats.closedRate}%)</p></div>
+                        <div><p className="text-2xl font-bold text-blue-300">{stats.closed}</p><p className="text-xs text-slate-500">Closed ({stats.closedRate}%)</p></div>
                         <div><p className="text-2xl font-bold text-amber-400">{stats.open}</p><p className="text-xs text-slate-500">Open</p></div>
                         <div><p className="text-2xl font-bold text-cyan-400">{stats.avgResponseTime}</p><p className="text-xs text-slate-500">Avg Response (min)</p></div>
                       </div>
