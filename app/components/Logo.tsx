@@ -12,7 +12,7 @@ export default function Logo({ className = '', width = 180, height = 40 }: LogoP
   return (
     <Image
       src="/logo.png"
-      alt="KPI Tracker"
+      alt="Think-Q"
       width={width}
       height={height}
       className={className}

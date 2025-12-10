@@ -31,7 +31,7 @@ export default function Home() {
         <div className="mb-6 flex justify-center">
           <Logo width={200} height={45} />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">KPI Tracker</h1> 
+            <h1 className="text-2xl font-bold text-white mb-2">Think-Q</h1>
         <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />
         <p className="text-slate-400 mt-4">Redirecting...</p>
       </div>

@@ -19,6 +19,8 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showStatsExport, setShowStatsExport] = useState(false);
   const [showTravelLogExport, setShowTravelLogExport] = useState(false);
+  const [exportDateFrom, setExportDateFrom] = useState('');
+  const [exportDateTo, setExportDateTo] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
@@ -837,6 +839,27 @@ export default function AdminPage() {
               </div>
 
               <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-2">From Date</label>
+                    <input 
+                      type="date" 
+                      value={exportDateFrom} 
+                      onChange={(e) => setExportDateFrom(e.target.value)} 
+                      className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-2">To Date</label>
+                    <input 
+                      type="date" 
+                      value={exportDateTo} 
+                      onChange={(e) => setExportDateTo(e.target.value)} 
+                      className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm text-slate-300 mb-2">Team Member</label>
                   <select value={exportUser} onChange={(e) => setExportUser(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white">
@@ -848,9 +871,16 @@ export default function AdminPage() {
                 <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                   <h3 className="text-sm font-semibold text-slate-300 mb-3">Preview</h3>
                   {(() => {
-                    const filteredLogs = exportUser === 'all' 
-                      ? travelLogs 
-                      : travelLogs.filter(log => log.user_id === exportUser);
+                    const filteredLogs = travelLogs.filter(log => {
+                      const logDate = new Date(log.created_at);
+                      const from = exportDateFrom ? new Date(exportDateFrom) : null;
+                      const to = exportDateTo ? new Date(exportDateTo) : null;
+                      
+                      const matchesDate = (!from || logDate >= from) && (!to || logDate <= to);
+                      const matchesUser = exportUser === 'all' || log.user_id === exportUser;
+                      
+                      return matchesDate && matchesUser;
+                    });
                     return (
                       <div className="text-center">
                         <p className="text-2xl font-bold text-white">{filteredLogs.length}</p>
@@ -862,12 +892,19 @@ export default function AdminPage() {
 
                 <button 
                   onClick={() => {
-                    const filteredLogs = exportUser === 'all' 
-                      ? travelLogs 
-                      : travelLogs.filter(log => log.user_id === exportUser);
+                    const filteredLogs = travelLogs.filter(log => {
+                      const logDate = new Date(log.created_at);
+                      const from = exportDateFrom ? new Date(exportDateFrom) : null;
+                      const to = exportDateTo ? new Date(exportDateTo) : null;
+                      
+                      const matchesDate = (!from || logDate >= from) && (!to || logDate <= to);
+                      const matchesUser = exportUser === 'all' || log.user_id === exportUser;
+                      
+                      return matchesDate && matchesUser;
+                    });
                     
                     // Create CSV
-                    const headers = ['Date & Time', 'User', 'Reason', 'Destination', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
+                    const headers = ['Date & Time', 'User', 'Reason', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
                     const rows = filteredLogs.map(log => [
                       new Date(log.created_at).toLocaleString('en-ZA', {
                         year: 'numeric',
@@ -879,7 +916,6 @@ export default function AdminPage() {
                       }),
                       log.profile?.full_name || 'Unknown',
                       log.reason,
-                      log.destination || '',
                       log.start_address || '',
                       log.end_address || '',
                       log.is_return_trip ? 'Yes' : 'No',

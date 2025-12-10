@@ -101,7 +101,7 @@ export default function LoginPage() {
           <div className="mb-6 flex justify-center">
             <Logo width={200} height={45} />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">KPI Tracker</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">Think-Q</h1>
           <p className="text-slate-400">
             {isForgotPassword ? 'Reset your password' : isSignUp ? 'Create your account' : 'Sign in to your account'}
           </p>
@@ -324,7 +324,7 @@ export default function LoginPage() {
         )}
 
         <div className="mt-6 text-center text-xs text-slate-600">
-          <p>KPI Tracker • Digital Solutions Team</p>
+            <p>Think-Q • Digital Solutions Team</p>
         </div>
       </div>
     </div>

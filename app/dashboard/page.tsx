@@ -40,7 +40,6 @@ export default function DashboardPage() {
   const [showTravelLogForm, setShowTravelLogForm] = useState(false);
   const [newTravelLog, setNewTravelLog] = useState({
     reason: '',
-    destination: '',
     startAddress: '',
     endAddress: '',
     isReturnTrip: false,
@@ -287,14 +286,14 @@ export default function DashboardPage() {
       // Geocode start address
       const startResponse = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(startAddr)}&limit=1`,
-        { headers: { 'User-Agent': 'KPI-Tracker/1.0' } }
+        { headers: { 'User-Agent': 'Think-Q/1.0' } }
       );
       const startData = await startResponse.json();
       
       // Geocode end address
       const endResponse = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endAddr)}&limit=1`,
-        { headers: { 'User-Agent': 'KPI-Tracker/1.0' } }
+        { headers: { 'User-Agent': 'Think-Q/1.0' } }
       );
       const endData = await endResponse.json();
 
@@ -347,7 +346,7 @@ export default function DashboardPage() {
 
   const handleCreateTravelLog = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newTravelLog.reason.trim() || !newTravelLog.destination.trim()) return;
+    if (!user || !newTravelLog.reason.trim() || !newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()) return;
 
     setIsSubmitting(true);
 
@@ -372,9 +371,8 @@ export default function DashboardPage() {
       const { error } = await createTravelLog({
         user_id: user.id,
         reason: newTravelLog.reason.trim(),
-        destination: newTravelLog.destination.trim(),
-        start_address: newTravelLog.startAddress.trim() || undefined,
-        end_address: newTravelLog.endAddress.trim() || undefined,
+        start_address: newTravelLog.startAddress.trim(),
+        end_address: newTravelLog.endAddress.trim(),
         is_return_trip: newTravelLog.isReturnTrip,
         comments: newTravelLog.comments.trim() || undefined,
         distance_travelled: newTravelLog.distanceTravelled ? parseFloat(newTravelLog.distanceTravelled) : undefined,
@@ -385,7 +383,6 @@ export default function DashboardPage() {
         await loadTravelLogs();
         setNewTravelLog({ 
           reason: '', 
-          destination: '', 
           startAddress: '', 
           endAddress: '', 
           isReturnTrip: false,
@@ -1629,7 +1626,7 @@ export default function DashboardPage() {
         <section className="mb-8 animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <svg className="w-5 h-5" style={{ color: '#007fff' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5" style={{ color: '#1e3a5f' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
               Travel Logs
@@ -1662,7 +1659,7 @@ export default function DashboardPage() {
                     onChange={(e) => setNewTravelLog({ ...newTravelLog, reason: e.target.value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                    onFocus={(e) => e.target.style.borderColor = '#007fff'}
+                    onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. Client site visit, Training, Conference"
                   />
@@ -1670,15 +1667,14 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Start Address (Location) <span className="text-rose-400">*</span>
+                    Start Address <span className="text-rose-400">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <PlaceAutocomplete
                     value={newTravelLog.startAddress}
-                    onChange={(e) => setNewTravelLog({ ...newTravelLog, startAddress: e.target.value })}
+                    onChange={(value) => setNewTravelLog({ ...newTravelLog, startAddress: value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                    onFocus={(e) => e.target.style.borderColor = '#007fff'}
+                    onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. 123 Main St, Johannesburg, South Africa"
                   />
@@ -1731,7 +1727,7 @@ export default function DashboardPage() {
                         value={newTravelLog.distanceTravelled}
                         onChange={(e) => setNewTravelLog({ ...newTravelLog, distanceTravelled: e.target.value })}
                         className="flex-1 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                        onFocus={(e) => e.target.style.borderColor = '#007fff'}
+                        onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                         onBlur={(e) => e.target.style.borderColor = '#475569'}
                         placeholder="e.g. 150.5"
                       />
@@ -1740,13 +1736,13 @@ export default function DashboardPage() {
                         onClick={handleCalculateDistance}
                         disabled={calculatingDistance || !newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()}
                         className="px-4 py-3 rounded-xl text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        style={{ background: 'linear-gradient(to right, #007fff, #ff4d54)' }}
+                        style={{ backgroundColor: '#06b6d4' }}
                       >
                         {calculatingDistance ? 'Calculating...' : 'Calculate'}
                       </button>
                     </div>
                     {newTravelLog.isReturnTrip && newTravelLog.distanceTravelled && (
-                      <p className="text-xs mt-1" style={{ color: '#ff4d54' }}>
+                      <p className="text-xs mt-1" style={{ color: '#60a5fa' }}>
                         Return trip: Distance will be doubled to {parseFloat(newTravelLog.distanceTravelled) * 2} km
                       </p>
                     )}
@@ -1760,7 +1756,7 @@ export default function DashboardPage() {
                     checked={newTravelLog.isReturnTrip}
                     onChange={(e) => setNewTravelLog({ ...newTravelLog, isReturnTrip: e.target.checked })}
                     className="w-5 h-5 rounded border-slate-700"
-                    style={{ accentColor: '#007fff' }}
+                    style={{ accentColor: '#1e3a5f' }}
                   />
                   <label htmlFor="returnTrip" className="text-sm font-medium text-slate-300 cursor-pointer">
                     Return Trip (double the distance)
@@ -1800,11 +1796,11 @@ export default function DashboardPage() {
                   />
                   <style jsx>{`
                     input[type="file"]::file-selector-button {
-                      background: linear-gradient(to right, #007fff, #ff4d54);
+                      background: #06b6d4;
                       border: none;
                     }
                     input[type="file"]::file-selector-button:hover {
-                      background: #007fff;
+                      background: #0891b2;
                     }
                   `}</style>
                   {travelLogAttachments.length > 0 && (
@@ -1831,7 +1827,7 @@ export default function DashboardPage() {
                     type="submit"
                     disabled={isSubmitting}
                     className="flex-1 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(to right, #007fff, #ff4d54)' }}
+                    style={{ backgroundColor: '#f97316' }}
                   >
                     {isSubmitting ? 'Creating...' : 'Create Travel Log'}
                   </button>
@@ -1841,7 +1837,6 @@ export default function DashboardPage() {
                       setShowTravelLogForm(false);
                       setNewTravelLog({ 
                         reason: '', 
-                        destination: '', 
                         startAddress: '', 
                         endAddress: '', 
                         isReturnTrip: false,
@@ -1862,7 +1857,7 @@ export default function DashboardPage() {
           {/* Travel Logs List */}
           {loadingTravelLogs ? (
             <div className="text-center py-8">
-              <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: '#007fff', borderTopColor: 'transparent' }} />
+              <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: '#1e3a5f', borderTopColor: 'transparent' }} />
             </div>
           ) : travelLogs.length === 0 ? (
             <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
@@ -1874,16 +1869,13 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-4">
               {travelLogs.map((log) => (
-                <div key={log.id} className="p-5 rounded-2xl bg-slate-800/40 border" style={{ borderColor: 'rgba(0, 127, 255, 0.3)' }}>
+                <div key={log.id} className="p-5 rounded-2xl bg-slate-800/40 border" style={{ borderColor: 'rgba(30, 58, 95, 0.3)' }}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-base font-semibold text-white">{log.reason}</h3>
-                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgba(0, 127, 255, 0.2)', color: '#007fff' }}>
-                          {log.destination}
-                        </span>
                         {log.distance_travelled && (
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgba(255, 77, 84, 0.2)', color: '#ff4d54' }}>
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgba(30, 58, 95, 0.2)', color: '#60a5fa' }}>
                             {log.distance_travelled} km {log.is_return_trip && '(Return)'}
                           </span>
                         )}
@@ -1892,12 +1884,12 @@ export default function DashboardPage() {
                         <div className="mt-2 space-y-1">
                           {log.start_address && (
                             <p className="text-xs text-slate-400">
-                              <span className="font-medium" style={{ color: '#007fff' }}>From:</span> {log.start_address}
+                              <span className="font-medium" style={{ color: '#1e3a5f' }}>From:</span> {log.start_address}
                             </p>
                           )}
                           {log.end_address && (
                             <p className="text-xs text-slate-400">
-                              <span className="font-medium" style={{ color: '#ff4d54' }}>To:</span> {log.end_address}
+                              <span className="font-medium" style={{ color: '#1e3a5f' }}>To:</span> {log.end_address}
                             </p>
                           )}
                         </div>
@@ -1947,14 +1939,14 @@ export default function DashboardPage() {
                             rel="noopener noreferrer"
                             className="px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2"
                             style={{ 
-                              backgroundColor: 'rgba(0, 127, 255, 0.2)', 
-                              color: '#007fff' 
+                              backgroundColor: 'rgba(30, 58, 95, 0.2)', 
+                              color: '#60a5fa' 
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(0, 127, 255, 0.3)';
+                              e.currentTarget.style.backgroundColor = 'rgba(30, 58, 95, 0.3)';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(0, 127, 255, 0.2)';
+                              e.currentTarget.style.backgroundColor = 'rgba(30, 58, 95, 0.2)';
                             }}
                           >
                             {attachment.type.startsWith('image/') ? (

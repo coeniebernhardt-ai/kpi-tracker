@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KPI Tracker | Digital Solutions Team",
+  title: "Think-Q | Digital Solutions Team",
   description: "Monitor and track KPIs for the digital access control support team",
 };
 

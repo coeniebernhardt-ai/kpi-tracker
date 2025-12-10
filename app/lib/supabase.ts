@@ -637,7 +637,6 @@ export interface TravelLog {
   id: string;
   user_id: string;
   reason: string;
-  destination: string;
   start_address?: string;
   end_address?: string;
   is_return_trip?: boolean;
@@ -692,7 +691,6 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
 export async function createTravelLog(travelLog: {
   user_id: string;
   reason: string;
-  destination: string;
   start_address?: string;
   end_address?: string;
   is_return_trip?: boolean;
