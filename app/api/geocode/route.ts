@@ -9,70 +9,99 @@ export async function GET(request: Request) {
   }
 
   try {
-    const baseUrl = 'https://nominatim.openstreetmap.org/search';
+    // Using Geoapify Address Autocomplete API - better coverage for South Africa
+    // Free tier: 20,000 requests/month
+    // Get your API key from https://www.geoapify.com/get-started-with-maps-api
+    const API_KEY = process.env.GEOAPIFY_API_KEY || '';
     
-    // Focus on Gauteng, South Africa - search with explicit Gauteng location
-    const searchQuery = `${query}, Gauteng, South Africa`;
+    if (!API_KEY) {
+      // Fallback to Nominatim if no API key configured
+      return await tryNominatimFallback(query);
+    }
+    
+    const baseUrl = 'https://api.geoapify.com/v1/geocode/autocomplete';
+    
+    // Focus on Gauteng, South Africa
+    const searchQuery = query.includes(',') ? query : `${query}, Gauteng, South Africa`;
     
     const params = new URLSearchParams({
-      format: 'json',
-      q: searchQuery,
-      limit: '15', // Get more results to filter from
-      addressdetails: '1',
-      extratags: '1', // Essential for POIs and estate names
-      namedetails: '1',
-      dedupe: '0',
-      countrycodes: 'za', // Restrict to South Africa
-      'accept-language': 'en',
+      text: searchQuery,
+      type: 'amenity,building,street,address,postcode,locality,place', // Include all types
+      filter: 'countrycode:za', // Restrict to South Africa
+      limit: '15',
+      lang: 'en',
+      bias: 'rect:25.7,-26.5,28.7,-25.0', // Gauteng bounding box for bias
+      apiKey: API_KEY,
     });
 
-    const headers = {
-      'User-Agent': 'Think-Q/1.0 (contact: webmaster@thinkdigital.co.za)',
-      'Accept-Language': 'en',
-    };
-
-    // Make the request
-    const response = await fetch(`${baseUrl}?${params.toString()}`, { headers });
+    const response = await fetch(`${baseUrl}?${params.toString()}`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
 
     if (!response.ok) {
-      throw new Error(`Nominatim API error: ${response.status}`);
+      // If Geoapify fails, try Nominatim as fallback
+      console.log('Geoapify failed, trying Nominatim fallback...');
+      return await tryNominatimFallback(query);
     }
 
-    let data = await response.json();
+    const data = await response.json();
     
-    // Process and enhance results to prioritize Gauteng addresses with estate names, POIs, and street numbers
-    const processedData = data.map((item: any) => {
-      const address = item.address || {};
-      const extraTags = item.extratags || {};
-      const osmType = item.osm_type; // node, way, relation
-      const type = item.type || item.class; // residential, commercial, etc.
+    if (!data.features || data.features.length === 0) {
+      // Try Nominatim if no results
+      return await tryNominatimFallback(query);
+    }
+
+    // Process Geoapify results
+    const processedData = data.features.map((feature: any) => {
+      const props = feature.properties || {};
+      const geometry = feature.geometry || {};
       
+      // Extract address components
+      const address = {
+        house_number: props.housenumber || props.house_number,
+        road: props.street || props.road,
+        suburb: props.suburb || props.district || props.neighbourhood,
+        city: props.city || props.municipality,
+        state: props.state || props.region,
+        postcode: props.postcode,
+        country: props.country || 'South Africa',
+      };
+      
+      // Build display name
       let displayName = '';
-      let priority = 0; // Higher priority = shown first
+      let priority = 0;
       
-      // Check if it's an estate (usually a residential area or suburb with a specific name)
-      const isEstate = address.place === 'neighbourhood' || 
-                       address.place === 'suburb' ||
-                       (osmType === 'relation' && type === 'administrative') ||
-                       extraTags.place === 'neighbourhood' ||
-                       extraTags.place === 'estate' ||
-                       (address.neighbourhood && address.neighbourhood.toLowerCase().includes('estate')) ||
-                       (item.name && (item.name.toLowerCase().includes('estate') || item.name.toLowerCase().includes('park') || item.name.toLowerCase().includes('village')));
+      // Check if it's a POI (business, amenity)
+      const isPOI = props.type === 'amenity' || 
+                    props.type === 'building' ||
+                    (props.name && (
+                      props.category === 'commercial' ||
+                      props.category === 'amenity' ||
+                      props.category === 'catering' ||
+                      props.category === 'tourism' ||
+                      props.category === 'shopping'
+                    ));
       
-      // Check if it's a POI (Point of Interest)
-      const isPOI = osmType === 'node' && 
-                    type && 
-                    ['amenity', 'shop', 'tourism', 'leisure', 'office', 'craft', 'healthcare'].includes(type) &&
-                    item.name;
+      // Check if it's an estate (residential area with name)
+      const isEstate = props.type === 'locality' ||
+                       props.type === 'place' ||
+                       (props.name && (
+                         props.name.toLowerCase().includes('estate') ||
+                         props.name.toLowerCase().includes('park') ||
+                         props.name.toLowerCase().includes('village') ||
+                         props.name.toLowerCase().includes('manor') ||
+                         props.name.toLowerCase().includes('grove')
+                       ));
       
-      // Street address with house number
+      // Check for street address with number
       const hasStreetAddress = address.house_number && address.road;
       
-      // Build optimized display name based on type
-      if (isPOI && item.name) {
-        // POI: Name, Street (if available), Suburb, City
-        displayName = item.name;
-        priority = 40; // High priority for POIs
+      if (isPOI && props.name) {
+        // POI/Business: Name, Street, Suburb, City
+        displayName = props.name;
+        priority = 40;
         
         const addressParts = [];
         if (address.house_number && address.road) {
@@ -82,106 +111,124 @@ export async function GET(request: Request) {
         }
         if (address.suburb) addressParts.push(address.suburb);
         if (address.city && address.city !== address.suburb) addressParts.push(address.city);
-        
         if (addressParts.length > 0) {
           displayName += `, ${addressParts.join(', ')}`;
         }
       } else if (hasStreetAddress) {
         // Street address: Number Street, Suburb, City
         displayName = `${address.house_number} ${address.road}`;
-        priority = 30; // High priority for street addresses
+        priority = 30;
         
         if (address.suburb) displayName += `, ${address.suburb}`;
         if (address.city && address.city !== address.suburb) {
           displayName += `, ${address.city}`;
         }
-        // Add estate name if available
-        if (address.neighbourhood && !displayName.includes(address.neighbourhood)) {
-          displayName += `, ${address.neighbourhood}`;
-        }
-      } else if (isEstate) {
+      } else if (isEstate && props.name) {
         // Estate: Estate Name, City
-        displayName = item.name || address.neighbourhood || address.suburb || item.display_name.split(',')[0];
-        priority = 35; // Very high priority for estates
+        displayName = props.name;
+        priority = 35;
         
-        const addressParts = [];
-        if (address.suburb && !displayName.includes(address.suburb)) addressParts.push(address.suburb);
-        if (address.city && address.city !== address.suburb) addressParts.push(address.city);
-        if (addressParts.length > 0) {
-          displayName += `, ${addressParts.join(', ')}`;
-        }
-      } else if (address.road) {
-        // Just a street name: Street, Suburb, City
-        displayName = address.road;
-        priority = 20;
-        
-        if (address.suburb) displayName += `, ${address.suburb}`;
-        if (address.city && address.city !== address.suburb) displayName += `, ${address.city}`;
-      } else if (address.suburb || address.neighbourhood) {
-        // Suburb/Neighbourhood
-        displayName = address.neighbourhood || address.suburb || item.display_name.split(',')[0];
-        priority = 15;
-        
-        if (address.city && !displayName.includes(address.city)) {
+        if (address.suburb && !displayName.includes(address.suburb)) displayName += `, ${address.suburb}`;
+        if (address.city && address.city !== address.suburb && !displayName.includes(address.city)) {
           displayName += `, ${address.city}`;
         }
+      } else if (address.road) {
+        // Street name
+        displayName = address.road;
+        priority = 20;
+        if (address.suburb) displayName += `, ${address.suburb}`;
+        if (address.city && address.city !== address.suburb) displayName += `, ${address.city}`;
+      } else if (props.name) {
+        // Place name (estate, suburb, etc.)
+        displayName = props.name;
+        priority = 15;
+        if (address.city && !displayName.includes(address.city)) displayName += `, ${address.city}`;
       } else {
-        // Fallback to original display name
-        displayName = item.display_name;
+        // Fallback to formatted address
+        displayName = props.formatted || props.name || 'Unknown location';
         priority = 10;
       }
       
-      // Add Gauteng if not already in the name
-      if (!displayName.includes('Gauteng') && address.state === 'Gauteng') {
+      // Add Gauteng if in Gauteng
+      if (address.state === 'Gauteng' && !displayName.includes('Gauteng')) {
         displayName += ', Gauteng';
       }
       
       return {
-        ...item,
+        place_id: feature.properties?.place_id || feature.id || Math.random().toString(),
         display_name: displayName,
         priority: priority,
         isPOI: isPOI,
         isEstate: isEstate,
         hasStreetAddress: hasStreetAddress,
-        city: address.city,
-        state: address.state,
+        address: address,
+        geometry: geometry,
+        properties: props,
       };
     });
     
-    // Filter and prioritize: Gauteng results first, then prioritize by type
+    // Prioritize Gauteng results
     const gautengResults = processedData.filter((item: any) => 
-      item.state === 'Gauteng' || 
       item.address?.state === 'Gauteng' ||
+      item.properties?.state === 'Gauteng' ||
       item.display_name.includes('Gauteng') ||
-      item.city === 'Johannesburg' || 
-      item.city === 'Pretoria' ||
-      item.city === 'Centurion' ||
       item.address?.city === 'Johannesburg' ||
       item.address?.city === 'Pretoria' ||
-      item.address?.city === 'Centurion'
+      item.address?.city === 'Centurion' ||
+      item.properties?.city === 'Johannesburg' ||
+      item.properties?.city === 'Pretoria' ||
+      item.properties?.city === 'Centurion'
     );
     
     const otherResults = processedData.filter((item: any) => !gautengResults.includes(item));
     
-    // Sort by priority (highest first), then by relevance
+    // Sort by priority
     const sortByPriority = (a: any, b: any) => {
       if (b.priority !== a.priority) return b.priority - a.priority;
-      return (b.importance || 0) - (a.importance || 0);
+      return 0;
     };
     
     gautengResults.sort(sortByPriority);
     otherResults.sort(sortByPriority);
     
-    // Combine: Gauteng results first (up to 10), then others (up to 3)
-    const results = [...gautengResults.slice(0, 10), ...otherResults.slice(0, 3)];
+    // Return up to 10 results (prioritize Gauteng)
+    const results = [...gautengResults.slice(0, 10), ...otherResults.slice(0, 3)].slice(0, 10);
     
     return NextResponse.json(results);
   } catch (error) {
     console.error('Geocoding error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch address suggestions' },
-      { status: 500 }
-    );
+    return await tryNominatimFallback(query);
   }
 }
 
+// Fallback to Nominatim if Geoapify fails or is not configured
+async function tryNominatimFallback(query: string): Promise<NextResponse> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Gauteng, South Africa')}&limit=10&addressdetails=1&extratags=1&countrycodes=za`,
+      {
+        headers: {
+          'User-Agent': 'Think-Q/1.0 (contact: webmaster@thinkdigital.co.za)',
+          'Accept-Language': 'en',
+        },
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      return NextResponse.json(
+        data.map((item: any) => ({
+          place_id: item.place_id || item.osm_id,
+          display_name: item.display_name,
+        })).slice(0, 10)
+      );
+    }
+  } catch (error) {
+    console.error('Nominatim fallback error:', error);
+  }
+  
+  return NextResponse.json(
+    { error: 'Failed to fetch address suggestions. Please configure GEOAPIFY_API_KEY in .env.local for better results. See GEOAPIFY_SETUP.md for instructions.' },
+    { status: 500 }
+  );
+}
