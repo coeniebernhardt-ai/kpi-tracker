@@ -12,6 +12,16 @@ const useMapEvents = dynamic(() => import('react-leaflet').then((mod) => mod.use
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
 
+// Fix for default marker icon in Next.js
+if (typeof window !== 'undefined') {
+  const L = require('leaflet');
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+}
+
 interface MapPinSelectorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,7 +32,7 @@ interface MapPinSelectorProps {
 
 // Component to handle map clicks
 function MapClickHandler({ onClick }: { onClick: (e: any) => void }) {
-  const map = useMapEvents({
+  const MapEvents = useMapEvents({
     click: onClick,
   });
   return null;
@@ -138,7 +148,7 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
                 zoom={13}
                 style={{ height: '100%', width: '100%', zIndex: 0 }}
                 className="rounded-b-2xl"
-                key={position.join(',')}
+                key={`map-${position[0]}-${position[1]}`}
               >
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -157,7 +167,7 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
             
             {/* Loading overlay */}
             {isLoading && (
-              <div className="absolute top-4 left-4 bg-slate-900/90 px-4 py-2 rounded-lg flex items-center gap-2">
+              <div className="absolute top-4 left-4 bg-slate-900/90 px-4 py-2 rounded-lg flex items-center gap-2 z-10">
                 <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                 <span className="text-sm text-white">Getting address...</span>
               </div>
@@ -195,4 +205,3 @@ export default function MapPinSelector({ isOpen, onClose, onSelect, initialAddre
     </div>
   );
 }
-
