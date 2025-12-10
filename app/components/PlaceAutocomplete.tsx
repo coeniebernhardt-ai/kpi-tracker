@@ -30,37 +30,53 @@ export default function PlaceAutocomplete({
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isLoading, setIsLoading] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounced search function
   const searchAddress = async (query: string) => {
     if (!query || query.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     try {
       // Use Nominatim API (OpenStreetMap) - free, no API key required
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=za&limit=5&addressdetails=1`,
-        {
-          headers: {
-            'User-Agent': 'Think-Q/1.0', // Required by Nominatim
-          },
-        }
-      );
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=za&limit=5&addressdetails=1`;
+      
+      console.log('Searching for:', query);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Think-Q/1.0 (contact: webmaster@thinkdigital.co.za)', // Required by Nominatim
+          'Accept-Language': 'en',
+        },
+      });
+
+      console.log('Response status:', response.status);
 
       if (response.ok) {
         const data: NominatimResult[] = await response.json();
+        console.log('Suggestions received:', data.length);
         setSuggestions(data);
         setShowSuggestions(data.length > 0);
         setSelectedIndex(-1);
+      } else {
+        console.error('Nominatim API error:', response.status, response.statusText);
+        setSuggestions([]);
+        setShowSuggestions(false);
       }
     } catch (error) {
       console.error('Error fetching address suggestions:', error);
       setSuggestions([]);
       setShowSuggestions(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -105,6 +121,20 @@ export default function PlaceAutocomplete({
     }
   };
 
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -114,7 +144,7 @@ export default function PlaceAutocomplete({
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <input
         ref={inputRef}
         type="text"
@@ -128,7 +158,7 @@ export default function PlaceAutocomplete({
           onFocus?.(e);
         }}
         onBlur={(e) => {
-          // Delay hiding suggestions to allow click events
+          // Don't hide if clicking on suggestions
           const relatedTarget = (e.relatedTarget as HTMLElement);
           if (!relatedTarget || !relatedTarget.closest('.autocomplete-suggestions')) {
             setTimeout(() => {
@@ -142,8 +172,13 @@ export default function PlaceAutocomplete({
         className={className}
         autoComplete="off"
       />
+      {isLoading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="autocomplete-suggestions absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+        <div className="autocomplete-suggestions absolute z-50 w-full mt-1 bg-slate-800 border border-blue-500/30 rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <button
               key={`${suggestion.place_id}-${index}`}
@@ -153,9 +188,9 @@ export default function PlaceAutocomplete({
                 e.preventDefault();
               }}
               onClick={() => handleSelectSuggestion(suggestion)}
-              className={`w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors ${
-                index === selectedIndex ? 'bg-slate-700' : ''
-              } ${index < suggestions.length - 1 ? 'border-b border-slate-700' : ''}`}
+              className={`w-full text-left px-4 py-3 hover:bg-blue-900/50 transition-colors ${
+                index === selectedIndex ? 'bg-blue-900/50' : ''
+              } ${index < suggestions.length - 1 ? 'border-b border-blue-500/20' : ''}`}
             >
               <p className="text-sm text-white">{suggestion.display_name}</p>
             </button>

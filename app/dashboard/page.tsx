@@ -486,11 +486,11 @@ export default function DashboardPage() {
 
   const getAvatarGradient = () => {
     const colors = [
+      'from-blue-400 to-blue-600',
+      'from-blue-500 to-indigo-600',
+      'from-indigo-400 to-blue-500',
+      'from-blue-600 to-cyan-500',
       'from-cyan-400 to-blue-500',
-      'from-violet-400 to-purple-500',
-      'from-rose-400 to-pink-500',
-      'from-amber-400 to-orange-500',
-      'from-emerald-400 to-teal-500',
     ];
     const index = (profile?.full_name?.charCodeAt(0) ?? 0) % colors.length;
     return colors[index];
@@ -514,7 +514,7 @@ export default function DashboardPage() {
   if (loading || !user || !profile) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -546,7 +546,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPicture}
-                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Upload or edit profile picture"
               >
                 {uploadingPicture ? (
@@ -574,7 +574,7 @@ export default function DashboardPage() {
             {isAdmin && (
               <Link
                 href="/admin"
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-orange-600 text-white text-sm font-medium hover:shadow-lg transition-all"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium hover:shadow-lg transition-all"
               >
                 Admin Dashboard
               </Link>
@@ -598,7 +598,7 @@ export default function DashboardPage() {
         {kpis && (
           <section className="mb-8 animate-fade-in">
             <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Your Performance Summary
@@ -606,14 +606,14 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <p className="text-xs text-slate-500 mb-1">Tickets Handled</p>
-                <p className={`text-2xl font-bold ${parseFloat(kpis.ticketsHandled) >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <p className={`text-2xl font-bold ${parseFloat(kpis.ticketsHandled) >= 80 ? 'text-blue-400' : 'text-blue-300'}`}>
                   {kpis.ticketsHandled}%
                 </p>
                 <p className="text-xs text-slate-600 mt-1">Target: 80%</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <p className="text-xs text-slate-500 mb-1">Avg Response Time</p>
-                <p className={`text-2xl font-bold ${parseFloat(kpis.avgResponseTime) <= 60 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <p className={`text-2xl font-bold ${parseFloat(kpis.avgResponseTime) <= 60 ? 'text-blue-400' : 'text-blue-300'}`}>
                   {kpis.avgResponseTime} min
                 </p>
                 <p className="text-xs text-slate-600 mt-1">Target: ≤60 min</p>
@@ -643,7 +643,7 @@ export default function DashboardPage() {
         <div className="mb-6">
           <button
             onClick={() => setShowNewTicketForm(!showNewTicketForm)}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all hover:-translate-y-0.5"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all hover:-translate-y-0.5"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -671,7 +671,7 @@ export default function DashboardPage() {
                   value={newTicketData.client}
                   onChange={(e) => setNewTicketData({ ...newTicketData, client: e.target.value })}
                   required
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 outline-none appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-blue-500 outline-none appearance-none cursor-pointer"
                 >
                   <option value="">Select a client...</option>
                   <option value="Redefine">Redefine</option>
@@ -687,7 +687,7 @@ export default function DashboardPage() {
                   value={newTicketData.ticketType}
                   onChange={(e) => setNewTicketData({ ...newTicketData, ticketType: e.target.value as 'Hardware' | 'Software' | 'New Site' | '' })}
                   required
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 outline-none appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-blue-500 outline-none appearance-none cursor-pointer"
                 >
                   <option value="">Select type...</option>
                   <option value="Hardware">Hardware</option>
@@ -797,7 +797,7 @@ export default function DashboardPage() {
                             });
                           }
                         }}
-                        className="px-4 py-3 rounded-xl bg-cyan-500/20 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/30"
+                        className="px-4 py-3 rounded-xl bg-blue-500/20 border border-blue-500 text-blue-400 hover:bg-blue-500/30"
                       >
                         Add
                       </button>
@@ -858,7 +858,7 @@ export default function DashboardPage() {
                             });
                           }
                         }}
-                        className="px-4 py-3 rounded-xl bg-cyan-500/20 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/30"
+                        className="px-4 py-3 rounded-xl bg-blue-500/20 border border-blue-500 text-blue-400 hover:bg-blue-500/30"
                       >
                         Add
                       </button>
@@ -961,7 +961,7 @@ export default function DashboardPage() {
                         hasDependencies: e.target.checked,
                         dependencyName: e.target.checked ? newTicketData.dependencyName : ''
                       })}
-                      className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
                     />
                     <div>
                       <span className="text-sm font-medium text-slate-300">Dependencies</span>
@@ -1155,7 +1155,7 @@ export default function DashboardPage() {
         <section>
           {loadingTickets ? (
             <div className="text-center py-12">
-              <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
             </div>
           ) : activeTab === 'open' ? (
             openTickets.length === 0 ? (
@@ -1176,17 +1176,17 @@ export default function DashboardPage() {
                             {ticket.client}
                           </span>
                           <span className={`px-2.5 py-1 rounded-lg text-xs ${
-                            ticket.location === 'on-site' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-violet-500/20 text-violet-400'
+                            ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
                           }`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
                           </span>
                           {ticket.clickup_ticket && (
-                            <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 text-xs">
+                            <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">
                               🔗 {ticket.clickup_ticket}
                             </span>
                           )}
                           {ticket.has_dependencies && (
-                            <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 text-xs">
+                            <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">
                               ⚠️ Has Dependencies
                             </span>
                           )}
@@ -1259,7 +1259,7 @@ export default function DashboardPage() {
                                     href={file.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-sm text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                                    className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
                                   >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1299,7 +1299,7 @@ export default function DashboardPage() {
                               <img
                                 src={attachment.url}
                                 alt={attachment.name}
-                                className="w-full h-24 object-cover rounded-lg border border-slate-700 hover:border-cyan-500 transition-colors"
+                                className="w-full h-24 object-cover rounded-lg border border-slate-700 hover:border-blue-500 transition-colors"
                               />
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                                 <span className="text-white text-xs">{attachment.name}</span>
@@ -1370,10 +1370,10 @@ export default function DashboardPage() {
                     )}
 
                     {/* Auto Time Tracker Section */}
-                    <div className="mb-4 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-violet-400 font-medium">⏱️ Auto Time Tracked</span>
-                        <span className="text-sm font-bold text-violet-300">
+                    <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-blue-400 font-medium">⏱️ Auto Time Tracked</span>
+                        <span className="text-sm font-bold text-blue-300">
                           {(() => {
                             // Calculate total time including current elapsed time
                             const loggedTime = ticket.total_time_minutes || 0;
@@ -1586,20 +1586,20 @@ export default function DashboardPage() {
 
                     {/* Auto Time Tracked for closed tickets */}
                     {(ticket.total_time_minutes || (ticket.time_logs && ticket.time_logs.length > 0)) && (
-                      <div className="mt-4 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                      <div className="mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-violet-400 font-medium">⏱️ Auto Time Tracked</span>
-                          <span className="text-sm font-bold text-violet-300">
+                          <span className="text-xs text-blue-400 font-medium">⏱️ Auto Time Tracked</span>
+                          <span className="text-sm font-bold text-blue-300">
                             {ticket.total_time_minutes ? `${Math.floor(ticket.total_time_minutes / 60)}h ${ticket.total_time_minutes % 60}m` : '0h 0m'}
                           </span>
                         </div>
                         {ticket.time_logs && ticket.time_logs.length > 0 && (
                           <div className="max-h-32 overflow-y-auto">
                             {ticket.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }, idx: number) => (
-                              <div key={idx} className="text-xs py-1.5 border-b border-violet-500/10 last:border-0">
+                              <div key={idx} className="text-xs py-1.5 border-b border-blue-500/10 last:border-0">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
-                                    <span className="text-violet-300 font-medium">{log.minutes}m</span>
+                                    <span className="text-blue-300 font-medium">{log.minutes}m</span>
                                     <span className="text-slate-400 mx-1">-</span>
                                     <span className="text-slate-300">{log.description}</span>
                                   </div>
