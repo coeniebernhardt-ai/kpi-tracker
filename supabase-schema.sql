@@ -33,6 +33,7 @@ CREATE TABLE tickets (
   clickup_ticket TEXT,
   location TEXT CHECK (location IN ('on-site', 'remote')) DEFAULT 'remote',
   status TEXT CHECK (status IN ('open', 'closed')) DEFAULT 'open',
+  severity TEXT CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')) DEFAULT 'MEDIUM',
   issue TEXT NOT NULL,
   resolution TEXT,
   response_time_minutes INTEGER,

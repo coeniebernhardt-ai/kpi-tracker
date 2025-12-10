@@ -26,6 +26,7 @@ interface Ticket {
   responseTimeMinutes?: number;
   hasDependencies?: boolean;
   dependencyName?: string;
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
 interface MemberData {
@@ -196,7 +197,8 @@ export default function MemberPage() {
     client: '',
     clickupTicket: '',
     hasDependencies: false,
-    dependencyName: ''
+    dependencyName: '',
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   });
 
   // Close ticket form
@@ -279,11 +281,12 @@ export default function MemberPage() {
       client: newTicketData.client.trim(),
       clickupTicket: newTicketData.clickupTicket.trim() || undefined,
       hasDependencies: newTicketData.hasDependencies,
-      dependencyName: newTicketData.hasDependencies ? newTicketData.dependencyName.trim() : undefined
+      dependencyName: newTicketData.hasDependencies ? newTicketData.dependencyName.trim() : undefined,
+      severity: newTicketData.severity
     };
 
     saveTickets([newTicket, ...tickets]);
-    setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '' });
+    setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', hasDependencies: false, dependencyName: '', severity: 'MEDIUM' });
     setShowNewTicketForm(false);
   };
 
@@ -613,6 +616,24 @@ export default function MemberPage() {
                   className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
                   placeholder="Enter ClickUp ticket ID or URL..."
                 />
+              </div>
+
+              {/* Severity Field */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Severity <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={newTicketData.severity}
+                  onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none appearance-none cursor-pointer"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
               </div>
 
               {/* Task Location */}
