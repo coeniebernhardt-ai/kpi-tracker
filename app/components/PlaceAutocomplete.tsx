@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+// Type for Google Maps Autocomplete
+interface GoogleAutocomplete {
+  getPlace: () => {
+    formatted_address?: string;
+    [key: string]: any;
+  };
+  addListener: (event: string, callback: () => void) => void;
+}
+
 interface PlaceAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
@@ -22,12 +31,12 @@ export default function PlaceAutocomplete({
   onBlur
 }: PlaceAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<any>(null);
+  const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     // Load Google Maps API script if not already loaded
-      if (typeof window !== 'undefined' && typeof window.google === 'undefined') {
+      if (typeof window !== 'undefined' && !(window as any).google?.maps?.places) {
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
       script.async = true;
@@ -36,20 +45,22 @@ export default function PlaceAutocomplete({
         setIsLoaded(true);
       };
       document.head.appendChild(script);
-      } else if (typeof window !== 'undefined' && window.google?.maps?.places) {
+      } else if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
         setIsLoaded(true);
       }
 
     return () => {
-      if (autocompleteRef.current && typeof window !== 'undefined' && window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      if (autocompleteRef.current && typeof window !== 'undefined' && (window as any).google?.maps?.event) {
+        const google = (window as any).google;
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
   }, []);
 
   useEffect(() => {
-    if (isLoaded && inputRef.current && !autocompleteRef.current && typeof window !== 'undefined' && window.google?.maps?.places) {
-      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+    if (isLoaded && inputRef.current && !autocompleteRef.current && typeof window !== 'undefined' && (window as any).google?.maps?.places) {
+      const google = (window as any).google;
+      const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
         types: ['address'],
         componentRestrictions: { country: 'za' } // Restrict to South Africa
       });
