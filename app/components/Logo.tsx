@@ -11,8 +11,8 @@ interface LogoProps {
 export default function Logo({ className = '', width = 180, height = 40 }: LogoProps) {
   return (
     <Image
-      src="/thinkdigital-logo.png"
-      alt="thinkdigital"
+      src="/logo.png"
+      alt="KPI Tracker"
       width={width}
       height={height}
       className={className}
