@@ -26,6 +26,7 @@ export default function AdminPage() {
     client: '',
     clickupTicket: '',
     ticketType: '' as 'Hardware' | 'Software' | '',
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
     estateOrBuilding: '',
     cmlLocation: ''
   });
@@ -98,13 +99,14 @@ export default function AdminPage() {
       issue: newTicketData.issue.trim(),
       created_by: user?.id,
       ticket_type: newTicketData.ticketType,
+      severity: newTicketData.severity,
       estate_or_building: newTicketData.estateOrBuilding.trim(),
       cml_location: newTicketData.cmlLocation.trim()
     });
 
     if (!error && data) {
       await loadData();
-      setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', ticketType: '', estateOrBuilding: '', cmlLocation: '' });
+      setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', ticketType: '', severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT', estateOrBuilding: '', cmlLocation: '' });
       setSelectedUserId('');
       setShowCreateForm(false);
     }
@@ -510,6 +512,16 @@ export default function AdminPage() {
                           <span className={`px-2 py-0.5 rounded text-xs ${ticket.location === 'on-site' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-violet-500/20 text-violet-400'}`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
                           </span>
+                          {ticket.severity && (
+                            <span className={`px-2 py-0.5 rounded border text-xs font-medium ${
+                              ticket.severity === 'LOW' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                              ticket.severity === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                              ticket.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                              'bg-red-500/20 text-red-400 border-red-500/30'
+                            }`}>
+                              {ticket.severity}
+                            </span>
+                          )}
                           <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                             {ticket.status === 'open' ? 'Open' : 'Closed'}
                           </span>
@@ -656,6 +668,26 @@ export default function AdminPage() {
                     <option value="">Select type...</option>
                     <option value="Hardware">Hardware</option>
                     <option value="Software">Software</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Severity <span className="text-rose-400">*</span></label>
+                  <select
+                    value={newTicketData.severity}
+                    onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' })}
+                    required
+                    className={`w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 appearance-none cursor-pointer font-medium ${
+                      newTicketData.severity === 'LOW' ? 'text-emerald-400' : 
+                      newTicketData.severity === 'MEDIUM' ? 'text-yellow-400' :
+                      newTicketData.severity === 'HIGH' ? 'text-orange-400' :
+                      newTicketData.severity === 'URGENT' ? 'text-red-400' : 'text-white'
+                    }`}
+                  >
+                    <option value="LOW" className="text-emerald-400">Low</option>
+                    <option value="MEDIUM" className="text-yellow-400">Medium</option>
+                    <option value="HIGH" className="text-orange-400">High</option>
+                    <option value="URGENT" className="text-red-400">URGENT</option>
                   </select>
                 </div>
 

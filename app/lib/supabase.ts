@@ -44,6 +44,7 @@ export interface Ticket {
   clickup_ticket?: string;
   location: 'on-site' | 'remote';
   status: 'open' | 'closed';
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   issue: string;
   resolution?: string;
   response_time_minutes?: number;
@@ -383,6 +384,7 @@ export async function createTicket(ticket: {
   location: 'on-site' | 'remote';
   issue: string;
   created_by?: string;
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   has_dependencies?: boolean;
   dependency_name?: string;
   ticket_type?: 'Hardware' | 'Software' | 'New Site';

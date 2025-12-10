@@ -47,6 +47,7 @@ export default function DashboardPage() {
     hasDependencies: false,
     dependencyName: '',
     ticketType: '' as 'Hardware' | 'Software' | 'New Site' | '',
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
     estateOrBuilding: '',
     cmlLocation: '',
     // New Site fields
@@ -127,6 +128,7 @@ export default function DashboardPage() {
         issue: newTicketData.issue.trim(),
         created_by: user.id,
         ticket_type: newTicketData.ticketType,
+        severity: newTicketData.severity,
       };
 
       // Add regular ticket fields
@@ -202,6 +204,7 @@ export default function DashboardPage() {
         hasDependencies: false, 
         dependencyName: '', 
         ticketType: '', 
+        severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
         estateOrBuilding: '', 
         cmlLocation: '',
         siteName: '',
@@ -335,6 +338,21 @@ export default function DashboardPage() {
     ];
     const index = (profile?.full_name?.charCodeAt(0) ?? 0) % colors.length;
     return colors[index];
+  };
+
+  const getSeverityColor = (severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') => {
+    switch (severity) {
+      case 'LOW':
+        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'MEDIUM':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'HIGH':
+        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'URGENT':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      default:
+        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
   };
 
   if (loading || !user || !profile) {
@@ -515,6 +533,29 @@ export default function DashboardPage() {
                   <option value="Hardware">Hardware</option>
                   <option value="Software">Software</option>
                   <option value="New Site">New Site</option>
+                </select>
+              </div>
+
+              {/* Severity Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Severity <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={newTicketData.severity}
+                  onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' })}
+                  required
+                  className={`w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 focus:border-cyan-500 outline-none appearance-none cursor-pointer font-medium ${
+                    newTicketData.severity === 'LOW' ? 'text-emerald-400' : 
+                    newTicketData.severity === 'MEDIUM' ? 'text-yellow-400' :
+                    newTicketData.severity === 'HIGH' ? 'text-orange-400' :
+                    newTicketData.severity === 'URGENT' ? 'text-red-400' : 'text-white'
+                  }`}
+                >
+                  <option value="LOW" className="text-emerald-400">Low</option>
+                  <option value="MEDIUM" className="text-yellow-400">Medium</option>
+                  <option value="HIGH" className="text-orange-400">High</option>
+                  <option value="URGENT" className="text-red-400">URGENT</option>
                 </select>
               </div>
 
@@ -907,6 +948,7 @@ export default function DashboardPage() {
                     hasDependencies: false, 
                     dependencyName: '', 
                     ticketType: '', 
+                    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
                     estateOrBuilding: '', 
                     cmlLocation: '',
                     siteName: '',
@@ -986,6 +1028,11 @@ export default function DashboardPage() {
                           {ticket.has_dependencies && (
                             <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 text-xs">
                               ⚠️ Has Dependencies
+                            </span>
+                          )}
+                          {ticket.severity && (
+                            <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
+                              {ticket.severity}
                             </span>
                           )}
                         </div>
@@ -1324,6 +1371,11 @@ export default function DashboardPage() {
                           {ticket.has_dependencies && (
                             <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 text-xs">
                               ⚠️ Dependency
+                            </span>
+                          )}
+                          {ticket.severity && (
+                            <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
+                              {ticket.severity}
                             </span>
                           )}
                         </div>
