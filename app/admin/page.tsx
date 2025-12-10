@@ -560,7 +560,7 @@ export default function AdminPage() {
                             <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300">📍 {ticket.cml_location}</span>
                           )}
                           {ticket.has_dependencies && (
-                            <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400">⚠️ {ticket.dependency_name}</span>
+                            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">⚠️ {ticket.dependency_name}</span>
                           )}
                         </div>
 
@@ -620,7 +620,7 @@ export default function AdminPage() {
                       {/* Delete Button */}
                       <button
                         onClick={() => handleDeleteTicket(ticket.id)}
-                        className="shrink-0 p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                        className="shrink-0 p-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
                         title="Delete ticket"
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -653,7 +653,7 @@ export default function AdminPage() {
               
               <form onSubmit={handleCreateTicket} className="p-6 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Assign to <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Assign to <span className="text-blue-400">*</span></label>
                   <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} required className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white">
                     <option value="">Select a team member...</option>
                     {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>)}
@@ -661,7 +661,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Client <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Client <span className="text-blue-400">*</span></label>
                   <select
                     value={newTicketData.client}
                     onChange={(e) => setNewTicketData({ ...newTicketData, client: e.target.value })}
@@ -677,7 +677,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Type <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Type <span className="text-blue-400">*</span></label>
                   <select
                     value={newTicketData.ticketType}
                     onChange={(e) => setNewTicketData({ ...newTicketData, ticketType: e.target.value as 'Hardware' | 'Software' | '' })}
@@ -691,7 +691,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Severity <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Severity <span className="text-blue-400">*</span></label>
                   <select
                     value={newTicketData.severity}
                     onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' })}
@@ -749,7 +749,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Issue Description <span className="text-rose-400">*</span></label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Issue Description <span className="text-blue-400">*</span></label>
                   <textarea value={newTicketData.issue} onChange={(e) => setNewTicketData({ ...newTicketData, issue: e.target.value })} rows={4} required className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white resize-none" placeholder="Describe the issue..." />
                 </div>
 
@@ -1078,7 +1078,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300">{p.role}</span>
                         {p.is_admin && (
-                          <span className="px-2 py-1 rounded text-xs bg-rose-500/20 text-rose-400">Admin</span>
+                          <span className="px-2 py-1 rounded text-xs bg-blue-500/20 text-blue-400">Admin</span>
                         )}
                       </div>
                     </div>
