@@ -1684,7 +1684,7 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    End Address (Destination) <span className="text-rose-400">*</span>
+                    End Address <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -1696,23 +1696,7 @@ export default function DashboardPage() {
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. 456 Oak Ave, Cape Town, South Africa"
                   />
-                  <p className="text-xs text-slate-400 mt-1">Enter the destination location</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Destination (Short Name)
-                  </label>
-                  <input
-                    type="text"
-                    value={newTravelLog.destination}
-                    onChange={(e) => setNewTravelLog({ ...newTravelLog, destination: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                    onFocus={(e) => e.target.style.borderColor = '#007fff'}
-                    onBlur={(e) => e.target.style.borderColor = '#475569'}
-                    placeholder="e.g. Johannesburg, Cape Town, Durban"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Optional: Short name for the destination</p>
+                  <p className="text-xs text-slate-400 mt-1">Enter the end location of your trip</p>
                 </div>
 
                 <div className="flex items-center gap-4">
