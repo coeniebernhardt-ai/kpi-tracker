@@ -10,11 +10,14 @@
 2. **Place the logo file:**
    - Copy your logo file to the `public` folder in the project root
    - The path should be: `public/logo.png` (or your chosen filename)
+   - **Important:** If you're replacing the existing `thinkdigital-logo.png`, you can either:
+     - Delete `public/thinkdigital-logo.png` and add your new logo as `logo.png`
+     - Or replace `public/thinkdigital-logo.png` directly with your new logo file (keep the same name)
 
 3. **Update the Logo component:**
    - Open `app/components/Logo.tsx`
    - Find the line that says: `src="/thinkdigital-logo.png"`
-   - Change it to: `src="/logo.png"` (or your filename)
+   - Change it to: `src="/logo.png"` (or your filename, or keep `/thinkdigital-logo.png` if you replaced that file)
    - Update the `alt` text if needed
 
 4. **Example:**
@@ -30,8 +33,13 @@
    />
    ```
 
-5. **Test the logo:**
+5. **Clear Next.js cache (if logo doesn't update):**
+   - Delete the `.next` folder
    - Restart your development server (`yarn dev`)
+
+6. **Test the logo:**
+   - Restart your development server (`yarn dev`)
+   - Hard refresh your browser (Ctrl+Shift+R or Cmd+Shift+R)
    - Check that the logo appears on:
      - Login page
      - Dashboard page
@@ -41,6 +49,10 @@
 ## Current Logo Location
 
 The logo currently uses: `/thinkdigital-logo.png` in the `public` folder.
+
+## Quick Method (Replace existing logo)
+
+**Easiest way:** Simply replace the file `public/thinkdigital-logo.png` with your new logo file (keeping the same filename). No code changes needed!
 
 ## Logo Sizing
 
@@ -56,4 +68,5 @@ The Logo component accepts `width` and `height` props:
 - The logo appears on all pages automatically
 - The logo is clickable on dashboard and admin pages (links to dashboard)
 - Make sure your logo file is optimized for web (not too large file size)
+- If the logo doesn't update after replacing the file, clear browser cache and restart the dev server
 

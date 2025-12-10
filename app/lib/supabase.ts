@@ -639,6 +639,8 @@ export interface TravelLog {
   reason: string;
   destination: string;
   comments?: string;
+  distance_travelled?: number;
+  attachments?: { url: string; name: string; type: string }[];
   created_at: string;
   updated_at: string;
   profile?: Profile;
@@ -689,12 +691,15 @@ export async function createTravelLog(travelLog: {
   reason: string;
   destination: string;
   comments?: string;
+  distance_travelled?: number;
+  attachments?: { url: string; name: string; type: string }[];
 }): Promise<{ data: TravelLog | null; error: Error | null }> {
   try {
     const { data, error } = await supabase
       .from('travel_logs')
       .insert({
         ...travelLog,
+        attachments: travelLog.attachments || [],
         updated_at: new Date().toISOString(),
       })
       .select('*, profile:profiles!user_id(*)')

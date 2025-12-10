@@ -41,8 +41,10 @@ export default function DashboardPage() {
   const [newTravelLog, setNewTravelLog] = useState({
     reason: '',
     destination: '',
-    comments: ''
+    comments: '',
+    distanceTravelled: ''
   });
+  const [travelLogAttachments, setTravelLogAttachments] = useState<File[]>([]);
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -279,19 +281,47 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!user || !newTravelLog.reason.trim() || !newTravelLog.destination.trim()) return;
 
-    const { error } = await createTravelLog({
-      user_id: user.id,
-      reason: newTravelLog.reason.trim(),
-      destination: newTravelLog.destination.trim(),
-      comments: newTravelLog.comments.trim() || undefined
-    });
+    setIsSubmitting(true);
 
-    if (!error) {
-      await loadTravelLogs();
-      setNewTravelLog({ reason: '', destination: '', comments: '' });
-      setShowTravelLogForm(false);
-    } else {
-      alert('Error creating travel log: ' + (error as Error).message);
+    try {
+      // Upload attachments if any
+      let attachmentUrls: { url: string; name: string; type: string }[] = [];
+      if (travelLogAttachments.length > 0) {
+        // Create a temporary ticket ID for storage purposes (travel logs don't have ticket IDs)
+        const tempId = `travel-${user.id}-${Date.now()}`;
+        for (const file of travelLogAttachments) {
+          const { url, error: uploadError } = await uploadTicketAttachment(tempId, file, 'attachment');
+          if (!uploadError && url) {
+            attachmentUrls.push({
+              url,
+              name: file.name,
+              type: file.type || 'application/octet-stream'
+            });
+          }
+        }
+      }
+
+      const { error } = await createTravelLog({
+        user_id: user.id,
+        reason: newTravelLog.reason.trim(),
+        destination: newTravelLog.destination.trim(),
+        comments: newTravelLog.comments.trim() || undefined,
+        distance_travelled: newTravelLog.distanceTravelled ? parseFloat(newTravelLog.distanceTravelled) : undefined,
+        attachments: attachmentUrls.length > 0 ? attachmentUrls : undefined
+      });
+
+      if (!error) {
+        await loadTravelLogs();
+        setNewTravelLog({ reason: '', destination: '', comments: '', distanceTravelled: '' });
+        setTravelLogAttachments([]);
+        setShowTravelLogForm(false);
+      } else {
+        alert('Error creating travel log: ' + (error as Error).message);
+      }
+    } catch (err) {
+      alert('Error creating travel log: ' + (err as Error).message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1583,18 +1613,52 @@ export default function DashboardPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Attachments (images or files)
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setTravelLogAttachments(files);
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-violet-500 file:text-white hover:file:bg-violet-400"
+                  />
+                  {travelLogAttachments.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {travelLogAttachments.map((file, idx) => (
+                        <span key={idx} className="px-3 py-1 rounded-lg bg-violet-500/20 text-violet-400 text-xs flex items-center gap-2">
+                          {file.name}
+                          <button
+                            type="button"
+                            onClick={() => setTravelLogAttachments(travelLogAttachments.filter((_, i) => i !== idx))}
+                            className="text-violet-400 hover:text-violet-300"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     type="submit"
-                    className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium hover:shadow-lg transition-all"
+                    disabled={isSubmitting}
+                    className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Create Travel Log
+                    {isSubmitting ? 'Creating...' : 'Create Travel Log'}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setShowTravelLogForm(false);
-                      setNewTravelLog({ reason: '', destination: '', comments: '' });
+                      setNewTravelLog({ reason: '', destination: '', comments: '', distanceTravelled: '' });
+                      setTravelLogAttachments([]);
                     }}
                     className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300 font-medium hover:bg-slate-600 transition-colors"
                   >
@@ -1623,11 +1687,16 @@ export default function DashboardPage() {
                 <div key={log.id} className="p-5 rounded-2xl bg-slate-800/40 border border-violet-500/30">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-base font-semibold text-white">{log.reason}</h3>
                         <span className="px-2.5 py-1 rounded-lg bg-violet-500/20 text-violet-400 text-xs font-medium">
                           {log.destination}
                         </span>
+                        {log.distance_travelled && (
+                          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-medium">
+                            {log.distance_travelled} km
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500">
                         {new Date(log.created_at).toLocaleDateString('en-ZA', {
@@ -1653,6 +1722,33 @@ export default function DashboardPage() {
                   {log.comments && (
                     <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
                       <p className="text-sm text-slate-300">{log.comments}</p>
+                    </div>
+                  )}
+                  {log.attachments && log.attachments.length > 0 && (
+                    <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                      <p className="text-xs text-slate-500 mb-2">Attachments ({log.attachments.length}):</p>
+                      <div className="flex flex-wrap gap-2">
+                        {log.attachments.map((attachment, idx) => (
+                          <a
+                            key={idx}
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-lg bg-violet-500/20 text-violet-400 text-xs hover:bg-violet-500/30 transition-colors flex items-center gap-2"
+                          >
+                            {attachment.type.startsWith('image/') ? (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            )}
+                            {attachment.name}
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
