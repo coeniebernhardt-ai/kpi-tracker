@@ -109,7 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile, loading]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error && data?.user) {
+      // Immediately update user state if we have session data
+      setUser(data.user);
+      setSession(data.session);
+      // Fetch profile will happen via the auth state listener
+    }
     return { error: error as Error | null };
   };
 
