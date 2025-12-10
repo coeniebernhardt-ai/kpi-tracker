@@ -4,9 +4,10 @@ import { createServerClient } from "@supabase/ssr";
 /**
  * Creates a Supabase client for server-side functions.
  * Uses Next.js server-side cookies for auth.
+ * Note: In Next.js 15+, cookies() is async.
  */
-export function createSupabaseServerClient() {
-  const cookieStore = cookies(); // <-- Important: synchronous cookies()
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies(); // <-- async in Next.js 15+
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
