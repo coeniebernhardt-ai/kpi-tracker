@@ -440,6 +440,7 @@ export async function createTicket(ticket: {
       ...ticket,
       ticket_number: ticketNumber,
       status: 'open',
+      severity: ticket.severity || 'MEDIUM', // Default to MEDIUM if not provided
       updates: [],
       time_logs: [initialTimeLog],
       total_time_minutes: 0,
