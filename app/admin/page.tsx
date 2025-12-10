@@ -18,6 +18,7 @@ export default function AdminPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showStatsExport, setShowStatsExport] = useState(false);
+  const [showTravelLogExport, setShowTravelLogExport] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
