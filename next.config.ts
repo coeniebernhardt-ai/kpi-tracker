@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Disable Turbopack and use webpack instead
+  experimental: {
+    turbo: false,
+  },
   images: {
     remotePatterns: [
       {
