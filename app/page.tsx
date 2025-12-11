@@ -29,7 +29,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient flex items-center justify-center">
       <div className="text-center">
         <div className="mb-6 flex justify-center">
-          <Logo width={200} height={45} />
+          <Logo variant="login" />
         </div>
             <h1 className="text-2xl font-bold text-white mb-2">Think-Q</h1>
         <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />

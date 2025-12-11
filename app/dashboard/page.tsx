@@ -585,7 +585,7 @@ export default function DashboardPage() {
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="flex-shrink-0">
-              <Logo width={120} height={30} className="opacity-90 hover:opacity-100 transition-opacity" />
+              <Logo variant="team" className="opacity-90 hover:opacity-100 transition-opacity" />
             </Link>
             <div className="flex-1" />
             <div className="relative group">

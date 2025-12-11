@@ -374,7 +374,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/dashboard" className="flex-shrink-0">
-                <Logo width={120} height={30} className="opacity-90 hover:opacity-100 transition-opacity" />
+                <Logo variant="team" className="opacity-90 hover:opacity-100 transition-opacity" />
               </Link>
               <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
