@@ -303,13 +303,31 @@ export default function DashboardPage() {
 
   const handleAssignTicket = async (ticketId: string, assignedToUserId: string | null) => {
     try {
+      console.log('Assigning ticket:', ticketId, 'to user:', assignedToUserId);
       const { data, error } = await updateTicket(ticketId, { assigned_to: assignedToUserId || null });
-      if (!error && data) {
+      
+      if (error) {
+        console.error('Error assigning ticket:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        // Check if it's a column missing error
+        if (error.message?.includes('assigned_to') || error.message?.includes('column') || error.code === '42703') {
+          alert('Error: The assigned_to column may not exist in the database. Please run the SQL migration script (ADD_ASSIGNED_TO_COLUMN.sql) in your Supabase SQL Editor.');
+        } else {
+          alert('Error assigning ticket: ' + (error.message || 'Unknown error'));
+        }
+        return;
+      }
+      
+      if (data) {
+        console.log('Ticket assigned successfully:', data);
         await loadTickets();
         setAssigningTicketId(null);
-      } else {
-        console.error('Error assigning ticket:', error);
-        alert('Error assigning ticket: ' + ((error as Error)?.message || 'Unknown error'));
       }
     } catch (err) {
       console.error('Exception assigning ticket:', err);
