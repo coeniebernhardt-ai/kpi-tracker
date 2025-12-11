@@ -705,18 +705,52 @@ export async function createTravelLog(travelLog: {
       finalDistance = finalDistance * 2;
     }
 
+    // Build insert object - only include fields that are provided and not undefined
+    const insertData: any = {
+      user_id: travelLog.user_id,
+      reason: travelLog.reason,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Only add optional fields if they are provided
+    if (travelLog.start_address !== undefined && travelLog.start_address !== null) {
+      insertData.start_address = travelLog.start_address;
+    }
+    if (travelLog.end_address !== undefined && travelLog.end_address !== null) {
+      insertData.end_address = travelLog.end_address;
+    }
+    if (travelLog.is_return_trip !== undefined && travelLog.is_return_trip !== null) {
+      insertData.is_return_trip = travelLog.is_return_trip;
+    }
+    if (travelLog.comments !== undefined && travelLog.comments !== null && travelLog.comments.trim() !== '') {
+      insertData.comments = travelLog.comments;
+    }
+    if (finalDistance !== undefined && finalDistance !== null) {
+      insertData.distance_travelled = finalDistance;
+    }
+    if (travelLog.attachments !== undefined && travelLog.attachments !== null && travelLog.attachments.length > 0) {
+      insertData.attachments = travelLog.attachments;
+    }
+
     const { data, error } = await supabase
       .from('travel_logs')
-      .insert({
-        ...travelLog,
-        distance_travelled: finalDistance,
-        attachments: travelLog.attachments || [],
-        updated_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select('*, profile:profiles!user_id(*)')
       .single();
     
-    return { data, error: error as Error | null };
+    if (error) {
+      console.error('Error creating travel log:', error);
+      // Check if it's a column missing error
+      if (error.message?.includes('column') && error.message?.includes('not found')) {
+        return { 
+          data: null, 
+          error: new Error('Database schema is missing required columns. Please run the SQL migration script FIX_TRAVEL_LOGS_SCHEMA.sql in your Supabase SQL Editor.') 
+        };
+      }
+      return { data: null, error: error as Error };
+    }
+    
+    return { data, error: null };
   } catch (err) {
     console.error('Exception in createTravelLog:', err);
     return { data: null, error: err as Error };
