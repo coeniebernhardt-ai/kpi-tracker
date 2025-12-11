@@ -1317,24 +1317,61 @@ export default function DashboardPage() {
                           </button>
                         </div>
                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {profiles.filter(p => p.id !== ticket.user_id).map(p => {
-                            const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
-                            const isAssigned = assignedArray.includes(p.id);
-                            const isUserAssigned = assignedArray.includes(user?.id || '');
-                            const isOwner = ticket.user_id === user?.id;
-                            const canRemove = isOwner || isAdmin; // Only owner/admin can remove
-                            const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not authorized
+                          {(() => {
+                            const availableProfiles = profiles.filter(p => p.id !== ticket.user_id);
+                            console.log('Available profiles for assignment:', {
+                              totalProfiles: profiles.length,
+                              ticketOwnerId: ticket.user_id,
+                              availableProfiles: availableProfiles.length,
+                              availableProfileIds: availableProfiles.map(p => p.id),
+                              currentUserId: user?.id
+                            });
                             
-                            return (
-                              <label key={p.id} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={isAssigned}
-                                  onChange={(e) => handleAssignTicket(ticket.id, p.id, e.target.checked)}
-                                  disabled={isDisabled}
-                                  className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
-                                  style={{ accentColor: '#1e3a5f' }}
-                                />
+                            if (availableProfiles.length === 0) {
+                              return (
+                                <p className="text-xs text-slate-400 p-2">No other members available to assign</p>
+                              );
+                            }
+                            
+                            return availableProfiles.map(p => {
+                              const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+                              const isAssigned = assignedArray.includes(p.id);
+                              const isUserAssigned = assignedArray.includes(user?.id || '');
+                              const isOwner = ticket.user_id === user?.id;
+                              const canRemove = isOwner || isAdmin; // Only owner/admin can remove
+                              const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not authorized
+                              
+                              console.log('Profile checkbox state:', {
+                                profileId: p.id,
+                                profileName: p.full_name,
+                                isAssigned,
+                                isOwner,
+                                isAdmin,
+                                canRemove,
+                                isDisabled
+                              });
+                              
+                              return (
+                                <label key={p.id} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={(e) => {
+                                      console.log('Checkbox clicked:', {
+                                        ticketId: ticket.id,
+                                        profileId: p.id,
+                                        profileName: p.full_name,
+                                        checked: e.target.checked,
+                                        isDisabled
+                                      });
+                                      if (!isDisabled) {
+                                        handleAssignTicket(ticket.id, p.id, e.target.checked);
+                                      }
+                                    }}
+                                    disabled={isDisabled}
+                                    className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
+                                    style={{ accentColor: '#1e3a5f' }}
+                                  />
                                 <div className="flex items-center gap-2 flex-1">
                                   {p.avatar_url ? (
                                     <Image src={p.avatar_url} alt={p.full_name} width={24} height={24} className="w-6 h-6 rounded-lg object-cover" />
@@ -1345,14 +1382,14 @@ export default function DashboardPage() {
                                   )}
                                   <span className="text-sm text-slate-300">{p.full_name}</span>
                                   {p.role && <span className="text-xs text-slate-500">({p.role})</span>}
+                                  {isDisabled && !isOwner && !isAdmin && (
+                                    <span className="text-xs text-slate-500 ml-auto">(can't remove)</span>
+                                  )}
                                 </div>
                               </label>
-                            );
-                          })}
-                          </div>
-                          {profiles.filter(p => p.id !== ticket.user_id).length === 0 && (
-                            <p className="text-xs text-slate-400 mt-2">No other members available to assign</p>
-                          )}
+                              );
+                            });
+                          })()}
                         </div>
                       );
                     })()}
