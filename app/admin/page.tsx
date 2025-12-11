@@ -619,10 +619,27 @@ export default function AdminPage() {
                           <div className="mt-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                             <p className="text-xs text-blue-400 mb-2">Updates ({ticket.updates.length}):</p>
                             <div className="space-y-2 max-h-32 overflow-y-auto">
-                              {ticket.updates.map((update: { text: string; timestamp: string }, idx: number) => (
+                              {ticket.updates.map((update: any, idx: number) => (
                                 <div key={idx} className="text-xs">
                                   <span className="text-blue-300">[{new Date(update.timestamp).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}]</span>
                                   <span className="text-slate-300 ml-1">{update.text}</span>
+                                  {update.attachments && update.attachments.length > 0 && (
+                                    <div className="mt-1 ml-6 flex flex-wrap gap-1">
+                                      {update.attachments.map((attachment: { url: string; name: string; type: string }, attIdx: number) => (
+                                        <a
+                                          key={attIdx}
+                                          href={attachment.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-colors inline-flex items-center gap-1"
+                                          style={{ backgroundColor: 'rgba(30, 58, 95, 0.3)', color: '#60a5fa' }}
+                                        >
+                                          {attachment.type.startsWith('image/') ? '🖼️' : '📎'}
+                                          <span className="max-w-[100px] truncate">{attachment.name}</span>
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>

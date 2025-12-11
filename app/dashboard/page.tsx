@@ -82,6 +82,7 @@ export default function DashboardPage() {
   // Update ticket state
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
+  const [updateAttachments, setUpdateAttachments] = useState<File[]>([]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -248,14 +249,43 @@ export default function DashboardPage() {
   const handleAddUpdate = async (ticketId: string) => {
     if (!newUpdateText.trim()) return;
 
-    const { data, error } = await addTicketUpdate(ticketId, newUpdateText.trim(), profile?.full_name);
+    setIsSubmitting(true);
 
-    if (!error && data) {
-      await loadTickets();
-      setNewUpdateText('');
-      setUpdatingTicketId(null);
-    } else if (error) {
-      alert('Error adding update: ' + (error as Error).message);
+    try {
+      // Upload attachments if any
+      let attachmentUrls: { url: string; name: string; type: string }[] = [];
+      if (updateAttachments.length > 0) {
+        for (const file of updateAttachments) {
+          const { url, error: uploadError } = await uploadTicketAttachment(ticketId, file, 'attachment');
+          if (!uploadError && url) {
+            attachmentUrls.push({
+              url,
+              name: file.name,
+              type: file.type || 'application/octet-stream'
+            });
+          }
+        }
+      }
+
+      const { data, error } = await addTicketUpdate(
+        ticketId, 
+        newUpdateText.trim(), 
+        profile?.full_name,
+        attachmentUrls.length > 0 ? attachmentUrls : undefined
+      );
+
+      if (!error && data) {
+        await loadTickets();
+        setNewUpdateText('');
+        setUpdateAttachments([]);
+        setUpdatingTicketId(null);
+      } else if (error) {
+        alert('Error adding update: ' + (error as Error).message);
+      }
+    } catch (err) {
+      alert('Error adding update: ' + (err as Error).message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1250,9 +1280,37 @@ export default function DashboardPage() {
                       <div className="mb-4">
                         <p className="text-xs text-slate-500 mb-2">Updates</p>
                         <div className="space-y-2">
-                          {ticket.updates.map((update, idx) => (
+                          {ticket.updates.map((update: any, idx: number) => (
                             <div key={idx} className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
                               <p className="text-sm text-slate-300">{update.text}</p>
+                              {update.attachments && update.attachments.length > 0 && (
+                                <div className="mt-3 p-2 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                                  <p className="text-xs text-slate-500 mb-2">Attachments ({update.attachments.length}):</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {update.attachments.map((attachment: { url: string; name: string; type: string }, attIdx: number) => (
+                                      <a
+                                        key={attIdx}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1.5 rounded-lg text-xs hover:opacity-80 transition-colors flex items-center gap-2"
+                                        style={{ backgroundColor: 'rgba(30, 58, 95, 0.2)', color: '#60a5fa' }}
+                                      >
+                                        {attachment.type.startsWith('image/') ? (
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                          </svg>
+                                        ) : (
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                          </svg>
+                                        )}
+                                        {attachment.name}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               <p className="text-xs text-blue-400 mt-1">
                                 {new Date(update.timestamp).toLocaleDateString('en-ZA', {
                                   day: 'numeric', month: 'short', year: 'numeric',
@@ -1276,16 +1334,65 @@ export default function DashboardPage() {
                           className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-blue-500 outline-none resize-none mb-3"
                           placeholder="Enter update details..."
                         />
+                        
+                        {/* File Upload for Update */}
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-slate-300 mb-2">
+                            Attachments (images or files)
+                          </label>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,.doc,.docx"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setUpdateAttachments(files);
+                            }}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:text-white"
+                            onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
+                            onBlur={(e) => e.target.style.borderColor = '#475569'}
+                          />
+                          <style jsx>{`
+                            input[type="file"]::file-selector-button {
+                              background: #06b6d4;
+                              border: none;
+                            }
+                            input[type="file"]::file-selector-button:hover {
+                              background: #0891b2;
+                            }
+                          `}</style>
+                          {updateAttachments.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {updateAttachments.map((file, idx) => (
+                                <span key={idx} className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-2">
+                                  {file.name}
+                                  <button
+                                    type="button"
+                                    onClick={() => setUpdateAttachments(updateAttachments.filter((_, i) => i !== idx))}
+                                    className="hover:opacity-70"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleAddUpdate(ticket.id)}
-                            disabled={!newUpdateText.trim()}
-                            className="flex-1 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+                            disabled={!newUpdateText.trim() || isSubmitting}
+                            className="flex-1 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Save Update
+                            {isSubmitting ? 'Adding...' : 'Save Update'}
                           </button>
                           <button
-                            onClick={() => { setUpdatingTicketId(null); setNewUpdateText(''); }}
+                            onClick={() => { 
+                              setUpdatingTicketId(null); 
+                              setNewUpdateText(''); 
+                              setUpdateAttachments([]);
+                            }}
                             className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm"
                           >
                             Cancel

@@ -508,7 +508,12 @@ export async function deleteTicket(ticketId: string) {
   return { error };
 }
 
-export async function addTicketUpdate(ticketId: string, updateText: string, loggedBy?: string) {
+export async function addTicketUpdate(
+  ticketId: string, 
+  updateText: string, 
+  loggedBy?: string,
+  attachments?: { url: string; name: string; type: string }[]
+) {
   // Get the current ticket with all necessary fields
   const { data: ticket, error: fetchError } = await supabase
     .from('tickets')
@@ -521,10 +526,15 @@ export async function addTicketUpdate(ticketId: string, updateText: string, logg
   }
 
   const now = new Date();
-  const newUpdate = {
+  const newUpdate: any = {
     text: updateText,
     timestamp: now.toISOString()
   };
+  
+  // Add attachments if provided
+  if (attachments && attachments.length > 0) {
+    newUpdate.attachments = attachments;
+  }
 
   // Append to existing updates or create new array
   const existingUpdates = ticket?.updates || [];
