@@ -1219,9 +1219,9 @@ export default function DashboardPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          {ticket.assigned_to && ticket.assigned_profile && (
+                          {ticket.assigned_profiles && ticket.assigned_profiles.length > 0 && (
                             <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
-                              👤 Assigned to: {ticket.assigned_profile.full_name}
+                              👤 Assigned: {ticket.assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
                             </span>
                           )}
                         </div>
