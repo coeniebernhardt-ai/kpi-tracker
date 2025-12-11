@@ -1255,15 +1255,27 @@ export default function DashboardPage() {
                         {(() => {
                           const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
                           const isAssigned = assignedArray.includes(user?.id || '');
-                          const canAssign = (ticket.user_id === user?.id || isAssigned || isAdmin) && profiles.length > 0;
-                          return canAssign ? (
+                          const isOwner = ticket.user_id === user?.id;
+                          const canAssign = (isOwner || isAssigned || isAdmin);
+                          
+                          // Always show button if user has permission, even if profiles are loading
+                          if (!canAssign) return null;
+                          
+                          return profiles.length > 0 ? (
                             <button
-                              onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
+                              onClick={() => {
+                                console.log('Assign button clicked - opening assignment UI for ticket:', ticket.id);
+                                setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id);
+                              }}
                               className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
                             >
-                              {ticket.assigned_to && Array.isArray(ticket.assigned_to) && ticket.assigned_to.length > 0 ? 'Manage Assignees' : 'Assign Members'}
+                              {assignedArray.length > 0 ? 'Manage Assignees' : 'Assign Members'}
                             </button>
-                          ) : null;
+                          ) : (
+                            <span className="px-3 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
+                              Loading...
+                            </span>
+                          );
                         })()}
                       </div>
                     </div>
@@ -1275,7 +1287,25 @@ export default function DashboardPage() {
                       const isOwner = ticket.user_id === user?.id;
                       const canAccessAssignment = isOwner || isAssigned || isAdmin;
                       
-                      return canAccessAssignment ? (
+                      console.log('Assignment UI rendering check:', {
+                        ticketId: ticket.id,
+                        isOwner,
+                        isAssigned,
+                        isAdmin,
+                        canAccessAssignment,
+                        profilesCount: profiles.length
+                      });
+                      
+                      if (!canAccessAssignment) return null;
+                      if (profiles.length === 0) {
+                        return (
+                          <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                            <p className="text-sm text-slate-400">Loading members...</p>
+                          </div>
+                        );
+                      }
+                      
+                      return (
                         <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
                           <div className="flex items-center justify-between mb-3">
                             <label className="block text-sm font-medium text-slate-300">Assign Members</label>
