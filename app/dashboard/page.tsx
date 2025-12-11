@@ -105,9 +105,11 @@ export default function DashboardPage() {
   const loadProfiles = async () => {
     try {
       const profilesData = await getAllProfiles();
+      console.log('Loaded profiles:', profilesData.length, profilesData);
       setProfiles(profilesData);
     } catch (err) {
       console.error('Error loading profiles:', err);
+      setProfiles([]); // Set empty array on error to prevent undefined issues
     }
   };
 
