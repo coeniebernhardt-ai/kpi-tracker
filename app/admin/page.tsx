@@ -615,12 +615,22 @@ export default function AdminPage() {
                             {profiles.filter(p => p.id !== ticket.user_id).map(p => {
                               const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
                               const isAssigned = assignedArray.includes(p.id);
+                              const isUserAssigned = assignedArray.includes(user?.id || '');
+                              const canRemove = isAdmin; // Only admins can remove in admin view
+                              const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not admin
+                              
                               return (
-                                <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-slate-800/50 cursor-pointer">
+                                <label key={p.id} className={`flex items-center gap-2 p-1.5 rounded hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                                   <input
                                     type="checkbox"
                                     checked={isAssigned}
                                     onChange={async (e) => {
+                                      // Check if user can remove (only admins can remove)
+                                      if (!e.target.checked && !isAdmin) {
+                                        alert('Only admins can remove assigned members.');
+                                        return;
+                                      }
+                                      
                                       const currentAssigned = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
                                       let newAssigned: string[];
                                       if (e.target.checked) {
@@ -636,7 +646,8 @@ export default function AdminPage() {
                                         alert('Error updating assignment: ' + ((error as Error)?.message || 'Unknown error'));
                                       }
                                     }}
-                                    className="w-4 h-4 rounded border-slate-700"
+                                    disabled={isDisabled}
+                                    className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
                                     style={{ accentColor: '#1e3a5f' }}
                                   />
                                   <span className="text-xs text-slate-300">{p.full_name}</span>

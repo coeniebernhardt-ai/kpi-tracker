@@ -306,20 +306,32 @@ export default function DashboardPage() {
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) return;
       
+      // Check permissions: Only owner or admin can remove members
+      const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+      const isAssigned = assignedArray.includes(user?.id || '');
+      const isOwner = ticket.user_id === user?.id;
+      const canRemove = isOwner || isAdmin; // Only owner/admin can remove
+      
+      // Prevent assigned members from removing members
+      if (!isChecked && !canRemove) {
+        alert('Only the ticket owner or admin can remove assigned members.');
+        return;
+      }
+      
       const currentAssigned = ticket.assigned_to || [];
-      const assignedArray = Array.isArray(currentAssigned) ? currentAssigned : (currentAssigned ? [currentAssigned] : []);
+      const currentAssignedArray = Array.isArray(currentAssigned) ? currentAssigned : (currentAssigned ? [currentAssigned] : []);
       
       let newAssigned: string[];
       if (isChecked) {
         // Add member if not already assigned
-        if (!assignedArray.includes(userId)) {
-          newAssigned = [...assignedArray, userId];
+        if (!currentAssignedArray.includes(userId)) {
+          newAssigned = [...currentAssignedArray, userId];
         } else {
           return; // Already assigned
         }
       } else {
-        // Remove member
-        newAssigned = assignedArray.filter(id => id !== userId);
+        // Remove member (only if allowed)
+        newAssigned = currentAssignedArray.filter(id => id !== userId);
       }
       
       console.log('Updating ticket assignment:', ticketId, 'assigned:', newAssigned);
@@ -1265,13 +1277,19 @@ export default function DashboardPage() {
                           {profiles.filter(p => p.id !== ticket.user_id).map(p => {
                             const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
                             const isAssigned = assignedArray.includes(p.id);
+                            const isUserAssigned = assignedArray.includes(user?.id || '');
+                            const isOwner = ticket.user_id === user?.id;
+                            const canRemove = isOwner || isAdmin; // Only owner/admin can remove
+                            const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not authorized
+                            
                             return (
-                              <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer">
+                              <label key={p.id} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                                 <input
                                   type="checkbox"
                                   checked={isAssigned}
                                   onChange={(e) => handleAssignTicket(ticket.id, p.id, e.target.checked)}
-                                  className="w-4 h-4 rounded border-slate-700"
+                                  disabled={isDisabled}
+                                  className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
                                   style={{ accentColor: '#1e3a5f' }}
                                 />
                                 <div className="flex items-center gap-2 flex-1">
