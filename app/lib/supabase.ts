@@ -305,7 +305,7 @@ export async function getAllTickets(): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
       .from('tickets')
-      .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
+      .select('*, profile:profiles!user_id(*)')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -347,7 +347,7 @@ export async function getAllTickets(): Promise<Ticket[]> {
       
       return {
         ...ticket,
-        assigned_to: assignedIds,
+        assigned_to: assignedIds || [],
         assigned_profiles: assignedProfiles,
         time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
         updates: Array.isArray(ticket.updates) ? ticket.updates : [],
