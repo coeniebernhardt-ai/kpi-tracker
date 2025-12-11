@@ -1796,6 +1796,11 @@ export default function DashboardPage() {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
                             {ticket.client}
                           </span>
+                          {ticket.estate_or_building && (
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
+                              {ticket.estate_or_building}
+                            </span>
+                          )}
                           {ticket.response_time_minutes && ticket.response_time_minutes > 0 && (
                             <span className={`px-2.5 py-1 rounded-lg text-xs ${
                               ticket.response_time_minutes <= 60 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
