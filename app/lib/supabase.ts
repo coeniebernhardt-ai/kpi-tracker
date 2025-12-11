@@ -496,16 +496,50 @@ export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
   // Only include fields that should be updated, exclude joined data
   const updateData: any = { ...updates };
   delete updateData.profile;
-  delete updateData.assigned_profile;
+  delete updateData.assigned_profiles;
+  
+  // Convert assigned_to array to the database column name (assigned_to_array)
+  if ('assigned_to' in updateData) {
+    // Ensure it's a proper array (not null/undefined)
+    const assignedArray = updateData.assigned_to || [];
+    // Set the database column name
+    updateData.assigned_to_array = Array.isArray(assignedArray) ? assignedArray : [];
+    // Remove the TypeScript field name
+    delete updateData.assigned_to;
+  }
 
   const { data, error } = await supabase
     .from('tickets')
     .update(updateData)
     .eq('id', ticketId)
-    .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
+    .select('*, profile:profiles!user_id(*)')
     .single();
 
-  return { data, error };
+  // After update, fetch assigned profiles separately if assigned_to_array exists
+  if (!error && data && (data as any).assigned_to_array && Array.isArray((data as any).assigned_to_array) && (data as any).assigned_to_array.length > 0) {
+    const { data: assignedProfiles } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', (data as any).assigned_to_array);
+    
+    return { 
+      data: { 
+        ...data, 
+        assigned_to: (data as any).assigned_to_array,
+        assigned_profiles: assignedProfiles || [] 
+      }, 
+      error 
+    };
+  }
+
+  return { 
+    data: error ? null : { 
+      ...data, 
+      assigned_to: (data as any)?.assigned_to_array || [],
+      assigned_profiles: [] 
+    }, 
+    error 
+  };
 }
 
 export async function closeTicket(ticketId: string, resolution: string) {
