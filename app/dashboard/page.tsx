@@ -1213,9 +1213,13 @@ export default function DashboardPage() {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
                             {ticket.client}
                           </span>
-                          {ticket.estate_or_building && (
+                          {ticket.estate_or_building ? (
                             <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
                               {ticket.estate_or_building}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs opacity-50">
+                              No Estate/Building
                             </span>
                           )}
                           <span className={`px-2.5 py-1 rounded-lg text-xs ${

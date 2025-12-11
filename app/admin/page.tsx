@@ -577,7 +577,11 @@ export default function AdminPage() {
                           </span>
                           <span className="text-xs text-slate-500">{memberProfile?.full_name}</span>
                           {ticket.client && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{ticket.client}</span>}
-                          {ticket.estate_or_building && <span className="px-2 py-0.5 rounded text-xs bg-slate-700/70 text-slate-300">{ticket.estate_or_building}</span>}
+                          {ticket.estate_or_building ? (
+                            <span className="px-2 py-0.5 rounded text-xs bg-slate-700/70 text-slate-300">{ticket.estate_or_building}</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-xs bg-slate-700/50 text-slate-400 opacity-50">No Estate/Building</span>
+                          )}
                           {ticket.clickup_ticket && <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">🔗 {ticket.clickup_ticket}</span>}
                           <span className={`px-2 py-0.5 rounded text-xs ${ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
