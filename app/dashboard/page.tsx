@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null);
+  const [editingClickUpTicketId, setEditingClickUpTicketId] = useState<string | null>(null);
+  const [clickUpTicketValue, setClickUpTicketValue] = useState('');
   const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
   const [loadingTravelLogs, setLoadingTravelLogs] = useState(true);
   const [showTravelLogForm, setShowTravelLogForm] = useState(false);
@@ -300,6 +302,21 @@ export default function DashboardPage() {
       alert('Error adding update: ' + (err as Error).message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateClickUpTicket = async (ticketId: string) => {
+    try {
+      const { error } = await updateTicket(ticketId, { clickup_ticket: clickUpTicketValue.trim() || undefined });
+      if (!error) {
+        await loadTickets();
+        setEditingClickUpTicketId(null);
+        setClickUpTicketValue('');
+      } else {
+        alert('Error updating ClickUp ticket: ' + (error.message || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error updating ClickUp ticket: ' + ((err as Error)?.message || 'Unknown error'));
     }
   };
 
