@@ -1202,7 +1202,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs">Open</span>
-                        {(ticket.user_id === user?.id || isAdmin) && (
+                        {(ticket.user_id === user?.id || isAdmin) && profiles.length > 0 && (
                           <button
                             onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
                             className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
