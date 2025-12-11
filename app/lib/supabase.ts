@@ -64,9 +64,12 @@ export interface Ticket {
   target_date?: string;
   // Attachments for regular tickets
   attachments?: { url: string; name: string; type: string }[];
-  updates?: { text: string; timestamp: string }[];
+  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[] }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
+  // Assignment
+  assigned_to?: string;
+  assigned_profile?: Profile;
   // Joined data
   profile?: Profile;
 }
@@ -302,7 +305,7 @@ export async function getAllTickets(): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
       .from('tickets')
-      .select('*, profile:profiles!user_id(*)')
+      .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -347,8 +350,8 @@ export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
       .from('tickets')
-      .select('*')
-      .eq('user_id', userId)
+      .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
+      .or(`user_id.eq.${userId},assigned_to.eq.${userId}`)
       .order('created_at', { ascending: false });
     
     if (error) {

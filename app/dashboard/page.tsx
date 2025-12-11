@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog } from '../lib/supabase';
+import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -35,6 +35,8 @@ export default function DashboardPage() {
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null);
   const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
   const [loadingTravelLogs, setLoadingTravelLogs] = useState(true);
   const [showTravelLogForm, setShowTravelLogForm] = useState(false);
@@ -91,13 +93,23 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  // Load tickets and travel logs - only when user ID changes
+  // Load tickets, travel logs, and profiles - only when user ID changes
   useEffect(() => {
     if (user?.id) {
       loadTickets();
       loadTravelLogs();
+      loadProfiles();
     }
   }, [user?.id]);
+
+  const loadProfiles = async () => {
+    try {
+      const profilesData = await getAllProfiles();
+      setProfiles(profilesData);
+    } catch (err) {
+      console.error('Error loading profiles:', err);
+    }
+  };
 
   const loadTickets = async () => {
     if (!user) return;
@@ -1160,6 +1172,11 @@ export default function DashboardPage() {
                               {ticket.severity}
                             </span>
                           )}
+                          {ticket.assigned_to && ticket.assigned_profile && (
+                            <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
+                              👤 Assigned to: {ticket.assigned_profile.full_name}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500">
                           {new Date(ticket.created_at).toLocaleDateString('en-ZA', { 
@@ -1167,8 +1184,43 @@ export default function DashboardPage() {
                           })}
                         </p>
                       </div>
-                      <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs">Open</span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs">Open</span>
+                        {(ticket.user_id === user?.id || isAdmin) && (
+                          <button
+                            onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
+                            className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
+                          >
+                            {ticket.assigned_to ? 'Change Assignee' : 'Assign Member'}
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Assignment UI */}
+                    {assigningTicketId === ticket.id && (
+                      <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Assign to Member</label>
+                        <div className="flex gap-2">
+                          <select
+                            value={ticket.assigned_to || ''}
+                            onChange={(e) => handleAssignTicket(ticket.id, e.target.value || null)}
+                            className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm"
+                          >
+                            <option value="">Unassigned</option>
+                            {profiles.filter(p => p.id !== ticket.user_id).map(p => (
+                              <option key={p.id} value={p.id}>{p.full_name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => setAssigningTicketId(null)}
+                            className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm hover:bg-slate-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mb-4">
                       <p className="text-xs text-slate-500 mb-1">Issue</p>
@@ -1399,7 +1451,7 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : (ticket.user_id === user?.id || ticket.assigned_to === user?.id || isAdmin) ? (
                       <button
                         onClick={() => setUpdatingTicketId(ticket.id)}
                         className="mb-4 w-full px-4 py-2 rounded-xl border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2"
@@ -1409,7 +1461,7 @@ export default function DashboardPage() {
                         </svg>
                         Add Update
                       </button>
-                    )}
+                    ) : null}
 
                     {/* Auto Time Tracker Section */}
                     <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">

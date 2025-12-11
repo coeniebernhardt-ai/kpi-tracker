@@ -591,6 +591,11 @@ export default function AdminPage() {
                               {ticket.severity}
                             </span>
                           )}
+                          {ticket.assigned_to && (ticket as any).assigned_profile && (
+                            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
+                              👤 Assigned: {(ticket as any).assigned_profile.full_name}
+                            </span>
+                          )}
                           <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
                             {ticket.status === 'open' ? 'Open' : 'Closed'}
                           </span>
