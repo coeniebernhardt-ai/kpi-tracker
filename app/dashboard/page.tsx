@@ -301,11 +301,29 @@ export default function DashboardPage() {
     }
   };
 
-  const handleAssignTicket = async (ticketId: string, assignedToUserId: string | null) => {
+  const handleAssignTicket = async (ticketId: string, userId: string, isChecked: boolean) => {
     try {
-      console.log('Assigning ticket:', ticketId, 'to user:', assignedToUserId);
-      const assignedTo = assignedToUserId || null;
-      const { data, error } = await updateTicket(ticketId, { assigned_to: assignedTo });
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+      
+      const currentAssigned = ticket.assigned_to || [];
+      const assignedArray = Array.isArray(currentAssigned) ? currentAssigned : (currentAssigned ? [currentAssigned] : []);
+      
+      let newAssigned: string[];
+      if (isChecked) {
+        // Add member if not already assigned
+        if (!assignedArray.includes(userId)) {
+          newAssigned = [...assignedArray, userId];
+        } else {
+          return; // Already assigned
+        }
+      } else {
+        // Remove member
+        newAssigned = assignedArray.filter(id => id !== userId);
+      }
+      
+      console.log('Updating ticket assignment:', ticketId, 'assigned:', newAssigned);
+      const { data, error } = await updateTicket(ticketId, { assigned_to: newAssigned });
       
       if (error) {
         console.error('Error assigning ticket:', error);
@@ -316,23 +334,17 @@ export default function DashboardPage() {
           hint: error.hint
         });
         
-        // Check if it's a column missing error
-        if (error.message?.includes('assigned_to') || error.message?.includes('column') || error.code === '42703') {
-          alert('Error: The assigned_to column may not exist in the database. Please run the SQL migration script (ADD_ASSIGNED_TO_COLUMN.sql) in your Supabase SQL Editor.');
-        } else {
-          alert('Error assigning ticket: ' + (error.message || 'Unknown error'));
-        }
+        alert('Error updating assignment: ' + (error.message || 'Unknown error'));
         return;
       }
       
       if (data) {
-        console.log('Ticket assigned successfully:', data);
+        console.log('Ticket assignment updated successfully:', data);
         await loadTickets();
-        setAssigningTicketId(null);
       }
     } catch (err) {
       console.error('Exception assigning ticket:', err);
-      alert('Error assigning ticket: ' + ((err as Error)?.message || 'Unknown error'));
+      alert('Error updating assignment: ' + ((err as Error)?.message || 'Unknown error'));
     }
   };
 
@@ -1226,7 +1238,7 @@ export default function DashboardPage() {
                             onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
                             className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
                           >
-                            {ticket.assigned_to ? 'Change Assignee' : 'Assign Member'}
+                            {ticket.assigned_to && Array.isArray(ticket.assigned_to) && ticket.assigned_to.length > 0 ? 'Manage Assignees' : 'Assign Members'}
                           </button>
                         )}
                       </div>

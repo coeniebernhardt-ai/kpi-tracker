@@ -67,9 +67,9 @@ export interface Ticket {
   updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[] }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
-  // Assignment
-  assigned_to?: string | null;
-  assigned_profile?: Profile;
+  // Assignment (can have multiple assigned members)
+  assigned_to?: string[] | null;
+  assigned_profiles?: Profile[];
   // Joined data
   profile?: Profile;
 }
@@ -330,12 +330,29 @@ export async function getAllTickets(): Promise<Ticket[]> {
       return [];
     }
     
-    // Ensure time_logs is always an array for existing tickets
-    const normalizedData = (data || []).map(ticket => ({
-      ...ticket,
-      time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
-      updates: Array.isArray(ticket.updates) ? ticket.updates : [],
-      total_time_minutes: ticket.total_time_minutes || 0
+    // Normalize data and fetch assigned profiles
+    const normalizedData = await Promise.all((data || []).map(async (ticket: any) => {
+      let assignedProfiles: Profile[] = [];
+      
+      // Handle both old single assigned_to and new assigned_to_array
+      const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? (Array.isArray(ticket.assigned_to) ? ticket.assigned_to : [ticket.assigned_to]) : []);
+      
+      if (assignedIds.length > 0 && Array.isArray(assignedIds)) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', assignedIds.filter((id: any) => id != null));
+        assignedProfiles = profiles || [];
+      }
+      
+      return {
+        ...ticket,
+        assigned_to: assignedIds,
+        assigned_profiles: assignedProfiles,
+        time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
+        updates: Array.isArray(ticket.updates) ? ticket.updates : [],
+        total_time_minutes: ticket.total_time_minutes || 0
+      };
     }));
     
     return normalizedData;
@@ -350,8 +367,8 @@ export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
       .from('tickets')
-      .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
-      .or(`user_id.eq.${userId},assigned_to.eq.${userId}`)
+      .select('*, profile:profiles!user_id(*)')
+      .or(`user_id.eq.${userId},assigned_to_array.cs.{${userId}}`)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -365,12 +382,29 @@ export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
       return [];
     }
     
-    // Ensure time_logs is always an array for existing tickets
-    const normalizedData = (data || []).map(ticket => ({
-      ...ticket,
-      time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
-      updates: Array.isArray(ticket.updates) ? ticket.updates : [],
-      total_time_minutes: ticket.total_time_minutes || 0
+    // Normalize data and fetch assigned profiles
+    const normalizedData = await Promise.all((data || []).map(async (ticket) => {
+      let assignedProfiles: Profile[] = [];
+      
+      // Handle both old single assigned_to and new assigned_to_array
+      const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? [ticket.assigned_to] : []);
+      
+      if (assignedIds.length > 0 && Array.isArray(assignedIds)) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', assignedIds.filter(id => id != null));
+        assignedProfiles = profiles || [];
+      }
+      
+      return {
+        ...ticket,
+        assigned_to: assignedIds,
+        assigned_profiles: assignedProfiles,
+        time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
+        updates: Array.isArray(ticket.updates) ? ticket.updates : [],
+        total_time_minutes: ticket.total_time_minutes || 0
+      };
     }));
     
     return normalizedData;
