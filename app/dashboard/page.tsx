@@ -1247,25 +1247,46 @@ export default function DashboardPage() {
                     {/* Assignment UI */}
                     {assigningTicketId === ticket.id && (
                       <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Assign to Member</label>
-                        <div className="flex gap-2">
-                          <select
-                            value={ticket.assigned_to || ''}
-                            onChange={(e) => handleAssignTicket(ticket.id, e.target.value || null)}
-                            className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm"
-                          >
-                            <option value="">Unassigned</option>
-                            {profiles.filter(p => p.id !== ticket.user_id).map(p => (
-                              <option key={p.id} value={p.id}>{p.full_name}</option>
-                            ))}
-                          </select>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="block text-sm font-medium text-slate-300">Assign Members</label>
                           <button
                             onClick={() => setAssigningTicketId(null)}
-                            className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm hover:bg-slate-600"
+                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
                           >
-                            Cancel
+                            Done
                           </button>
                         </div>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {profiles.filter(p => p.id !== ticket.user_id).map(p => {
+                            const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+                            const isAssigned = assignedArray.includes(p.id);
+                            return (
+                              <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={isAssigned}
+                                  onChange={(e) => handleAssignTicket(ticket.id, p.id, e.target.checked)}
+                                  className="w-4 h-4 rounded border-slate-700"
+                                  style={{ accentColor: '#1e3a5f' }}
+                                />
+                                <div className="flex items-center gap-2 flex-1">
+                                  {p.avatar_url ? (
+                                    <Image src={p.avatar_url} alt={p.full_name} width={24} height={24} className="w-6 h-6 rounded-lg object-cover" />
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+                                      {p.avatar}
+                                    </div>
+                                  )}
+                                  <span className="text-sm text-slate-300">{p.full_name}</span>
+                                  {p.role && <span className="text-xs text-slate-500">({p.role})</span>}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {profiles.filter(p => p.id !== ticket.user_id).length === 0 && (
+                          <p className="text-xs text-slate-400 mt-2">No other members available to assign</p>
+                        )}
                       </div>
                     )}
 
