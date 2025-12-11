@@ -1635,39 +1635,26 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-400 mt-1">Enter the end location of your trip</p>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Distance Travelled (km)
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newTravelLog.distanceTravelled}
-                        onChange={(e) => setNewTravelLog({ ...newTravelLog, distanceTravelled: e.target.value })}
-                        className="flex-1 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
-                        onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
-                        onBlur={(e) => e.target.style.borderColor = '#475569'}
-                        placeholder="e.g. 150.5"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCalculateDistance}
-                        disabled={calculatingDistance || !newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()}
-                        className="px-4 py-3 rounded-xl text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        style={{ backgroundColor: '#1e3a5f' }}
-                      >
-                        {calculatingDistance ? 'Calculating...' : 'Calculate'}
-                      </button>
-                    </div>
-                    {newTravelLog.isReturnTrip && newTravelLog.distanceTravelled && (
-                      <p className="text-xs mt-1" style={{ color: '#60a5fa' }}>
-                        Return trip: Distance will be doubled to {parseFloat(newTravelLog.distanceTravelled) * 2} km
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Distance Travelled (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newTravelLog.distanceTravelled}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, distanceTravelled: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
+                    onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
+                    onBlur={(e) => e.target.style.borderColor = '#475569'}
+                    placeholder="e.g. 150.5"
+                  />
+                  {newTravelLog.isReturnTrip && newTravelLog.distanceTravelled && (
+                    <p className="text-xs mt-1" style={{ color: '#60a5fa' }}>
+                      Return trip: Distance will be doubled to {parseFloat(newTravelLog.distanceTravelled) * 2} km
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">
