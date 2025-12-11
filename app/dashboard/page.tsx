@@ -1317,12 +1317,13 @@ export default function DashboardPage() {
                               </label>
                             );
                           })}
+                          </div>
+                          {profiles.filter(p => p.id !== ticket.user_id).length === 0 && (
+                            <p className="text-xs text-slate-400 mt-2">No other members available to assign</p>
+                          )}
                         </div>
-                        {profiles.filter(p => p.id !== ticket.user_id).length === 0 && (
-                          <p className="text-xs text-slate-400 mt-2">No other members available to assign</p>
-                        )}
-                      </div>
-                    )}
+                      ) : null;
+                    })()}
 
                     <div className="mb-4">
                       <p className="text-xs text-slate-500 mb-1">Issue</p>
