@@ -655,7 +655,9 @@ export default function AdminPage() {
                               );
                             })}
                           </div>
-                        </div>
+                            </div>
+                          ) : null;
+                        })()}
 
                         {/* Show ticket details */}
                         <div className="flex flex-wrap gap-2 mb-2 text-xs">
