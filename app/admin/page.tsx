@@ -591,9 +591,14 @@ export default function AdminPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          {(ticket as any).assigned_profiles && (ticket as any).assigned_profiles.length > 0 && (
+                          {/* Always show assigned members if any */}
+                          {(ticket as any).assigned_profiles && (ticket as any).assigned_profiles.length > 0 ? (
                             <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
                               👤 Assigned: {(ticket as any).assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-slate-700/50 text-slate-400 text-xs">
+                              👤 No members assigned
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>

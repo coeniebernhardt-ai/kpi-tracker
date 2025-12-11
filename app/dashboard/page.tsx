@@ -1231,9 +1231,14 @@ export default function DashboardPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          {ticket.assigned_profiles && ticket.assigned_profiles.length > 0 && (
+                          {/* Always show assigned members if any */}
+                          {ticket.assigned_profiles && ticket.assigned_profiles.length > 0 ? (
                             <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
                               👤 Assigned: {ticket.assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
+                              👤 No members assigned
                             </span>
                           )}
                         </div>
@@ -1261,11 +1266,17 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Assignment UI */}
-                    {assigningTicketId === ticket.id && (
-                      <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="block text-sm font-medium text-slate-300">Assign Members</label>
+                    {/* Assignment UI - Visible to owner, assigned members, and admins */}
+                    {assigningTicketId === ticket.id && (() => {
+                      const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+                      const isAssigned = assignedArray.includes(user?.id || '');
+                      const isOwner = ticket.user_id === user?.id;
+                      const canAccessAssignment = isOwner || isAssigned || isAdmin;
+                      
+                      return canAccessAssignment ? (
+                        <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="block text-sm font-medium text-slate-300">Assign Members</label>
                           <button
                             onClick={() => setAssigningTicketId(null)}
                             className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
