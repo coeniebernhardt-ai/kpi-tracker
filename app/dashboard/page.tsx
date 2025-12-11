@@ -1605,34 +1605,34 @@ export default function DashboardPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     Start Address <span className="text-blue-400">*</span>
                   </label>
-                  <PlaceAutocomplete
+                  <input
+                    type="text"
                     value={newTravelLog.startAddress}
-                    onChange={(value) => setNewTravelLog({ ...newTravelLog, startAddress: value })}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, startAddress: e.target.value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
                     onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. 123 Main St, Johannesburg, South Africa"
-                    label="Start Address"
                   />
-                  <p className="text-xs text-slate-400 mt-1">Enter the starting location or click Map to select on map</p>
+                  <p className="text-xs text-slate-400 mt-1">Enter the starting location of your trip</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     End Address <span className="text-blue-400">*</span>
                   </label>
-                  <PlaceAutocomplete
+                  <input
+                    type="text"
                     value={newTravelLog.endAddress}
-                    onChange={(value) => setNewTravelLog({ ...newTravelLog, endAddress: value })}
+                    onChange={(e) => setNewTravelLog({ ...newTravelLog, endAddress: e.target.value })}
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none transition-colors"
                     onFocus={(e) => e.target.style.borderColor = '#1e3a5f'}
                     onBlur={(e) => e.target.style.borderColor = '#475569'}
                     placeholder="e.g. 456 Oak Ave, Cape Town, South Africa"
-                    label="End Address"
                   />
-                  <p className="text-xs text-slate-400 mt-1">Enter the end location or click Map to select on map</p>
+                  <p className="text-xs text-slate-400 mt-1">Enter the end location of your trip</p>
                 </div>
 
                 <div className="flex items-center gap-4">
