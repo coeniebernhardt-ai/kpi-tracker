@@ -126,6 +126,21 @@ export default function AdminPage() {
     }
   };
 
+  const handleUpdateClickUpTicket = async (ticketId: string) => {
+    try {
+      const { error } = await updateTicket(ticketId, { clickup_ticket: clickUpTicketValue.trim() || undefined });
+      if (!error) {
+        await loadData();
+        setEditingClickUpTicketId(null);
+        setClickUpTicketValue('');
+      } else {
+        alert('Error updating ClickUp ticket: ' + (error.message || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error updating ClickUp ticket: ' + ((err as Error)?.message || 'Unknown error'));
+    }
+  };
+
   const handleDeleteTicket = async (ticketId: string) => {
     if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;
     
