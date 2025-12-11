@@ -1213,6 +1213,11 @@ export default function DashboardPage() {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
                             {ticket.client}
                           </span>
+                          {ticket.estate_or_building && (
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
+                              {ticket.estate_or_building}
+                            </span>
+                          )}
                           <span className={`px-2.5 py-1 rounded-lg text-xs ${
                             ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
                           }`}>
