@@ -19,10 +19,6 @@ const Marker = dynamic(
   () => import('react-leaflet').then((mod) => mod.Marker),
   { ssr: false }
 );
-const useMapEvents = dynamic(
-  () => import('react-leaflet').then((mod) => mod.useMapEvents),
-  { ssr: false }
-);
 
 interface MapPinSelectorProps {
   isOpen: boolean;
@@ -32,14 +28,19 @@ interface MapPinSelectorProps {
   label?: string;
 }
 
-// Component to handle map clicks
+// Component to handle map clicks - use require inside component to avoid SSR issues
 function MapClickHandler({ onClick }: { onClick: (e: any) => void }) {
   if (typeof window === 'undefined') return null;
   
-  const { useMapEvents: useMapEventsHook } = require('react-leaflet');
-  const map = useMapEventsHook({
-    click: onClick,
-  });
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useMapEvents } = require('react-leaflet');
+    useMapEvents({
+      click: onClick,
+    });
+  } catch (error) {
+    console.error('Error setting up map click handler:', error);
+  }
   return null;
 }
 
