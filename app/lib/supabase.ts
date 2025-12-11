@@ -508,37 +508,60 @@ export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
     delete updateData.assigned_to;
   }
 
-  const { data, error } = await supabase
+  // First, perform the update without select to avoid RLS issues with .single()
+  const { error: updateError } = await supabase
     .from('tickets')
     .update(updateData)
-    .eq('id', ticketId)
-    .select('*, profile:profiles!user_id(*)')
-    .single();
+    .eq('id', ticketId);
 
-  // After update, fetch assigned profiles separately if assigned_to_array exists
-  if (!error && data && (data as any).assigned_to_array && Array.isArray((data as any).assigned_to_array) && (data as any).assigned_to_array.length > 0) {
-    const { data: assignedProfiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .in('id', (data as any).assigned_to_array);
-    
+  if (updateError) {
+    console.error('Error updating ticket:', updateError);
+    return { data: null, error: updateError };
+  }
+
+  // Then fetch the updated ticket separately (this respects RLS and avoids .single() issues)
+  const { data: updatedTicket, error: fetchError } = await supabase
+    .from('tickets')
+    .select('*, profile:profiles!user_id(*)')
+    .eq('id', ticketId)
+    .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
+
+  if (fetchError) {
+    console.error('Error fetching updated ticket:', fetchError);
+    return { data: null, error: fetchError };
+  }
+
+  if (!updatedTicket) {
+    // Ticket might not exist or RLS is preventing access - return error
     return { 
-      data: { 
-        ...data, 
-        assigned_to: (data as any).assigned_to_array,
-        assigned_profiles: assignedProfiles || [] 
-      }, 
-      error 
+      data: null, 
+      error: { 
+        message: 'Ticket not found or access denied', 
+        code: 'PGRST116',
+        details: 'The result contains 0 rows',
+        hint: null
+      } as any 
     };
   }
 
+  // Fetch assigned profiles separately if assigned_to_array exists
+  let assignedProfiles: Profile[] = [];
+  if ((updatedTicket as any).assigned_to_array && Array.isArray((updatedTicket as any).assigned_to_array) && (updatedTicket as any).assigned_to_array.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', (updatedTicket as any).assigned_to_array);
+    
+    assignedProfiles = profiles || [];
+  }
+
   return { 
-    data: error ? null : { 
-      ...data, 
-      assigned_to: (data as any)?.assigned_to_array || [],
-      assigned_profiles: [] 
+    data: { 
+      ...updatedTicket, 
+      assigned_to: (updatedTicket as any).assigned_to_array || [],
+      assigned_profiles: assignedProfiles
     }, 
-    error 
+    error: null 
   };
 }
 
