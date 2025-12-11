@@ -684,6 +684,7 @@ export default function AdminPage() {
                             </span>
                           )}
                           {/* Always show assigned members if any */}
+                          {/* ClickUp ticket edit is available for open tickets */}
                           {(ticket as any).assigned_profiles && (ticket as any).assigned_profiles.length > 0 ? (
                             <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
                               👤 Assigned: {(ticket as any).assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
@@ -720,7 +721,7 @@ export default function AdminPage() {
                         
                         <p className="text-sm text-slate-300 mb-2">{ticket.issue}</p>
                         
-                        {/* Assignment UI - Visible to admins and assigned members */}
+                        {/* Assignment UI - Visible to admins and assigned members - Only shows when button clicked */}
                         {assigningTicketId === ticket.id && (() => {
                           const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
                           const isAssigned = assignedArray.includes(user?.id || '');
