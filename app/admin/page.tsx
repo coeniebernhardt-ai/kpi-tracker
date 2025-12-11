@@ -168,6 +168,18 @@ export default function AdminPage() {
   const totalOpen = tickets.filter(t => t.status === 'open').length;
   const totalClosed = tickets.filter(t => t.status === 'closed').length;
   const totalOnSite = tickets.filter(t => t.location === 'on-site').length;
+  
+  // Calculate overall KPI metrics
+  const closedTicketsWithResponseTime = tickets.filter(t => 
+    t.status === 'closed' && t.response_time_minutes && t.response_time_minutes > 0
+  );
+  const overallAvgResponseTime = closedTicketsWithResponseTime.length > 0
+    ? Math.round(
+        closedTicketsWithResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / 
+        closedTicketsWithResponseTime.length
+      )
+    : 0;
+  const ticketsHandled = totalClosed; // All closed tickets
   const totalRemote = tickets.filter(t => t.location === 'remote').length;
 
   // Export functions
@@ -410,7 +422,7 @@ export default function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Stats */}
-        <section className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <section className="mb-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-xs text-slate-500 mb-1">Total Tickets</p>
             <p className="text-3xl font-bold text-white">{tickets.length}</p>
@@ -427,6 +439,16 @@ export default function AdminPage() {
             <p className="text-xs text-slate-500 mb-1">Team Members</p>
             <p className="text-3xl font-bold text-white">{profiles.length}</p>
           </div>
+          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-400 mb-1">Tickets Handled</p>
+            <p className="text-3xl font-bold text-blue-400">{ticketsHandled}</p>
+            <p className="text-xs text-blue-300 mt-1">All closed tickets</p>
+          </div>
+          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-400 mb-1">Avg Response Time</p>
+            <p className="text-3xl font-bold text-blue-400">{overallAvgResponseTime}</p>
+            <p className="text-xs text-blue-300 mt-1">{overallAvgResponseTime > 0 ? 'minutes' : 'No data'}</p>
+          </div>
         </section>
 
         {/* Team Members */}
@@ -437,6 +459,20 @@ export default function AdminPage() {
               const memberTickets = tickets.filter(t => t.user_id === p.id);
               const openCount = memberTickets.filter(t => t.status === 'open').length;
               const closedCount = memberTickets.filter(t => t.status === 'closed').length;
+              
+              // Calculate per-member KPI metrics
+              const memberClosedTickets = memberTickets.filter(t => t.status === 'closed');
+              const memberTicketsWithResponseTime = memberClosedTickets.filter(t => 
+                t.response_time_minutes && t.response_time_minutes > 0
+              );
+              const memberAvgResponseTime = memberTicketsWithResponseTime.length > 0
+                ? Math.round(
+                    memberTicketsWithResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / 
+                    memberTicketsWithResponseTime.length
+                  )
+                : 0;
+              const memberTicketsHandled = closedCount;
+              
               return (
                 <div key={p.id} className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 group">
                   <div className="flex items-center gap-3 mb-3">
@@ -464,10 +500,24 @@ export default function AdminPage() {
                       <p className="text-xs text-slate-500 truncate">{p.role}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-blue-400">{openCount} open</span>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-blue-300">{closedCount} closed</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-blue-400">{openCount} open</span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-blue-300">{closedCount} closed</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-700/50 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Handled:</span>
+                        <span className="text-blue-400 font-semibold">{memberTicketsHandled}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Avg Response:</span>
+                        <span className="text-blue-400 font-semibold">
+                          {memberAvgResponseTime > 0 ? `${memberAvgResponseTime}m` : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   {p.is_admin && <span className="mt-2 inline-block px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">Admin</span>}
                 </div>
