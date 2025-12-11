@@ -1354,7 +1354,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-slate-400 mt-2">No other members available to assign</p>
                           )}
                         </div>
-                      ) : null;
+                      );
                     })()}
 
                     <div className="mb-4">
