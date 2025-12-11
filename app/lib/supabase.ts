@@ -740,11 +740,11 @@ export async function createTravelLog(travelLog: {
     
     if (error) {
       console.error('Error creating travel log:', error);
-      // Check if it's a column missing error
-      if (error.message?.includes('column') && error.message?.includes('not found')) {
+      // Check if it's a column missing error (PGRST204 is the PostgREST error code for missing column)
+      if (error.code === 'PGRST204' || (error.message?.includes('column') && (error.message?.includes('not found') || error.message?.includes('schema cache')))) {
         return { 
           data: null, 
-          error: new Error('Database schema is missing required columns. Please run the SQL migration script FIX_TRAVEL_LOGS_SCHEMA.sql in your Supabase SQL Editor.') 
+          error: new Error('Database schema is missing required columns. Please run the SQL migration in your Supabase SQL Editor. See HOW_TO_FIX_TRAVEL_LOGS_ERROR.md for step-by-step instructions.') 
         };
       }
       return { data: null, error: error as Error };
