@@ -591,9 +591,9 @@ export default function AdminPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          {ticket.assigned_to && (ticket as any).assigned_profile && (
+                          {(ticket as any).assigned_profiles && (ticket as any).assigned_profiles.length > 0 && (
                             <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
-                              👤 Assigned: {(ticket as any).assigned_profile.full_name}
+                              👤 Assigned: {(ticket as any).assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
@@ -604,27 +604,41 @@ export default function AdminPage() {
                         <p className="text-sm text-slate-300 mb-2">{ticket.issue}</p>
                         
                         {/* Assignment UI for Admins */}
-                        <div className="mt-3 flex items-center gap-2">
-                          <label className="text-xs text-slate-400">Assign to:</label>
-                          <select
-                            value={ticket.assigned_to || ''}
-                            onChange={async (e) => {
-                              const assignedTo = e.target.value || null;
-                              const { error } = await updateTicket(ticket.id, { assigned_to: assignedTo });
-                              if (!error) {
-                                await loadData();
-                              } else {
-                                console.error('Error assigning ticket:', error);
-                                alert('Error assigning ticket: ' + ((error as Error)?.message || 'Unknown error'));
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs"
-                          >
-                            <option value="">Unassigned</option>
-                            {profiles.filter(p => p.id !== ticket.user_id).map(p => (
-                              <option key={p.id} value={p.id}>{p.full_name}</option>
-                            ))}
-                          </select>
+                        <div className="mt-3">
+                          <label className="block text-xs text-slate-400 mb-2">Assign Members:</label>
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {profiles.filter(p => p.id !== ticket.user_id).map(p => {
+                              const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                              const isAssigned = assignedArray.includes(p.id);
+                              return (
+                                <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-slate-800/50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={async (e) => {
+                                      const currentAssigned = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                                      let newAssigned: string[];
+                                      if (e.target.checked) {
+                                        newAssigned = currentAssigned.includes(p.id) ? currentAssigned : [...currentAssigned, p.id];
+                                      } else {
+                                        newAssigned = currentAssigned.filter((id: string) => id !== p.id);
+                                      }
+                                      const { error } = await updateTicket(ticket.id, { assigned_to: newAssigned });
+                                      if (!error) {
+                                        await loadData();
+                                      } else {
+                                        console.error('Error assigning ticket:', error);
+                                        alert('Error updating assignment: ' + ((error as Error)?.message || 'Unknown error'));
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded border-slate-700"
+                                    style={{ accentColor: '#1e3a5f' }}
+                                  />
+                                  <span className="text-xs text-slate-300">{p.full_name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
                         </div>
 
                         {/* Show ticket details */}

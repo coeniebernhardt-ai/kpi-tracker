@@ -1498,7 +1498,11 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       </div>
-                    ) : (ticket.user_id === user?.id || ticket.assigned_to === user?.id || isAdmin) ? (
+                    ) : (() => {
+                      const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+                      const isAssigned = assignedArray.includes(user?.id || '');
+                      return ticket.user_id === user?.id || isAssigned || isAdmin;
+                    })() ? (
                       <button
                         onClick={() => setUpdatingTicketId(ticket.id)}
                         className="mb-4 w-full px-4 py-2 rounded-xl border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2"
