@@ -48,6 +48,10 @@ export default function AdminPage() {
   // User management state
   const [showUserManagement, setShowUserManagement] = useState(false);
 
+  // ClickUp ticket edit state
+  const [editingClickUpTicketId, setEditingClickUpTicketId] = useState<string | null>(null);
+  const [clickUpTicketValue, setClickUpTicketValue] = useState('');
+
   // Redirect if not admin
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
