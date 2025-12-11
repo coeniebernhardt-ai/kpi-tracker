@@ -710,6 +710,9 @@ export async function createTravelLog(travelLog: {
       user_id: travelLog.user_id,
       reason: travelLog.reason,
       updated_at: new Date().toISOString(),
+      // Provide a default value for destination column (required by old schema)
+      // Use end_address if available, otherwise a placeholder
+      destination: travelLog.end_address || travelLog.start_address || 'Not specified',
     };
 
     // Only add optional fields if they are provided
