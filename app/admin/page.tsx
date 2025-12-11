@@ -696,87 +696,112 @@ export default function AdminPage() {
                           <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
                             {ticket.status === 'open' ? 'Open' : 'Closed'}
                           </span>
+                          {(() => {
+                            const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                            const isAssigned = assignedArray.includes(user?.id || '');
+                            const canAssign = isAdmin || isAssigned;
+                            if (!canAssign) return null;
+                            return profiles.length > 0 ? (
+                              <button
+                                onClick={() => {
+                                  setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id);
+                                }}
+                                className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
+                              >
+                                {assignedArray.length > 0 ? 'Manage Assignees' : 'Assign Members'}
+                              </button>
+                            ) : (
+                              <span className="px-3 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
+                                Loading...
+                              </span>
+                            );
+                          })()}
                         </div>
                         
                         <p className="text-sm text-slate-300 mb-2">{ticket.issue}</p>
                         
-                        {/* Assignment UI - Available to admins and assigned members */}
-                        {(() => {
+                        {/* Assignment UI - Visible to admins and assigned members */}
+                        {assigningTicketId === ticket.id && (() => {
                           const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
                           const isAssigned = assignedArray.includes(user?.id || '');
-                          const canAssign = isAdmin || isAssigned;
-                          return canAssign ? (
-                            <div className="mt-3">
-                              {assigningTicketId === ticket.id ? (
-                                <div>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-xs text-slate-400">Assign Members:</label>
-                                    <button
-                                      onClick={() => setAssigningTicketId(null)}
-                                      className="px-2 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
-                                    >
-                                      Done
-                                    </button>
-                                  </div>
-                                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                                    {profiles.filter(p => p.id !== ticket.user_id).map(p => {
-                                      const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
-                                      const isAssigned = assignedArray.includes(p.id);
-                                      const isUserAssigned = assignedArray.includes(user?.id || '');
-                                      const canRemove = isAdmin; // Only admins can remove in admin view
-                                      const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not admin
-                                      
-                                      return (
-                                        <label key={p.id} className={`flex items-center gap-2 p-1.5 rounded hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
-                                          <input
-                                            type="checkbox"
-                                            checked={isAssigned}
-                                            onChange={async (e) => {
-                                              // Check if user can remove (only admins can remove)
-                                              if (!e.target.checked && !isAdmin) {
-                                                alert('Only admins can remove assigned members.');
-                                                return;
-                                              }
-                                              
-                                              const currentAssigned = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
-                                              let newAssigned: string[];
-                                              if (e.target.checked) {
-                                                newAssigned = currentAssigned.includes(p.id) ? currentAssigned : [...currentAssigned, p.id];
-                                              } else {
-                                                newAssigned = currentAssigned.filter((id: string) => id !== p.id);
-                                              }
-                                              const { error } = await updateTicket(ticket.id, { assigned_to: newAssigned });
-                                              if (!error) {
-                                                await loadData();
-                                                // Close assignment UI after successful assignment
-                                                if (assigningTicketId === ticket.id) {
-                                                  setAssigningTicketId(null);
-                                                }
-                                              } else {
-                                                console.error('Error assigning ticket:', error);
-                                                alert('Error updating assignment: ' + ((error as Error)?.message || 'Unknown error'));
-                                              }
-                                            }}
-                                            disabled={isDisabled}
-                                            className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
-                                            style={{ accentColor: '#1e3a5f' }}
-                                          />
-                                          <span className="text-xs text-slate-300">{p.full_name}</span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : (
+                          const canAccessAssignment = isAdmin || isAssigned;
+                          if (!canAccessAssignment) return null;
+                          if (profiles.length === 0) {
+                            return (
+                              <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                                <p className="text-sm text-slate-400">Loading members...</p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                              <div className="flex items-center justify-between mb-3">
+                                <label className="block text-sm font-medium text-slate-300">Assign Members</label>
                                 <button
-                                  onClick={() => setAssigningTicketId(ticket.id)}
-                                  className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
+                                  onClick={() => setAssigningTicketId(null)}
+                                  className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
                                 >
-                                  {assignedArray.length > 0 ? 'Manage Assignees' : 'Assign Members'}
+                                  Done
                                 </button>
-                              )}
+                              </div>
+                              <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {profiles.filter(p => p.id !== ticket.user_id).map(p => {
+                                  const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                                  const isAssigned = assignedArray.includes(p.id);
+                                  const canRemove = isAdmin; // Only admins can remove in admin view
+                                  const isDisabled = isAssigned && !canRemove; // Disable checkbox if trying to remove and not admin
+                                  
+                                  return (
+                                    <label key={p.id} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isAssigned}
+                                        onChange={async (e) => {
+                                          if (!e.target.checked && !isAdmin) {
+                                            alert('Only admins can remove assigned members.');
+                                            return;
+                                          }
+                                          
+                                          const currentAssigned = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                                          let newAssigned: string[];
+                                          if (e.target.checked) {
+                                            newAssigned = currentAssigned.includes(p.id) ? currentAssigned : [...currentAssigned, p.id];
+                                          } else {
+                                            newAssigned = currentAssigned.filter((id: string) => id !== p.id);
+                                          }
+                                          const { error } = await updateTicket(ticket.id, { assigned_to: newAssigned });
+                                          if (!error) {
+                                            await loadData();
+                                            // Close assignment UI after successful assignment
+                                            if (assigningTicketId === ticket.id) {
+                                              setAssigningTicketId(null);
+                                            }
+                                          } else {
+                                            console.error('Error assigning ticket:', error);
+                                            alert('Error updating assignment: ' + ((error as Error)?.message || 'Unknown error'));
+                                          }
+                                        }}
+                                        disabled={isDisabled}
+                                        className="w-4 h-4 rounded border-slate-700 disabled:cursor-not-allowed"
+                                        style={{ accentColor: '#1e3a5f' }}
+                                      />
+                                      <div className="flex items-center gap-2 flex-1">
+                                        {p.avatar_url ? (
+                                          <Image src={p.avatar_url} alt={p.full_name} width={24} height={24} className="w-6 h-6 rounded-lg object-cover" />
+                                        ) : (
+                                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+                                            {p.avatar}
+                                          </div>
+                                        )}
+                                        <span className="text-sm text-slate-300">{p.full_name}</span>
+                                        {p.role && <span className="text-xs text-slate-500">({p.role})</span>}
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          ) : null;
+                          );
                         })()}
 
                         {/* Show ticket details */}
