@@ -1,8 +1,11 @@
 -- Fix RLS policies to allow assigned members to update and view tickets
 -- Run this in your Supabase SQL Editor
 
--- Step 1: Allow assigned members to view tickets they're assigned to
--- (This should already be working via getTicketsByUserId, but let's ensure it's explicit)
+-- Step 1: Drop existing policies if they exist (to avoid conflicts)
+DROP POLICY IF EXISTS "Assigned members can view assigned tickets" ON tickets;
+DROP POLICY IF EXISTS "Assigned members can update assigned tickets" ON tickets;
+
+-- Step 2: Allow assigned members to view tickets they're assigned to
 CREATE POLICY "Assigned members can view assigned tickets"
   ON tickets FOR SELECT
   TO authenticated
@@ -19,7 +22,7 @@ CREATE POLICY "Assigned members can view assigned tickets"
     )
   );
 
--- Step 2: Allow assigned members to update tickets they're assigned to
+-- Step 3: Allow assigned members to update tickets they're assigned to
 CREATE POLICY "Assigned members can update assigned tickets"
   ON tickets FOR UPDATE
   TO authenticated
@@ -36,10 +39,7 @@ CREATE POLICY "Assigned members can update assigned tickets"
     )
   );
 
--- Note: If you get errors about duplicate policies, you may need to drop the old restrictive ones first:
--- DROP POLICY IF EXISTS "Users can view their own tickets" ON tickets;
--- DROP POLICY IF EXISTS "Users can update their own tickets" ON tickets;
-
--- However, having multiple policies is fine - PostgreSQL will use OR logic,
+-- Note: PostgreSQL uses OR logic for multiple policies,
 -- so if ANY policy allows access, the user can access the row.
+-- This means the new policies will work alongside existing ones.
 
