@@ -586,7 +586,72 @@ export default function AdminPage() {
                           ) : (
                             <span className="px-2 py-0.5 rounded text-xs bg-slate-700/50 text-slate-400 opacity-50">No Estate/Building</span>
                           )}
-                          {ticket.clickup_ticket && <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">🔗 {ticket.clickup_ticket}</span>}
+                          {editingClickUpTicketId === ticket.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={clickUpTicketValue}
+                                onChange={(e) => setClickUpTicketValue(e.target.value)}
+                                placeholder="Enter ClickUp ticket ID..."
+                                className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs focus:border-blue-500 outline-none"
+                                style={{ minWidth: '180px' }}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleUpdateClickUpTicket(ticket.id);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingClickUpTicketId(null);
+                                    setClickUpTicketValue('');
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => handleUpdateClickUpTicket(ticket.id)}
+                                className="px-2 py-1 rounded-lg bg-blue-500 text-white text-xs hover:bg-blue-600"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingClickUpTicketId(null);
+                                  setClickUpTicketValue('');
+                                }}
+                                className="px-2 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            ticket.clickup_ticket ? (
+                              <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400 flex items-center gap-1">
+                                🔗 {ticket.clickup_ticket}
+                                {ticket.status === 'open' && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingClickUpTicketId(ticket.id);
+                                      setClickUpTicketValue(ticket.clickup_ticket || '');
+                                    }}
+                                    className="ml-1 hover:opacity-70"
+                                    title="Edit ClickUp ticket"
+                                  >
+                                    ✏️
+                                  </button>
+                                )}
+                              </span>
+                            ) : (
+                              ticket.status === 'open' && (
+                                <button
+                                  onClick={() => {
+                                    setEditingClickUpTicketId(ticket.id);
+                                    setClickUpTicketValue('');
+                                  }}
+                                  className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 flex items-center gap-1"
+                                >
+                                  + Add ClickUp
+                                </button>
+                              )
+                            )
+                          )}
                           <span className={`px-2 py-0.5 rounded text-xs ${ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                             {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
                           </span>
