@@ -603,9 +603,14 @@ export default function AdminPage() {
                         
                         <p className="text-sm text-slate-300 mb-2">{ticket.issue}</p>
                         
-                        {/* Assignment UI for Admins */}
-                        <div className="mt-3">
-                          <label className="block text-xs text-slate-400 mb-2">Assign Members:</label>
+                        {/* Assignment UI - Available to admins and assigned members */}
+                        {(() => {
+                          const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
+                          const isAssigned = assignedArray.includes(user?.id || '');
+                          const canAssign = isAdmin || isAssigned;
+                          return canAssign ? (
+                            <div className="mt-3">
+                              <label className="block text-xs text-slate-400 mb-2">Assign Members:</label>
                           <div className="space-y-1.5 max-h-40 overflow-y-auto">
                             {profiles.filter(p => p.id !== ticket.user_id).map(p => {
                               const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);

@@ -1233,14 +1233,19 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs">Open</span>
-                        {(ticket.user_id === user?.id || isAdmin) && profiles.length > 0 && (
-                          <button
-                            onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
-                            className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
-                          >
-                            {ticket.assigned_to && Array.isArray(ticket.assigned_to) && ticket.assigned_to.length > 0 ? 'Manage Assignees' : 'Assign Members'}
-                          </button>
-                        )}
+                        {(() => {
+                          const assignedArray = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : (ticket.assigned_to ? [ticket.assigned_to] : []);
+                          const isAssigned = assignedArray.includes(user?.id || '');
+                          const canAssign = (ticket.user_id === user?.id || isAssigned || isAdmin) && profiles.length > 0;
+                          return canAssign ? (
+                            <button
+                              onClick={() => setAssigningTicketId(assigningTicketId === ticket.id ? null : ticket.id)}
+                              className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors"
+                            >
+                              {ticket.assigned_to && Array.isArray(ticket.assigned_to) && ticket.assigned_to.length > 0 ? 'Manage Assignees' : 'Assign Members'}
+                            </button>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
 
