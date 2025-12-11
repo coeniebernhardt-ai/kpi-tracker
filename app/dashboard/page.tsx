@@ -304,7 +304,8 @@ export default function DashboardPage() {
   const handleAssignTicket = async (ticketId: string, assignedToUserId: string | null) => {
     try {
       console.log('Assigning ticket:', ticketId, 'to user:', assignedToUserId);
-      const { data, error } = await updateTicket(ticketId, { assigned_to: assignedToUserId || null });
+      const assignedTo = assignedToUserId || undefined;
+      const { data, error } = await updateTicket(ticketId, { assigned_to: assignedTo });
       
       if (error) {
         console.error('Error assigning ticket:', error);

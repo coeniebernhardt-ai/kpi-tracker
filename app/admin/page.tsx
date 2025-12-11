@@ -609,7 +609,8 @@ export default function AdminPage() {
                           <select
                             value={ticket.assigned_to || ''}
                             onChange={async (e) => {
-                              const { error } = await updateTicket(ticket.id, { assigned_to: e.target.value || null });
+                              const assignedTo = e.target.value || undefined;
+                              const { error } = await updateTicket(ticket.id, { assigned_to: assignedTo });
                               if (!error) {
                                 await loadData();
                               } else {

@@ -463,6 +463,11 @@ export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
   const updateData: any = { ...updates };
   delete updateData.profile;
   delete updateData.assigned_profile;
+  
+  // Convert null to undefined for assigned_to (PostgreSQL uses null, but TypeScript expects undefined)
+  if ('assigned_to' in updateData && updateData.assigned_to === null) {
+    updateData.assigned_to = null; // Keep null for database, but handle type conversion
+  }
 
   const { data, error } = await supabase
     .from('tickets')
