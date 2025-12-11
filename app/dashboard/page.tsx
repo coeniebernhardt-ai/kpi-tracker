@@ -355,6 +355,10 @@ export default function DashboardPage() {
       if (data) {
         console.log('Ticket assignment updated successfully:', data);
         await loadTickets();
+        // Close assignment UI after successful assignment
+        if (assigningTicketId === ticketId) {
+          setAssigningTicketId(null);
+        }
       }
     } catch (err) {
       console.error('Exception assigning ticket:', err);
