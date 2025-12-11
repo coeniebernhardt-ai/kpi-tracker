@@ -602,6 +602,21 @@ export default function AdminPage() {
                         </div>
                         
                         <p className="text-sm text-slate-300 mb-2">{ticket.issue}</p>
+                        
+                        {/* Assignment UI for Admins */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <label className="text-xs text-slate-400">Assign to:</label>
+                          <select
+                            value={ticket.assigned_to || ''}
+                            onChange={(e) => updateTicket(ticket.id, { assigned_to: e.target.value || null }).then(() => loadData())}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs"
+                          >
+                            <option value="">Unassigned</option>
+                            {profiles.filter(p => p.id !== ticket.user_id).map(p => (
+                              <option key={p.id} value={p.id}>{p.full_name}</option>
+                            ))}
+                          </select>
+                        </div>
 
                         {/* Show ticket details */}
                         <div className="flex flex-wrap gap-2 mb-2 text-xs">
