@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog } from '../lib/supabase';
+import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
