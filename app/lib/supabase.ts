@@ -68,7 +68,7 @@ export interface Ticket {
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
   // Assignment
-  assigned_to?: string;
+  assigned_to?: string | null;
   assigned_profile?: Profile;
   // Joined data
   profile?: Profile;
