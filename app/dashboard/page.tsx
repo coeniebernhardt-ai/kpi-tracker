@@ -7,7 +7,6 @@ import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadP
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
-import PlaceAutocomplete from '../components/PlaceAutocomplete';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -48,7 +47,6 @@ export default function DashboardPage() {
     distanceTravelled: ''
   });
   const [travelLogAttachments, setTravelLogAttachments] = useState<File[]>([]);
-  const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -281,69 +279,6 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
-  // Calculate distance between two addresses using OpenStreetMap Nominatim (free, no API key)
-  const calculateDistanceBetweenAddresses = async (startAddr: string, endAddr: string): Promise<number | null> => {
-    try {
-      // Geocode start address
-      const startResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(startAddr)}&limit=1`,
-        { headers: { 'User-Agent': 'Think-Q/1.0' } }
-      );
-      const startData = await startResponse.json();
-      
-      // Geocode end address
-      const endResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endAddr)}&limit=1`,
-        { headers: { 'User-Agent': 'Think-Q/1.0' } }
-      );
-      const endData = await endResponse.json();
-
-      if (startData.length === 0 || endData.length === 0) {
-        return null;
-      }
-
-      const lat1 = parseFloat(startData[0].lat);
-      const lon1 = parseFloat(startData[0].lon);
-      const lat2 = parseFloat(endData[0].lat);
-      const lon2 = parseFloat(endData[0].lon);
-
-      // Haversine formula to calculate distance in km
-      const R = 6371; // Earth's radius in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = R * c;
-
-      return Math.round(distance * 100) / 100; // Round to 2 decimal places
-    } catch (error) {
-      console.error('Error calculating distance:', error);
-      return null;
-    }
-  };
-
-  const handleCalculateDistance = async () => {
-    if (!newTravelLog.startAddress.trim() || !newTravelLog.endAddress.trim()) {
-      alert('Please enter both start and end addresses');
-      return;
-    }
-
-    setCalculatingDistance(true);
-    const distance = await calculateDistanceBetweenAddresses(
-      newTravelLog.startAddress,
-      newTravelLog.endAddress
-    );
-
-    if (distance !== null) {
-      setNewTravelLog({ ...newTravelLog, distanceTravelled: distance.toString() });
-    } else {
-      alert('Could not calculate distance. Please enter the distance manually.');
-    }
-    setCalculatingDistance(false);
-  };
 
   const handleCreateTravelLog = async (e: React.FormEvent) => {
     e.preventDefault();
