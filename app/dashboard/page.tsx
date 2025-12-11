@@ -301,6 +301,22 @@ export default function DashboardPage() {
     }
   };
 
+  const handleAssignTicket = async (ticketId: string, assignedToUserId: string | null) => {
+    try {
+      const { data, error } = await updateTicket(ticketId, { assigned_to: assignedToUserId || null });
+      if (!error && data) {
+        await loadTickets();
+        setAssigningTicketId(null);
+      } else {
+        console.error('Error assigning ticket:', error);
+        alert('Error assigning ticket: ' + ((error as Error)?.message || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Exception assigning ticket:', err);
+      alert('Error assigning ticket: ' + ((err as Error)?.message || 'Unknown error'));
+    }
+  };
+
   const handleCloseTicket = async (ticketId: string) => {
     if (!closeTicketData.resolution.trim()) return;
 

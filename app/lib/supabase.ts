@@ -459,11 +459,16 @@ export async function createTicket(ticket: {
 }
 
 export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
+  // Only include fields that should be updated, exclude joined data
+  const updateData: any = { ...updates };
+  delete updateData.profile;
+  delete updateData.assigned_profile;
+
   const { data, error } = await supabase
     .from('tickets')
-    .update(updates)
+    .update(updateData)
     .eq('id', ticketId)
-    .select()
+    .select('*, profile:profiles!user_id(*), assigned_profile:profiles!assigned_to(*)')
     .single();
 
   return { data, error };

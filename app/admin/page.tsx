@@ -608,7 +608,15 @@ export default function AdminPage() {
                           <label className="text-xs text-slate-400">Assign to:</label>
                           <select
                             value={ticket.assigned_to || ''}
-                            onChange={(e) => updateTicket(ticket.id, { assigned_to: e.target.value || null }).then(() => loadData())}
+                            onChange={async (e) => {
+                              const { error } = await updateTicket(ticket.id, { assigned_to: e.target.value || null });
+                              if (!error) {
+                                await loadData();
+                              } else {
+                                console.error('Error assigning ticket:', error);
+                                alert('Error assigning ticket: ' + ((error as Error)?.message || 'Unknown error'));
+                              }
+                            }}
                             className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs"
                           >
                             <option value="">Unassigned</option>
