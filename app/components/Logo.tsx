@@ -34,6 +34,8 @@ export default function Logo({ className = '', width, height, variant = 'team' }
 
   // Check if variant-specific logo exists, fallback to default
   useEffect(() => {
+    if (typeof window === 'undefined') return; // Skip SSR
+    
     const img = document.createElement('img');
     img.onload = () => setLogoSrc(variantLogo);
     img.onerror = () => setLogoSrc(fallbackLogo);
