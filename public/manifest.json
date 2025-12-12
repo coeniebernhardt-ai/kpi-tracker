@@ -1,0 +1,25 @@
+{
+  "name": "Think-Q KPI Tracker",
+  "short_name": "Think-Q",
+  "description": "Monitor and track KPIs for the digital access control support team",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a5f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-team.png",
+      "sizes": "120x30",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-login.png",
+      "sizes": "400x90",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

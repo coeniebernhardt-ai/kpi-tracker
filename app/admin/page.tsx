@@ -55,6 +55,7 @@ export default function AdminPage() {
   
   // Assignment UI toggle state
   const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null);
+  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
 
   // Redirect if not admin
   useEffect(() => {
@@ -582,29 +583,70 @@ export default function AdminPage() {
             <div className="space-y-3">
               {filteredTickets.map(ticket => {
                 const memberProfile = profiles.find(p => p.id === ticket.user_id);
+                const isExpanded = expandedTickets.has(ticket.id);
                 return (
                   <div key={ticket.id} className={`p-4 rounded-xl border ${ticket.status === 'open' ? 'bg-slate-800/40 border-blue-500/30' : 'bg-slate-800/30 border-slate-700/50'}`}>
-                    <div className="flex items-start gap-4">
-                      {memberProfile?.avatar_url ? (
-                        <Image src={memberProfile.avatar_url} alt={memberProfile.full_name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
-                      ) : (
-                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(memberProfile?.full_name || 'U')} flex items-center justify-center text-white font-bold text-sm`}>
-                          {memberProfile?.avatar || 'U'}
-                        </div>
-                      )}
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center flex-wrap gap-2 mb-2">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-300'}`}>
-                            {ticket.ticket_number}
+                    {/* Collapsed Header - Always Visible */}
+                    <div 
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedTickets);
+                        if (isExpanded) {
+                          newExpanded.delete(ticket.id);
+                        } else {
+                          newExpanded.add(ticket.id);
+                        }
+                        setExpandedTickets(newExpanded);
+                      }}
+                    >
+                      <div className="flex items-center flex-wrap gap-2 flex-1">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-300'}`}>
+                          {ticket.ticket_number}
+                        </span>
+                        {ticket.client && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{ticket.client}</span>}
+                        {ticket.estate_or_building ? (
+                          <span className="px-2 py-0.5 rounded text-xs bg-slate-700/70 text-slate-300">{ticket.estate_or_building}</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-xs bg-slate-700/50 text-slate-400 opacity-50">No Estate/Building</span>
+                        )}
+                        {ticket.severity && (
+                          <span className={`px-2 py-0.5 rounded border text-xs font-medium ${
+                            ticket.severity === 'LOW' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                            ticket.severity === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                            ticket.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                            'bg-red-500/20 text-red-400 border-red-500/30'
+                          }`}>
+                            {ticket.severity}
                           </span>
-                          <span className="text-xs text-slate-500">{memberProfile?.full_name}</span>
-                          {ticket.client && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{ticket.client}</span>}
-                          {ticket.estate_or_building ? (
-                            <span className="px-2 py-0.5 rounded text-xs bg-slate-700/70 text-slate-300">{ticket.estate_or_building}</span>
+                        )}
+                      </div>
+                      <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
+                        <svg 
+                          className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Expanded Content - Only visible when expanded */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        <div className="flex items-start gap-4">
+                          {memberProfile?.avatar_url ? (
+                            <Image src={memberProfile.avatar_url} alt={memberProfile.full_name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-xs bg-slate-700/50 text-slate-400 opacity-50">No Estate/Building</span>
+                            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(memberProfile?.full_name || 'U')} flex items-center justify-center text-white font-bold text-sm`}>
+                              {memberProfile?.avatar || 'U'}
+                            </div>
                           )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-2 mb-2">
+                              <span className="text-xs text-slate-500">{memberProfile?.full_name}</span>
                           {editingClickUpTicketId === ticket.id ? (
                             <div className="flex items-center gap-2">
                               <input
@@ -903,6 +945,8 @@ export default function AdminPage() {
                         </svg>
                       </button>
                     </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -55,6 +55,8 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  const [expandedTravelLogs, setExpandedTravelLogs] = useState<Set<string>>(new Set());
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -698,8 +700,8 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* New Ticket Button */}
-        <div className="mb-6">
+        {/* New Ticket and Log Travel Buttons */}
+        <div className="mb-6 flex gap-3 flex-wrap">
           <button
             onClick={() => setShowNewTicketForm(!showNewTicketForm)}
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all hover:-translate-y-0.5"
@@ -708,6 +710,16 @@ export default function DashboardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             {showNewTicketForm ? 'Cancel' : 'Open New Ticket'}
+          </button>
+          <button
+            onClick={() => setShowTravelLogForm(!showTravelLogForm)}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all flex items-center gap-2"
+            style={{ backgroundColor: '#1e3a5f' }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            {showTravelLogForm ? 'Cancel' : 'Log Travel'}
           </button>
         </div>
 
@@ -1223,31 +1235,68 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {openTickets.map((ticket) => (
+                {openTickets.map((ticket) => {
+                  const isExpanded = expandedTickets.has(ticket.id);
+                  return (
                   <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center flex-wrap gap-2 mb-2">
-                          <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 text-xs font-bold font-mono">
-                            {ticket.ticket_number}
+                    {/* Collapsed Header - Always Visible */}
+                    <div 
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedTickets);
+                        if (isExpanded) {
+                          newExpanded.delete(ticket.id);
+                        } else {
+                          newExpanded.add(ticket.id);
+                        }
+                        setExpandedTickets(newExpanded);
+                      }}
+                    >
+                      <div className="flex items-center flex-wrap gap-2 flex-1">
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 text-xs font-bold font-mono">
+                          {ticket.ticket_number}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
+                          {ticket.client}
+                        </span>
+                        {ticket.estate_or_building ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
+                            {ticket.estate_or_building}
                           </span>
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
-                            {ticket.client}
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs opacity-50">
+                            No Estate/Building
                           </span>
-                          {ticket.estate_or_building ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
-                              {ticket.estate_or_building}
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs opacity-50">
-                              No Estate/Building
-                            </span>
-                          )}
-                          <span className={`px-2.5 py-1 rounded-lg text-xs ${
-                            ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
-                          }`}>
-                            {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
+                        )}
+                        {ticket.severity && (
+                          <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
+                            {ticket.severity}
                           </span>
+                        )}
+                      </div>
+                      <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
+                        <svg 
+                          className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Expanded Content - Only visible when expanded */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <div className="flex items-center flex-wrap gap-2 mb-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs ${
+                                ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
+                              }`}>
+                                {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
+                              </span>
                           {editingClickUpTicketId === ticket.id ? (
                             <div className="flex items-center gap-2">
                               <input
@@ -1334,16 +1383,41 @@ export default function DashboardPage() {
                               {ticket.severity}
                             </span>
                           )}
-                          {/* Always show assigned members if any */}
-                          {ticket.assigned_profiles && ticket.assigned_profiles.length > 0 ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
-                              👤 Assigned: {ticket.assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
-                              👤 No members assigned
-                            </span>
-                          )}
+                        </div>
+                      </div>
+                      <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
+                        <svg 
+                          className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Expanded Content - Only visible when expanded */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <div className="flex items-center flex-wrap gap-2 mb-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs ${
+                                ticket.location === 'on-site' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
+                              }`}>
+                                {ticket.location === 'on-site' ? '📍 On-Site' : '🌐 Remote'}
+                              </span>
+                              {/* Always show assigned members if any */}
+                              {ticket.assigned_profiles && ticket.assigned_profiles.length > 0 ? (
+                                <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
+                                  👤 Assigned: {ticket.assigned_profiles.map((p: Profile) => p.full_name).join(', ')}
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
+                                  👤 No members assigned
+                                </span>
+                              )}
                         </div>
                         <p className="text-xs text-slate-500">
                           {new Date(ticket.created_at).toLocaleDateString('en-ZA', { 
@@ -1872,6 +1946,9 @@ export default function DashboardPage() {
                       </button>
                     )}
                   </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )
@@ -1882,50 +1959,82 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {closedTickets.map((ticket) => (
+                {closedTickets.map((ticket) => {
+                  const isExpanded = expandedTickets.has(ticket.id);
+                  return (
                   <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center flex-wrap gap-2 mb-2">
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold font-mono">
-                            {ticket.ticket_number}
+                    {/* Collapsed Header - Always Visible */}
+                    <div 
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedTickets);
+                        if (isExpanded) {
+                          newExpanded.delete(ticket.id);
+                        } else {
+                          newExpanded.add(ticket.id);
+                        }
+                        setExpandedTickets(newExpanded);
+                      }}
+                    >
+                      <div className="flex items-center flex-wrap gap-2 flex-1">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold font-mono">
+                          {ticket.ticket_number}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
+                          {ticket.client}
+                        </span>
+                        {ticket.estate_or_building ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
+                            {ticket.estate_or_building}
                           </span>
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
-                            {ticket.client}
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/30 text-slate-500 text-xs opacity-50">
+                            No Estate/Building
                           </span>
-                          {ticket.estate_or_building ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
-                              {ticket.estate_or_building}
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-700/30 text-slate-500 text-xs opacity-50">
-                              No Estate/Building
-                            </span>
-                          )}
-                          {ticket.response_time_minutes && ticket.response_time_minutes > 0 && (
-                            <span className={`px-2.5 py-1 rounded-lg text-xs ${
-                              ticket.response_time_minutes <= 60 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                            }`}>
-                              ⏱ {ticket.response_time_minutes} min
-                            </span>
-                          )}
-                          {ticket.has_dependencies && (
-                            <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 text-xs">
-                              ⚠️ Dependency
-                            </span>
-                          )}
-                          {ticket.severity && (
-                            <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
-                              {ticket.severity}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          Closed: {ticket.closed_at && new Date(ticket.closed_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                        )}
+                        {ticket.severity && (
+                          <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
+                            {ticket.severity}
+                          </span>
+                        )}
                       </div>
-                      <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">Closed</span>
+                      <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
+                        <svg 
+                          className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
                     </div>
+
+                    {/* Expanded Content - Only visible when expanded */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <div className="flex items-center flex-wrap gap-2 mb-2">
+                              {ticket.response_time_minutes && ticket.response_time_minutes > 0 && (
+                                <span className={`px-2.5 py-1 rounded-lg text-xs ${
+                                  ticket.response_time_minutes <= 60 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                }`}>
+                                  ⏱ {ticket.response_time_minutes} min
+                                </span>
+                              )}
+                              {ticket.has_dependencies && (
+                                <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 text-xs">
+                                  ⚠️ Dependency
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              Closed: {ticket.closed_at && new Date(ticket.closed_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">Closed</span>
+                        </div>
 
                     {ticket.has_dependencies && ticket.dependency_name && (
                       <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
@@ -2041,16 +2150,6 @@ export default function DashboardPage() {
               </svg>
               Travel Logs
             </h2>
-            <button
-              onClick={() => setShowTravelLogForm(!showTravelLogForm)}
-              className="px-4 py-2 rounded-xl text-white text-sm font-medium hover:shadow-lg transition-all flex items-center gap-2"
-              style={{ backgroundColor: '#1e3a5f' }}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {showTravelLogForm ? 'Cancel' : 'Add Travel Log'}
-            </button>
           </div>
 
           {/* Travel Log Form */}
@@ -2250,18 +2349,51 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {travelLogs.map((log) => (
+              {travelLogs.map((log) => {
+                const isExpanded = expandedTravelLogs.has(log.id);
+                return (
                 <div key={log.id} className="p-5 rounded-2xl bg-slate-800/40 border" style={{ borderColor: 'rgba(30, 58, 95, 0.3)' }}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h3 className="text-base font-semibold text-white">{log.reason}</h3>
-                        {log.distance_travelled && (
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgba(30, 58, 95, 0.2)', color: '#60a5fa' }}>
-                            {log.distance_travelled} km {log.is_return_trip && '(Return)'}
-                          </span>
-                        )}
-                      </div>
+                  {/* Collapsed Header - Always Visible */}
+                  <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => {
+                      const newExpanded = new Set(expandedTravelLogs);
+                      if (isExpanded) {
+                        newExpanded.delete(log.id);
+                      } else {
+                        newExpanded.add(log.id);
+                      }
+                      setExpandedTravelLogs(newExpanded);
+                    }}
+                  >
+                    <div className="flex items-center gap-3 flex-wrap flex-1">
+                      <h3 className="text-base font-semibold text-white">{log.reason}</h3>
+                      {log.distance_travelled && (
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgba(30, 58, 95, 0.2)', color: '#60a5fa' }}>
+                          {log.distance_travelled} km {log.is_return_trip && '(Return)'}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-500">
+                        {new Date(log.created_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
+                      <svg 
+                        className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Expanded Content - Only visible when expanded */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-slate-700/50">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
                       {(log.start_address || log.end_address) && (
                         <div className="mt-2 space-y-1">
                           {log.start_address && (
@@ -2286,25 +2418,28 @@ export default function DashboardPage() {
                           minute: '2-digit'
                         })}
                       </p>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteTravelLog(log.id)}
-                      className="p-2 rounded-lg transition-colors"
-                      style={{ backgroundColor: 'rgba(255, 77, 84, 0.2)', color: '#ff4d54' }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 77, 84, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 77, 84, 0.2)';
-                      }}
-                      title="Delete travel log"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                  {log.comments && (
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTravelLog(log.id);
+                          }}
+                          className="p-2 rounded-lg transition-colors"
+                          style={{ backgroundColor: 'rgba(255, 77, 84, 0.2)', color: '#ff4d54' }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 77, 84, 0.3)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 77, 84, 0.2)';
+                          }}
+                          title="Delete travel log"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                      {log.comments && (
                     <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
                       <p className="text-sm text-slate-300">{log.comments}</p>
                     </div>
