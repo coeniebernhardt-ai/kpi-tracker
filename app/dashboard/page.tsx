@@ -1945,7 +1945,6 @@ export default function DashboardPage() {
                         Resolve & Close Ticket
                       </button>
                     )}
-                  </div>
                       </div>
                     )}
                   </div>
@@ -2036,6 +2035,9 @@ export default function DashboardPage() {
                           <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">Closed</span>
                         </div>
 
+                    {/* Expanded Content - Only visible when expanded */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
                     {ticket.has_dependencies && ticket.dependency_name && (
                       <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
                         <p className="text-xs text-rose-400 mb-1">Dependency</p>
