@@ -1222,7 +1222,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Tickets List - Open and Closed */}
+        {/* Tickets List */}
         <section>
           {loadingTickets ? (
             <div className="text-center py-12">
@@ -1952,6 +1952,7 @@ export default function DashboardPage() {
                 })}
               </div>
             )
+          )
           ) : (
             closedTickets.length === 0 ? (
               <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
