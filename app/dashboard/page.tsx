@@ -1897,6 +1897,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
+                    </div>
                     )}
 
                     {closingTicketId === ticket.id ? (
