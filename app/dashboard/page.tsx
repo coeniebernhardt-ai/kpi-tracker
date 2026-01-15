@@ -1229,7 +1229,7 @@ export default function DashboardPage() {
               <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
             </div>
           ) : activeTab === 'open' ? (
-            openTickets.length === 0 ? (
+            (openTickets.length === 0 ? (
               <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
                 <p className="text-slate-500">No open tickets. Great job!</p>
               </div>
@@ -1951,7 +1951,7 @@ export default function DashboardPage() {
                   )
                 })}
               </div>
-            )
+            ))
           ) : (
             closedTickets.length === 0 ? (
               <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
