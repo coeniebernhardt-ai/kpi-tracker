@@ -1947,7 +1947,7 @@ export default function DashboardPage() {
                         Resolve & Close Ticket
                       </button>
                     )}
-                    </div>
+                  </div>
                   )
                 })}
               </div>
