@@ -1897,7 +1897,6 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                    )}
 
                     {closingTicketId === ticket.id ? (
                       <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
@@ -1945,6 +1944,7 @@ export default function DashboardPage() {
                       >
                         Resolve & Close Ticket
                       </button>
+                    )}
                     )}
                   </div>
                   )
