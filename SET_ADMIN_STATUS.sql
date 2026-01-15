@@ -24,3 +24,8 @@ SELECT public.is_admin() AS is_admin_check;
 -- This should now return TRUE
 
 
+
+
+
+
+

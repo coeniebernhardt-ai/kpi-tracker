@@ -70,3 +70,8 @@ CREATE POLICY "Admins can update any ticket"
 SELECT public.is_admin() AS is_admin_check;
 
 
+
+
+
+
+

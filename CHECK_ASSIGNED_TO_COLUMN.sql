@@ -33,3 +33,8 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
   AND tc.table_name = 'tickets'
   AND kcu.column_name = 'assigned_to';
 
+
+
+
+
+

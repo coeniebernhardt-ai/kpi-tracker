@@ -14,3 +14,8 @@ WHERE email = 'coenie@td.dev';
 -- But if has_password is TRUE, the user has a password set
 
 
+
+
+
+
+

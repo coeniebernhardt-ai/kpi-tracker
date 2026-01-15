@@ -14,3 +14,8 @@ CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
 -- Note: This allows both the ticket owner (user_id) and assigned member (assigned_to) 
 -- to collaborate on the ticket by adding updates and comments.
 
+
+
+
+
+

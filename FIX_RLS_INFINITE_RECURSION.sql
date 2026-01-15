@@ -69,3 +69,8 @@ CREATE POLICY "Admins can update any ticket"
 SELECT auth.is_admin() AS is_admin_check;
 
 
+
+
+
+
+

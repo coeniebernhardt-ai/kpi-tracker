@@ -26,3 +26,8 @@ WHERE email = 'coenie@td.dev';
 -- Select "Confirm Email" or "Confirm User"
 
 
+
+
+
+
+
