@@ -655,7 +655,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {/* New Ticket and Log Travel Buttons */}
+        {/* New Ticket and Log Travel Buttons - Moved to top */}
         <div className="mb-6 flex gap-3 flex-wrap">
           <button
             onClick={() => setShowNewTicketForm(!showNewTicketForm)}
