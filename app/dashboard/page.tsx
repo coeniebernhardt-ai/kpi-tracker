@@ -1247,7 +1247,7 @@ export default function DashboardPage() {
                   {openTickets.map((ticket) => {
                     const isExpanded = expandedTickets.has(ticket.id);
                     return (
-                      <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30">
+                      <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30" key={ticket.id}>
                     {/* Collapsed Header - Always Visible */}
                     <div 
                       className="flex items-center justify-between cursor-pointer"
