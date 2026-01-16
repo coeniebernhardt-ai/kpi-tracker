@@ -2087,10 +2087,13 @@ export default function DashboardPage() {
               </div>
             );
           })()}
-        </section>
+            </section>
+          </>
+        )}
 
-        {/* Travel Logs Section */}
-        <section className="mb-8 animate-fade-in">
+        {/* Travel Logs Section - Only show when travel logs tab is selected */}
+        {mainTab === 'travelLogs' && (
+          <section className="mb-8 animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <svg className="w-5 h-5" style={{ color: '#1e3a5f' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
