@@ -959,7 +959,7 @@ export default function AdminPage() {
             </div>
           )}
         </section>
-          </>
+          </div>
         )}
 
         {/* Travel Logs Tab */}
