@@ -1245,8 +1245,8 @@ export default function DashboardPage() {
               return (
                 <div className="space-y-4">
                   {openTickets.map((ticket) => {
-                  const isExpanded = expandedTickets.has(ticket.id);
-                  return (
+                    const isExpanded = expandedTickets.has(ticket.id);
+                    return (
                     <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30">
                     {/* Collapsed Header - Always Visible */}
                     <div 
@@ -1957,7 +1957,7 @@ export default function DashboardPage() {
                       </button>
                     )}
                     </div>
-                  )
+                    );
                   })}
                 </div>
               );
