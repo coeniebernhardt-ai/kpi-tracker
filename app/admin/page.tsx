@@ -551,8 +551,33 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* Filters */}
-        <section className="mb-6 flex flex-wrap items-center gap-4">
+        {/* Admin Tabs - Tickets and Travel Logs */}
+        <div className="mb-6">
+          <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
+            <button
+              onClick={() => setAdminTab('tickets')}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+                adminTab === 'tickets' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Tickets
+            </button>
+            <button
+              onClick={() => setAdminTab('travelLogs')}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+                adminTab === 'travelLogs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Travel Logs
+            </button>
+          </div>
+        </div>
+
+        {/* Tickets Tab */}
+        {adminTab === 'tickets' && (
+          <div>
+            {/* Filters */}
+            <section className="mb-6 flex flex-wrap items-center gap-4">
           <div>
             <label className="block text-xs text-slate-500 mb-1">Filter by Member</label>
             <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm">
