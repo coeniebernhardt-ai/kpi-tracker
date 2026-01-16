@@ -110,10 +110,10 @@ function validateRequest(request: NextRequest): boolean {
   return true;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware for static files and Next.js internals
+  // Skip proxy for static files and Next.js internals
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
@@ -242,5 +242,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
-
-
