@@ -1250,7 +1250,10 @@ export default function DashboardPage() {
             <div className="mb-6">
               <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
                 <button
-                  onClick={() => setActiveTab('open')}
+                  onClick={() => {
+                    setActiveTab('open');
+                    setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === 'open' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400'
                   }`}
@@ -1258,7 +1261,10 @@ export default function DashboardPage() {
                   Open Tickets ({openTickets.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab('closed')}
+                  onClick={() => {
+                    setActiveTab('closed');
+                    setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === 'closed' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'
                   }`}

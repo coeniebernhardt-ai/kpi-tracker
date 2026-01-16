@@ -556,7 +556,10 @@ export default function AdminPage() {
         <div className="mb-6">
           <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
             <button
-              onClick={() => setAdminTab('tickets')}
+              onClick={() => {
+                setAdminTab('tickets');
+                setExpandedTickets(new Set()); // Collapse all tickets when switching to tickets tab
+              }}
               className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                 adminTab === 'tickets' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
               }`}
@@ -564,7 +567,10 @@ export default function AdminPage() {
               Tickets
             </button>
             <button
-              onClick={() => setAdminTab('travelLogs')}
+              onClick={() => {
+                setAdminTab('travelLogs');
+                setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
+              }}
               className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                 adminTab === 'travelLogs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
               }`}
