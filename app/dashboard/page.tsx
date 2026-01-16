@@ -1326,6 +1326,11 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </div>
+                      {!isExpanded && (
+                        <div className="mt-2 text-sm text-slate-400 line-clamp-1">
+                          {ticket.issue}
+                        </div>
+                      )}
                       <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
                         <svg 
                           className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
@@ -1944,6 +1949,11 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </div>
+                      {!isExpanded && (
+                        <div className="mt-2 text-sm text-slate-400 line-clamp-1">
+                          {ticket.issue}
+                        </div>
+                      )}
                       <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
                         <svg 
                           className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 

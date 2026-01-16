@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
+  const [adminTab, setAdminTab] = useState<'tickets' | 'travelLogs'>('tickets');
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -620,6 +621,11 @@ export default function AdminPage() {
                           </span>
                         )}
                       </div>
+                      {!isExpanded && (
+                        <div className="mt-2 text-sm text-slate-400 line-clamp-1">
+                          {ticket.issue}
+                        </div>
+                      )}
                       <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
                         <svg 
                           className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
@@ -953,6 +959,71 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+          </>
+        )}
+
+        {/* Travel Logs Tab */}
+        {adminTab === 'travelLogs' && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold text-white mb-4">All Travel Logs</h2>
+            {travelLogs.length === 0 ? (
+              <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+                <p className="text-slate-500">No travel logs found.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {travelLogs.map(log => {
+                  const memberProfile = profiles.find(p => p.id === log.user_id);
+                  return (
+                    <div key={log.id} className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-base font-semibold text-white">{log.reason}</h3>
+                            {log.distance_travelled && (
+                              <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">
+                                {log.distance_travelled} km {log.is_return_trip && '(Return)'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
+                            {memberProfile && (
+                              <span className="flex items-center gap-1">
+                                <Image 
+                                  src={memberProfile.avatar_url || ''} 
+                                  alt={memberProfile.full_name} 
+                                  width={16} 
+                                  height={16} 
+                                  className="w-4 h-4 rounded-full"
+                                />
+                                {memberProfile.full_name}
+                              </span>
+                            )}
+                            <span>•</span>
+                            <span>{new Date(log.created_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          {log.start_address && (
+                            <p className="text-sm text-slate-300 mb-1">
+                              <span className="text-slate-500">From:</span> {log.start_address}
+                            </p>
+                          )}
+                          {log.end_address && (
+                            <p className="text-sm text-slate-300 mb-1">
+                              <span className="text-slate-500">To:</span> {log.end_address}
+                            </p>
+                          )}
+                          {log.comments && (
+                            <p className="text-sm text-slate-400 mt-2">{log.comments}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       {/* Create Ticket Modal */}
