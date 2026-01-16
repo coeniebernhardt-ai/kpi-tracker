@@ -31,6 +31,7 @@ export default function DashboardPage() {
   // Force re-render every minute to update time tracker
   useTimeUpdate();
   
+  const [mainTab, setMainTab] = useState<'tickets' | 'travelLogs' | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
@@ -97,14 +98,25 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  // Load tickets, travel logs, and profiles - only when user ID changes
+  // Load profiles when user ID changes
   useEffect(() => {
     if (user?.id) {
-      loadTickets();
-      loadTravelLogs();
       loadProfiles();
     }
   }, [user?.id]);
+
+  // Load tickets or travel logs only when mainTab is selected
+  useEffect(() => {
+    if (user?.id && mainTab === 'tickets') {
+      loadTickets();
+    }
+  }, [user?.id, mainTab]);
+
+  useEffect(() => {
+    if (user?.id && mainTab === 'travelLogs') {
+      loadTravelLogs();
+    }
+  }, [user?.id, mainTab]);
 
   const loadProfiles = async () => {
     try {
@@ -1201,31 +1213,62 @@ export default function DashboardPage() {
           </form>
         )}
 
-        {/* Tickets Tabs */}
+        {/* Main Tabs - Tickets and Travel Logs */}
         <div className="mb-6">
           <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
             <button
-              onClick={() => setActiveTab('open')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'open' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400'
+              onClick={() => {
+                setMainTab('tickets');
+                setExpandedTickets(new Set()); // Collapse all tickets
+              }}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+                mainTab === 'tickets' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              Open Tickets ({openTickets.length})
+              Tickets
             </button>
             <button
-              onClick={() => setActiveTab('closed')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'closed' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'
+              onClick={() => {
+                setMainTab('travelLogs');
+                setExpandedTravelLogs(new Set()); // Collapse all travel logs
+              }}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+                mainTab === 'travelLogs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              Closed Tickets ({closedTickets.length})
+              Travel Logs
             </button>
           </div>
         </div>
 
-        {/* Tickets List */}
-        <section>
-          {(() => {
+        {/* Tickets Section - Only show when tickets tab is selected */}
+        {mainTab === 'tickets' && (
+          <>
+            {/* Tickets Tabs */}
+            <div className="mb-6">
+              <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
+                <button
+                  onClick={() => setActiveTab('open')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === 'open' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400'
+                  }`}
+                >
+                  Open Tickets ({openTickets.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('closed')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === 'closed' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'
+                  }`}
+                >
+                  Closed Tickets ({closedTickets.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Tickets List */}
+            <section>
+              {(() => {
             if (loadingTickets) {
               return (
                 <div className="text-center py-12">
