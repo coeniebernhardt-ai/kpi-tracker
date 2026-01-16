@@ -651,32 +651,33 @@ export default function DashboardPage() {
               Sign Out
             </button>
           </div>
+          
+          {/* New Ticket and Log Travel Buttons - Top Left */}
+          <div className="mt-4 flex gap-3 flex-wrap">
+            <button
+              onClick={() => setShowNewTicketForm(!showNewTicketForm)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all hover:-translate-y-0.5"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {showNewTicketForm ? 'Cancel' : 'Open New Ticket'}
+            </button>
+            <button
+              onClick={() => setShowTravelLogForm(!showTravelLogForm)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all"
+              style={{ backgroundColor: '#1e3a5f' }}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              {showTravelLogForm ? 'Cancel' : 'Log Travel'}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {/* New Ticket and Log Travel Buttons - Moved to top */}
-        <div className="mb-6 flex gap-3 flex-wrap">
-          <button
-            onClick={() => setShowNewTicketForm(!showNewTicketForm)}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all hover:-translate-y-0.5"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {showNewTicketForm ? 'Cancel' : 'Open New Ticket'}
-          </button>
-          <button
-            onClick={() => setShowTravelLogForm(!showTravelLogForm)}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all flex items-center gap-2"
-            style={{ backgroundColor: '#1e3a5f' }}
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            {showTravelLogForm ? 'Cancel' : 'Log Travel'}
-          </button>
-        </div>
 
         {/* KPI Summary */}
         {kpis && (
