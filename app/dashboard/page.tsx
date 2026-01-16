@@ -108,6 +108,7 @@ export default function DashboardPage() {
   // Load tickets or travel logs only when mainTab is selected
   useEffect(() => {
     if (user?.id && mainTab === 'tickets') {
+      setExpandedTickets(new Set()); // Collapse all tickets when loading
       loadTickets();
     }
   }, [user?.id, mainTab]);
@@ -132,6 +133,7 @@ export default function DashboardPage() {
   const loadTickets = async () => {
     if (!user) return;
     setLoadingTickets(true);
+    setExpandedTickets(new Set()); // Ensure all tickets are collapsed when loading
     const data = await getTicketsByUserId(user.id);
     setTickets(data);
     setLoadingTickets(false);

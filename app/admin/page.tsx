@@ -84,6 +84,7 @@ export default function AdminPage() {
   const loadData = async () => {
     console.log('loadData: Starting...');
     setLoadingData(true);
+    setExpandedTickets(new Set()); // Ensure all tickets are collapsed when loading
     try {
       console.log('loadData: Fetching profiles...');
       const profilesData = await getAllProfiles();
