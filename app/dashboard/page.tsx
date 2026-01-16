@@ -1225,18 +1225,26 @@ export default function DashboardPage() {
 
         {/* Tickets List */}
         <section>
-          {loadingTickets ? (
-            <div className="text-center py-12">
-              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            </div>
-          ) : activeTab === 'open' ? (
-            openTickets.length === 0 ? (
-              <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
-                <p className="text-slate-500">No open tickets. Great job!</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {openTickets.map((ticket) => {
+          {(() => {
+            if (loadingTickets) {
+              return (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                </div>
+              );
+            }
+            
+            if (activeTab === 'open') {
+              if (openTickets.length === 0) {
+                return (
+                  <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+                    <p className="text-slate-500">No open tickets. Great job!</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-4">
+                  {openTickets.map((ticket) => {
                   const isExpanded = expandedTickets.has(ticket.id);
                   return (
                     <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30">
@@ -1950,17 +1958,22 @@ export default function DashboardPage() {
                     )}
                     </div>
                   )
-                })}
-              </div>
-            )
-          )
-          ) : closedTickets.length === 0 ? (
-            <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
-              <p className="text-slate-500">No closed tickets yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {closedTickets.map((ticket) => {
+                  })}
+                </div>
+              );
+            }
+            
+            if (closedTickets.length === 0) {
+              return (
+                <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+                  <p className="text-slate-500">No closed tickets yet.</p>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="space-y-4">
+                {closedTickets.map((ticket) => {
                   const isExpanded = expandedTickets.has(ticket.id);
                   return (
                   <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50">
@@ -2141,10 +2154,10 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                })}
               </div>
-            ))
-          )}
+            );
+          })()}
         </section>
 
         {/* Travel Logs Section */}
