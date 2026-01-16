@@ -1394,16 +1394,6 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
-                      <button className="ml-2 p-1 rounded-lg hover:bg-slate-700/50 transition-colors">
-                        <svg 
-                          className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                          fill="none" 
-                          viewBox="0 0 24 24" 
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
                     </div>
 
                     {/* Expanded Content - Only visible when expanded */}
@@ -1957,8 +1947,8 @@ export default function DashboardPage() {
                       </button>
                     )}
                     </div>
-                    )}
-                  })}
+                  )
+                })}
                 </div>
               );
             }
