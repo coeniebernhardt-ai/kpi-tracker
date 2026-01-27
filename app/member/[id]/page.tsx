@@ -643,7 +643,7 @@ export default function MemberPage() {
                   <option value="LOW">LOW</option>
                   <option value="MEDIUM">MEDIUM</option>
                   <option value="HIGH">HIGH</option>
-                  <option value="CRITICAL">CRITICAL</option>
+                  <option value="URGENT">URGENT</option>
                 </select>
               </div>
 
