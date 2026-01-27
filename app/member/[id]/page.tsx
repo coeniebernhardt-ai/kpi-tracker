@@ -636,7 +636,7 @@ export default function MemberPage() {
                 </label>
                 <select
                   value={newTicketData.severity}
-                  onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })}
+                  onChange={(e) => setNewTicketData({ ...newTicketData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' })}
                   required
                   className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none appearance-none cursor-pointer"
                 >
