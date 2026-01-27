@@ -1387,27 +1387,36 @@ export default function AdminPage() {
                       return str;
                     };
                     
-                    const headers = ['Date & Time', 'User', 'Reason', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
-                    const rows = filteredLogs.map(log => [
-                      new Date(log.created_at).toLocaleString('en-ZA', {
+                    const headers = ['Date', 'Time', 'User', 'Reason', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
+                    const rows = filteredLogs.map(log => {
+                      const logDate = new Date(log.created_at);
+                      const dateStr = logDate.toLocaleDateString('en-ZA', {
                         year: 'numeric',
                         month: '2-digit',
-                        day: '2-digit',
+                        day: '2-digit'
+                      });
+                      const timeStr = logDate.toLocaleTimeString('en-ZA', {
                         hour: '2-digit',
                         minute: '2-digit',
-                        second: '2-digit'
-                      }),
-                      log.profile?.full_name || 'Unknown',
-                      log.reason || '',
-                      log.start_address || '',
-                      log.end_address || '',
-                      log.is_return_trip ? 'Yes' : 'No',
-                      log.distance_travelled?.toString() || '',
-                      log.comments || '',
-                      log.attachments && log.attachments.length > 0 
-                        ? log.attachments.map(a => a.name).join('; ') 
-                        : ''
-                    ]);
+                        second: '2-digit',
+                        hour12: false
+                      });
+                      
+                      return [
+                        dateStr,
+                        timeStr,
+                        log.profile?.full_name || 'Unknown',
+                        log.reason || '',
+                        log.start_address || '',
+                        log.end_address || '',
+                        log.is_return_trip ? 'Yes' : 'No',
+                        log.distance_travelled?.toString() || '',
+                        log.comments || '',
+                        log.attachments && log.attachments.length > 0 
+                          ? log.attachments.map(a => a.name).join('; ') 
+                          : ''
+                      ];
+                    });
                     
                     const csvContent = [
                       headers.map(h => escapeCSVCell(h)).join(','),
