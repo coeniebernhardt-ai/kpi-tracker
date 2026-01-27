@@ -318,20 +318,34 @@ export default function AdminPage() {
         t.location === 'on-site' ? 'On-Site' : t.location === 'remote' ? 'Remote' : '',
         t.clickup_ticket || '',
         t.status === 'open' ? 'Open' : t.status === 'closed' ? 'Closed' : '',
-        `"${(t.issue || '').replace(/"/g, '""')}"`,
-        `"${(t.resolution || '').replace(/"/g, '""')}"`,
+        t.issue || '',
+        t.resolution || '',
         t.has_dependencies ? 'Yes' : 'No',
         t.dependency_name || '',
-        `"${updatesFormatted.replace(/"/g, '""')}"`,
-        t.total_time_minutes || '',
-        `"${timeLogsFormatted.replace(/"/g, '""')}"`,
-        t.response_time_minutes || '',
+        updatesFormatted,
+        t.total_time_minutes?.toString() || '',
+        timeLogsFormatted,
+        t.response_time_minutes?.toString() || '',
         new Date(t.created_at).toLocaleString('en-ZA'),
         t.closed_at ? new Date(t.closed_at).toLocaleString('en-ZA') : ''
       ];
     });
     
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    // Properly escape all CSV cells
+    const escapeCSVCell = (cell: string | number | undefined): string => {
+      if (cell === undefined || cell === null) return '';
+      const str = String(cell);
+      // If cell contains comma, newline, or quote, wrap in quotes and escape quotes
+      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    const csv = [
+      headers.map(h => escapeCSVCell(h)).join(','),
+      ...rows.map(r => r.map(cell => escapeCSVCell(cell)).join(','))
+    ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
