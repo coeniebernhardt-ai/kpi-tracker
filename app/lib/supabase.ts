@@ -602,12 +602,35 @@ export async function closeTicket(ticketId: string, resolution: string) {
 }
 
 export async function deleteTicket(ticketId: string) {
-  const { error } = await supabase
-    .from('tickets')
-    .delete()
-    .eq('id', ticketId);
-
-  return { error };
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .delete()
+      .eq('id', ticketId)
+      .select(); // Select to verify deletion
+    
+    if (error) {
+      console.error('Error deleting ticket:', {
+        ticketId,
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
+      // Check for RLS policy issues
+      if (error.code === 'PGRST116' || error.message?.includes('permission') || error.message?.includes('policy')) {
+        console.error('⚠️ This might be an RLS (Row Level Security) policy issue. Check your Supabase RLS policies for the tickets table.');
+      }
+    } else {
+      console.log('Ticket deleted successfully:', ticketId, data);
+    }
+    
+    return { data, error };
+  } catch (err: any) {
+    console.error('Exception in deleteTicket:', err);
+    return { data: null, error: err };
+  }
 }
 
 export async function addTicketUpdate(

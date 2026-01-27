@@ -152,21 +152,35 @@ export default function AdminPage() {
     if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;
     
     try {
-      const { error } = await deleteTicket(ticketId);
+      console.log('Attempting to delete ticket:', ticketId);
+      const { data, error } = await deleteTicket(ticketId);
+      
       if (error) {
         console.error('Error deleting ticket:', error);
-        alert('Failed to delete ticket: ' + error.message);
+        const errorMessage = error.message || 'Unknown error';
+        const errorCode = error.code || 'NO_CODE';
+        
+        // Provide more specific error messages
+        if (errorCode === 'PGRST116' || errorMessage.includes('permission') || errorMessage.includes('policy')) {
+          alert('Failed to delete ticket: Permission denied. This might be an RLS (Row Level Security) policy issue. Please check your Supabase RLS policies for the tickets table.');
+        } else {
+          alert(`Failed to delete ticket: ${errorMessage} (Code: ${errorCode})`);
+        }
         return;
       }
+      
+      console.log('Ticket deleted successfully, data:', data);
       
       // Remove from local state immediately for UI feedback
       setTickets(tickets.filter(t => t.id !== ticketId));
       
       // Reload tickets from database to ensure consistency
       await loadData();
-    } catch (err) {
+      
+      console.log('Tickets reloaded after deletion');
+    } catch (err: any) {
       console.error('Exception deleting ticket:', err);
-      alert('An unexpected error occurred while deleting the ticket');
+      alert('An unexpected error occurred while deleting the ticket: ' + (err?.message || 'Unknown error'));
     }
   };
 
