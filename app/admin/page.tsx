@@ -20,6 +20,7 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showStatsExport, setShowStatsExport] = useState(false);
   const [showTravelLogExport, setShowTravelLogExport] = useState(false);
+  const [showImageLinks, setShowImageLinks] = useState(false);
   const [exportDateFrom, setExportDateFrom] = useState('');
   const [exportDateTo, setExportDateTo] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -1439,6 +1440,259 @@ export default function AdminPage() {
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Download CSV Report
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Links Modal */}
+      {showImageLinks && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowImageLinks(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="w-full max-w-4xl bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-slate-700/50 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">All Image Links</h2>
+                  <button onClick={() => setShowImageLinks(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1">
+                {(() => {
+                  // Collect all image links
+                  const imageLinks: Array<{
+                    type: 'profile' | 'ticket-attachment' | 'ticket-site-file' | 'travel-log';
+                    url: string;
+                    name: string;
+                    context: string;
+                  }> = [];
+
+                  // Profile avatars
+                  profiles.forEach(profile => {
+                    if (profile.avatar_url) {
+                      imageLinks.push({
+                        type: 'profile',
+                        url: profile.avatar_url,
+                        name: `${profile.full_name} - Profile Picture`,
+                        context: `Profile: ${profile.full_name}`
+                      });
+                    }
+                  });
+
+                  // Ticket attachments and site files
+                  tickets.forEach(ticket => {
+                    const memberProfile = profiles.find(p => p.id === ticket.user_id);
+                    const ticketContext = `${ticket.ticket_number} - ${memberProfile?.full_name || 'Unknown'}`;
+
+                    // Regular attachments
+                    if (ticket.attachments && ticket.attachments.length > 0) {
+                      ticket.attachments.forEach((att: { url: string; name: string; type: string }) => {
+                        if (att.type?.startsWith('image/')) {
+                          imageLinks.push({
+                            type: 'ticket-attachment',
+                            url: att.url,
+                            name: att.name,
+                            context: `Ticket: ${ticketContext}`
+                          });
+                        }
+                      });
+                    }
+
+                    // Site files
+                    if (ticket.site_files && ticket.site_files.length > 0) {
+                      ticket.site_files.forEach((file: { url: string; name: string; type: string; label?: string }) => {
+                        if (file.type?.startsWith('image/')) {
+                          imageLinks.push({
+                            type: 'ticket-site-file',
+                            url: file.url,
+                            name: file.label || file.name,
+                            context: `Ticket: ${ticketContext}`
+                          });
+                        }
+                      });
+                    }
+
+                    // Update attachments
+                    if (ticket.updates && ticket.updates.length > 0) {
+                      ticket.updates.forEach((update: { attachments?: { url: string; name: string; type: string }[] }) => {
+                        if (update.attachments && update.attachments.length > 0) {
+                          update.attachments.forEach((att: { url: string; name: string; type: string }) => {
+                            if (att.type?.startsWith('image/')) {
+                              imageLinks.push({
+                                type: 'ticket-attachment',
+                                url: att.url,
+                                name: att.name,
+                                context: `Ticket Update: ${ticketContext}`
+                              });
+                            }
+                          });
+                        }
+                      });
+                    }
+                  });
+
+                  // Travel log attachments
+                  travelLogs.forEach(log => {
+                    const memberProfile = profiles.find(p => p.id === log.user_id);
+                    const logContext = `${memberProfile?.full_name || 'Unknown'} - ${log.reason}`;
+
+                    if (log.attachments && log.attachments.length > 0) {
+                      log.attachments.forEach((att: { url: string; name: string; type: string }) => {
+                        if (att.type?.startsWith('image/')) {
+                          imageLinks.push({
+                            type: 'travel-log',
+                            url: att.url,
+                            name: att.name,
+                            context: `Travel Log: ${logContext}`
+                          });
+                        }
+                      });
+                    }
+                  });
+
+                  if (imageLinks.length === 0) {
+                    return (
+                      <div className="text-center py-12">
+                        <p className="text-slate-500">No images found.</p>
+                      </div>
+                    );
+                  }
+
+                  // Group by type
+                  const grouped = {
+                    profile: imageLinks.filter(l => l.type === 'profile'),
+                    'ticket-attachment': imageLinks.filter(l => l.type === 'ticket-attachment'),
+                    'ticket-site-file': imageLinks.filter(l => l.type === 'ticket-site-file'),
+                    'travel-log': imageLinks.filter(l => l.type === 'travel-log')
+                  };
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Profile Pictures */}
+                      {grouped.profile.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-3">Profile Pictures ({grouped.profile.length})</h3>
+                          <div className="space-y-2">
+                            {grouped.profile.map((link, idx) => (
+                              <div key={idx} className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-slate-300 truncate">{link.name}</p>
+                                  <p className="text-xs text-slate-500 truncate">{link.context}</p>
+                                </div>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-4 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm font-medium flex items-center gap-2 flex-shrink-0"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ticket Attachments */}
+                      {grouped['ticket-attachment'].length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-3">Ticket Attachments ({grouped['ticket-attachment'].length})</h3>
+                          <div className="space-y-2">
+                            {grouped['ticket-attachment'].map((link, idx) => (
+                              <div key={idx} className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-slate-300 truncate">{link.name}</p>
+                                  <p className="text-xs text-slate-500 truncate">{link.context}</p>
+                                </div>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-4 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm font-medium flex items-center gap-2 flex-shrink-0"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ticket Site Files */}
+                      {grouped['ticket-site-file'].length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-3">Ticket Site Files ({grouped['ticket-site-file'].length})</h3>
+                          <div className="space-y-2">
+                            {grouped['ticket-site-file'].map((link, idx) => (
+                              <div key={idx} className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-slate-300 truncate">{link.name}</p>
+                                  <p className="text-xs text-slate-500 truncate">{link.context}</p>
+                                </div>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-4 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm font-medium flex items-center gap-2 flex-shrink-0"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Travel Log Attachments */}
+                      {grouped['travel-log'].length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-3">Travel Log Attachments ({grouped['travel-log'].length})</h3>
+                          <div className="space-y-2">
+                            {grouped['travel-log'].map((link, idx) => (
+                              <div key={idx} className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-slate-300 truncate">{link.name}</p>
+                                  <p className="text-xs text-slate-500 truncate">{link.context}</p>
+                                </div>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-4 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm font-medium flex items-center gap-2 flex-shrink-0"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Summary */}
+                      <div className="mt-6 p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
+                        <p className="text-sm text-slate-400">
+                          <span className="font-semibold text-white">Total Images:</span> {imageLinks.length}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
