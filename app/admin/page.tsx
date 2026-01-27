@@ -151,9 +151,22 @@ export default function AdminPage() {
   const handleDeleteTicket = async (ticketId: string) => {
     if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;
     
-    const { error } = await deleteTicket(ticketId);
-    if (!error) {
+    try {
+      const { error } = await deleteTicket(ticketId);
+      if (error) {
+        console.error('Error deleting ticket:', error);
+        alert('Failed to delete ticket: ' + error.message);
+        return;
+      }
+      
+      // Remove from local state immediately for UI feedback
       setTickets(tickets.filter(t => t.id !== ticketId));
+      
+      // Reload tickets from database to ensure consistency
+      await loadData();
+    } catch (err) {
+      console.error('Exception deleting ticket:', err);
+      alert('An unexpected error occurred while deleting the ticket');
     }
   };
 
