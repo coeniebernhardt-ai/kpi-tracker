@@ -199,7 +199,7 @@ export default function MemberPage() {
     clickupTicket: '',
     hasDependencies: false,
     dependencyName: '',
-    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
   });
 
   // Close ticket form
