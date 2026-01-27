@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Use service role key for admin operations (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Helper function to create admin client (lazy initialization to avoid build-time errors)
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +30,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Create admin client
+    const supabaseAdmin = getSupabaseAdmin();
 
     // Verify user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
