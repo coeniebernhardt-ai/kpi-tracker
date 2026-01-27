@@ -107,8 +107,11 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
+  // Use production Vercel URL for password reset emails
+  // This ensures reset links work in production, not just localhost/preview
+  const productionUrl = 'https://kpi-tracker-six.vercel.app';
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/login`,
+    redirectTo: `${productionUrl}/reset-password`,
   });
   return { data, error };
 }
