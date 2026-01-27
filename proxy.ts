@@ -140,8 +140,9 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // Origin validation for API-like routes
-  if (pathname.startsWith('/api') || pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
+  // Origin validation for API-like routes (skip for internal API routes)
+  // Internal API routes (like /api/admin/*) should be accessible from the same origin
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
     if (!validateOrigin(request)) {
       return new NextResponse(
         JSON.stringify({ 
@@ -153,6 +154,34 @@ export async function proxy(request: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
         }
       );
+    }
+  }
+  
+  // For API routes, allow same-origin requests (no origin header means same origin)
+  // This allows the frontend to call API routes on the same domain
+  if (pathname.startsWith('/api')) {
+    const origin = request.headers.get('origin');
+    // Allow if no origin (same-origin request) or if origin matches the request host
+    if (origin) {
+      const requestHost = request.headers.get('host');
+      const originUrl = new URL(origin);
+      // Allow if origin host matches request host (same domain)
+      if (originUrl.host !== requestHost && !ALLOWED_ORIGINS.includes(origin)) {
+        // For API routes, be more permissive - allow if it's a Vercel preview/production URL
+        const isVercelUrl = origin.includes('vercel.app') || origin.includes('vercel.live');
+        if (!isVercelUrl && !ALLOWED_ORIGINS.includes(origin)) {
+          return new NextResponse(
+            JSON.stringify({ 
+              error: 'Invalid origin',
+              code: 'INVALID_ORIGIN'
+            }),
+            {
+              status: 403,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+      }
     }
   }
 
