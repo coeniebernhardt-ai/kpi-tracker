@@ -26,7 +26,7 @@ interface Ticket {
   responseTimeMinutes?: number;
   hasDependencies?: boolean;
   dependencyName?: string;
-  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 }
 
 interface MemberData {
