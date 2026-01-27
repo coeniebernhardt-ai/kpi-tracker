@@ -1376,7 +1376,17 @@ export default function AdminPage() {
                       return matchesDate && matchesUser;
                     });
                     
-                    // Create CSV
+                    // Create CSV with proper escaping
+                    const escapeCSVCell = (cell: string | number | undefined): string => {
+                      if (cell === undefined || cell === null) return '';
+                      const str = String(cell);
+                      // If cell contains comma, newline, or quote, wrap in quotes and escape quotes
+                      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+                        return `"${str.replace(/"/g, '""')}"`;
+                      }
+                      return str;
+                    };
+                    
                     const headers = ['Date & Time', 'User', 'Reason', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
                     const rows = filteredLogs.map(log => [
                       new Date(log.created_at).toLocaleString('en-ZA', {
@@ -1388,7 +1398,7 @@ export default function AdminPage() {
                         second: '2-digit'
                       }),
                       log.profile?.full_name || 'Unknown',
-                      log.reason,
+                      log.reason || '',
                       log.start_address || '',
                       log.end_address || '',
                       log.is_return_trip ? 'Yes' : 'No',
@@ -1400,8 +1410,8 @@ export default function AdminPage() {
                     ]);
                     
                     const csvContent = [
-                      headers.join(','),
-                      ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+                      headers.map(h => escapeCSVCell(h)).join(','),
+                      ...rows.map(row => row.map(cell => escapeCSVCell(cell)).join(','))
                     ].join('\n');
                     
                     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
