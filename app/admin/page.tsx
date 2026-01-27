@@ -151,25 +151,35 @@ export default function AdminPage() {
   const handleDeleteTicket = async (ticketId: string) => {
     if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;
     
+    if (!user?.id) {
+      alert('Error: User not authenticated');
+      return;
+    }
+    
     try {
-      console.log('Attempting to delete ticket:', ticketId);
-      const { data, error } = await deleteTicket(ticketId);
+      console.log('Attempting to delete ticket:', ticketId, 'for user:', user.id);
       
-      if (error) {
-        console.error('Error deleting ticket:', error);
-        const errorMessage = error.message || 'Unknown error';
-        const errorCode = error.code || 'NO_CODE';
-        
-        // Provide more specific error messages
-        if (errorCode === 'PGRST116' || errorMessage.includes('permission') || errorMessage.includes('policy')) {
-          alert('Failed to delete ticket: Permission denied. This might be an RLS (Row Level Security) policy issue. Please check your Supabase RLS policies for the tickets table.');
-        } else {
-          alert(`Failed to delete ticket: ${errorMessage} (Code: ${errorCode})`);
-        }
+      // Use API route with service role key (bypasses RLS)
+      const response = await fetch('/api/admin/delete-ticket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ticketId,
+          userId: user.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Error deleting ticket:', result);
+        alert(`Failed to delete ticket: ${result.error || 'Unknown error'}`);
         return;
       }
       
-      console.log('Ticket deleted successfully, data:', data);
+      console.log('Ticket deleted successfully:', result);
       
       // Remove from local state immediately for UI feedback
       setTickets(tickets.filter(t => t.id !== ticketId));
