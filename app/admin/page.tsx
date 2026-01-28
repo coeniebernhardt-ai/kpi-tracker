@@ -210,14 +210,42 @@ export default function AdminPage() {
     }
 
     setUploading(true);
-    const { publicUrl, error } = await uploadProfilePicture(uploadingFor.id, file);
-    setUploading(false);
+    try {
+      const { publicUrl, error } = await uploadProfilePicture(uploadingFor.id, file);
 
-    if (error) {
-      alert('Failed to upload image: ' + error.message);
-    } else {
-      await loadData();
-      setUploadingFor(null);
+      if (error) {
+        alert('Failed to upload image: ' + error.message);
+        setUploading(false);
+        return;
+      }
+
+      if (publicUrl) {
+        // Add cache-busting parameter to force browser refresh
+        const cacheBustUrl = `${publicUrl}?t=${Date.now()}`;
+        
+        // Update the profile in state immediately with cache-busted URL
+        setProfiles(prevProfiles => 
+          prevProfiles.map(p => 
+            p.id === uploadingFor.id 
+              ? { ...p, avatar_url: cacheBustUrl }
+              : p
+          )
+        );
+        
+        // Reload all data to ensure consistency
+        await loadData();
+        
+        // Show success message
+        alert('Profile picture updated successfully!');
+        
+        // Close modal
+        setUploadingFor(null);
+      }
+    } catch (err) {
+      console.error('Error uploading profile picture:', err);
+      alert('An unexpected error occurred while uploading the image.');
+    } finally {
+      setUploading(false);
     }
   };
 
