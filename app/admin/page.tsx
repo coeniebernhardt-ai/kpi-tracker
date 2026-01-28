@@ -1729,7 +1729,14 @@ export default function AdminPage() {
                   {/* Current Avatar */}
                   <div className="flex items-center gap-4 w-full p-4 rounded-xl bg-slate-800/50">
                     {uploadingFor.avatar_url ? (
-                      <Image src={uploadingFor.avatar_url} alt={uploadingFor.full_name} width={64} height={64} className="w-16 h-16 rounded-xl object-cover" />
+                      <Image 
+                        src={`${uploadingFor.avatar_url}${uploadingFor.avatar_url.includes('?') ? '&' : '?'}t=${Date.now()}`} 
+                        alt={uploadingFor.full_name} 
+                        width={64} 
+                        height={64} 
+                        className="w-16 h-16 rounded-xl object-cover" 
+                        unoptimized
+                      />
                     ) : (
                       <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${getAvatarGradient(uploadingFor.full_name)} flex items-center justify-center text-white font-bold text-xl`}>
                         {uploadingFor.avatar}
