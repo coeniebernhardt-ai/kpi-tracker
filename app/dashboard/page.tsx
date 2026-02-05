@@ -82,6 +82,18 @@ export default function DashboardPage() {
     siteFiles: [] as { file: File; label: string }[]
   });
 
+  // Optional travel log when creating a ticket
+  const [logTravelWithTicket, setLogTravelWithTicket] = useState(false);
+  const [ticketTravelLog, setTicketTravelLog] = useState({
+    reason: '',
+    startAddress: '',
+    endAddress: '',
+    isReturnTrip: false,
+    comments: '',
+    distanceTravelled: ''
+  });
+  const [ticketTravelAttachments, setTicketTravelAttachments] = useState<File[]>([]);
+
   const [closeTicketData, setCloseTicketData] = useState({
     resolution: ''
   });
@@ -256,6 +268,34 @@ export default function DashboardPage() {
       
       // Reload tickets from database
       await loadTickets();
+
+      // Optional: create travel log with this ticket
+      if (logTravelWithTicket && ticketTravelLog.reason.trim() && ticketTravelLog.startAddress.trim() && ticketTravelLog.endAddress.trim()) {
+        let travelAttachmentUrls: { url: string; name: string; type: string }[] = [];
+        if (ticketTravelAttachments.length > 0) {
+          const tempId = `travel-${user.id}-${Date.now()}`;
+          for (const file of ticketTravelAttachments) {
+            const { url, error: uploadError } = await uploadTicketAttachment(tempId, file, 'attachment');
+            if (!uploadError && url) {
+              travelAttachmentUrls.push({ url, name: file.name, type: file.type || 'application/octet-stream' });
+            }
+          }
+        }
+        const { error: travelError } = await createTravelLog({
+          user_id: user.id,
+          reason: ticketTravelLog.reason.trim(),
+          start_address: ticketTravelLog.startAddress.trim(),
+          end_address: ticketTravelLog.endAddress.trim(),
+          is_return_trip: ticketTravelLog.isReturnTrip,
+          comments: ticketTravelLog.comments.trim() || undefined,
+          distance_travelled: ticketTravelLog.distanceTravelled ? parseFloat(ticketTravelLog.distanceTravelled) : undefined,
+          attachments: travelAttachmentUrls.length > 0 ? travelAttachmentUrls : undefined
+        });
+        if (!travelError) {
+          await loadTravelLogs();
+        }
+      }
+
       setNewTicketData({ 
         issue: '', 
         location: 'remote', 
@@ -276,6 +316,9 @@ export default function DashboardPage() {
         attachments: [],
         siteFiles: []
       });
+      setLogTravelWithTicket(false);
+      setTicketTravelLog({ reason: '', startAddress: '', endAddress: '', isReturnTrip: false, comments: '', distanceTravelled: '' });
+      setTicketTravelAttachments([]);
       setShowNewTicketForm(false);
     } finally {
       setIsSubmitting(false);
@@ -1186,6 +1229,107 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {/* Optional: log travel with this ticket */}
+            <div className="mt-6 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={logTravelWithTicket}
+                  onChange={(e) => setLogTravelWithTicket(e.target.checked)}
+                  className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-300">Log travel with this ticket (optional)</span>
+              </label>
+              {logTravelWithTicket && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Reason for travel</label>
+                    <input
+                      type="text"
+                      value={ticketTravelLog.reason}
+                      onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, reason: e.target.value })}
+                      placeholder="e.g. Site visit for this ticket"
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Start address</label>
+                    <input
+                      type="text"
+                      value={ticketTravelLog.startAddress}
+                      onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, startAddress: e.target.value })}
+                      placeholder="e.g. Home or office"
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">End address</label>
+                    <input
+                      type="text"
+                      value={ticketTravelLog.endAddress}
+                      onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, endAddress: e.target.value })}
+                      placeholder="e.g. Client or site address"
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Distance (km)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={ticketTravelLog.distanceTravelled}
+                        onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, distanceTravelled: e.target.value })}
+                        placeholder="e.g. 50"
+                        className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center pt-7">
+                      <input
+                        type="checkbox"
+                        id="ticketTravelReturn"
+                        checked={ticketTravelLog.isReturnTrip}
+                        onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, isReturnTrip: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+                      />
+                      <label htmlFor="ticketTravelReturn" className="ml-2 text-sm text-slate-400">Return trip</label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Comments</label>
+                    <input
+                      type="text"
+                      value={ticketTravelLog.comments}
+                      onChange={(e) => setTicketTravelLog({ ...ticketTravelLog, comments: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Attachments (optional)</label>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx"
+                      onChange={(e) => setTicketTravelAttachments(Array.from(e.target.files || []))}
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-500/20 file:text-blue-400"
+                    />
+                    {ticketTravelAttachments.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {ticketTravelAttachments.map((f, i) => (
+                          <span key={i} className="px-2 py-1 rounded bg-slate-700 text-slate-300 text-xs flex items-center gap-1">
+                            {f.name}
+                            <button type="button" onClick={() => setTicketTravelAttachments(ticketTravelAttachments.filter((_, idx) => idx !== i))} className="text-rose-400 hover:text-rose-300">×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="mt-6 flex gap-3">
               <button
                 type="submit"
@@ -1197,7 +1341,8 @@ export default function DashboardPage() {
                   !newTicketData.ticketType || 
                   (newTicketData.ticketType !== 'New Site' && (!newTicketData.estateOrBuilding.trim() || !newTicketData.cmlLocation.trim())) ||
                   (newTicketData.ticketType !== 'New Site' && newTicketData.hasDependencies && !newTicketData.dependencyName.trim()) ||
-                  (newTicketData.ticketType === 'New Site' && !newTicketData.siteName.trim())
+                  (newTicketData.ticketType === 'New Site' && !newTicketData.siteName.trim()) ||
+                  (logTravelWithTicket && (!ticketTravelLog.reason.trim() || !ticketTravelLog.startAddress.trim() || !ticketTravelLog.endAddress.trim()))
                 }
                 className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium disabled:opacity-50"
               >
@@ -1227,6 +1372,9 @@ export default function DashboardPage() {
                     attachments: [],
                     siteFiles: []
                   });
+                  setLogTravelWithTicket(false);
+                  setTicketTravelLog({ reason: '', startAddress: '', endAddress: '', isReturnTrip: false, comments: '', distanceTravelled: '' });
+                  setTicketTravelAttachments([]);
                 }}
                 className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300"
               >
