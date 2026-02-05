@@ -8,6 +8,7 @@ import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfil
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
+import AIInsightsPanel from '../components/AIInsightsPanel';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function AdminPage() {
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
   const [filterIssueSearch, setFilterIssueSearch] = useState('');
-  const [adminTab, setAdminTab] = useState<'tickets' | 'travelLogs'>('tickets');
+  const [adminTab, setAdminTab] = useState<'tickets' | 'travelLogs' | 'aiInsights'>('tickets');
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -670,8 +671,30 @@ export default function AdminPage() {
             >
               Travel Logs
             </button>
+            <button
+              onClick={() => setAdminTab('aiInsights')}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+                adminTab === 'aiInsights' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              AI Insights
+            </button>
           </div>
         </div>
+
+        {/* AI Insights Tab - read-only analytics */}
+        {adminTab === 'aiInsights' && (
+          <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+            <h2 className="text-lg font-semibold text-white mb-4">AI Insights</h2>
+            <AIInsightsPanel
+              filters={{
+                ...(dateFrom ? { dateFrom } : {}),
+                ...(dateTo ? { dateTo } : {}),
+                ...(filterUser !== 'all' ? { userId: filterUser } : {}),
+              }}
+            />
+          </div>
+        )}
 
         {/* Tickets Tab */}
         {adminTab === 'tickets' && (
