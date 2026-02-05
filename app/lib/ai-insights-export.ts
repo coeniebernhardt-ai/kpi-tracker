@@ -120,6 +120,6 @@ export function downloadInsightPdf(response: AIInsightsResponse): void {
   win.focus();
   setTimeout(() => {
     win.print();
-    win.afterprint = () => win.close();
+    win.onafterprint = () => win.close();
   }, 300);
 }
