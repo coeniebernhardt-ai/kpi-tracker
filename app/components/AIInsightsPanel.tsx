@@ -31,6 +31,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
       const res = await fetch('/api/admin/ai-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ question: q, filters }),
       });
       const data = await res.json();
