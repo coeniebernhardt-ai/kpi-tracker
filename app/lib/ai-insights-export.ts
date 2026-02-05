@@ -15,6 +15,7 @@ function escapeCsvCell(value: string | number): string {
 
 /** Build CSV content for the current insight (timestamp, filters, metrics summary, AI text). */
 export function buildInsightCsv(response: AIInsightsResponse): string {
+  const m = response.metrics;
   const rows: string[][] = [
     ['AI Insights Export'],
     ['Generated at', response.generatedAt],
@@ -23,17 +24,17 @@ export function buildInsightCsv(response: AIInsightsResponse): string {
     ['Filters', JSON.stringify(response.filters)],
     [],
     ['Key metrics'],
-    ['Total tickets', response.metrics.totalTickets],
-    ['Open', response.metrics.openTickets],
-    ['Closed', response.metrics.closedTickets],
-    ['Closed rate %', response.metrics.closedRatePercent],
-    ['Avg response time (min)', response.metrics.avgResponseTimeMinutes],
-    ['Avg resolution time (min)', response.metrics.avgResolutionTimeMinutes],
-    ['Tickets with dependencies', response.metrics.ticketsWithDependencies],
-    ['Open older than 24h', response.metrics.openOlderThan24h],
-    ['Open older than 72h', response.metrics.openOlderThan72h],
-    ['Total travel logs', response.metrics.totalTravelLogs],
-    ['Total distance (km)', response.metrics.totalDistanceKm],
+    ['Total tickets', String(m.totalTickets)],
+    ['Open', String(m.openTickets)],
+    ['Closed', String(m.closedTickets)],
+    ['Closed rate %', String(m.closedRatePercent)],
+    ['Avg response time (min)', String(m.avgResponseTimeMinutes)],
+    ['Avg resolution time (min)', String(m.avgResolutionTimeMinutes)],
+    ['Tickets with dependencies', String(m.ticketsWithDependencies)],
+    ['Open older than 24h', String(m.openOlderThan24h)],
+    ['Open older than 72h', String(m.openOlderThan72h)],
+    ['Total travel logs', String(m.totalTravelLogs)],
+    ['Total distance (km)', String(m.totalDistanceKm)],
     [],
     ['AI explanation'],
     [response.answer],
