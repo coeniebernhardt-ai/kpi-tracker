@@ -297,21 +297,21 @@ export default function AdminPage() {
 
   const exportToCSV = () => {
     const exportTickets = getFilteredTicketsForExport();
-    
+    // Headers and column order match dashboard form; every cell quoted + newlines stripped so one row per ticket (redeploy to apply)
     const headers = [
       'Ticket Number',
       'Team Member',
-      'Client Name',
-      'Type (Hardware/Software)',
+      'Client',
+      'Type',
       'Estate or Building',
       'Location (as per CML)',
-      'Work Type (On-Site/Remote)',
-      'ClickUp Ticket Reference',
+      'Task Location',
+      'ClickUp Ticket',
       'Ticket Status',
       'Issue Description',
-      'Resolution Description',
-      'Has Dependencies (Yes/No)',
-      'Dependency Company/Department',
+      'Resolution',
+      'Has Dependencies',
+      'Dependency',
       'Ticket Updates',
       'Total Time Tracked (Minutes)',
       'Time Log Details',
@@ -360,22 +360,26 @@ export default function AdminPage() {
       ];
     });
     
-    // Properly escape all CSV cells
+    // Strip ALL newline-like chars so one ticket = one line (Excel treats \n inside quotes as new row)
+    const stripNewlines = (s: string): string =>
+      s.replace(/\r\n|\r|\n|\u2028|\u2029/g, ' ').replace(/\s+/g, ' ').trim();
+
     const escapeCSVCell = (cell: string | number | undefined): string => {
-      if (cell === undefined || cell === null) return '';
-      const str = String(cell);
-      // If cell contains comma, newline, or quote, wrap in quotes and escape quotes
-      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
+      if (cell === undefined || cell === null) return '""';
+      let str = stripNewlines(String(cell));
+      return `"${str.replace(/"/g, '""')}"`;
     };
-    
+
+    const toCSVLine = (cells: (string | number | undefined)[]) =>
+      cells.map(escapeCSVCell).join(',');
+
     const csv = [
-      headers.map(h => escapeCSVCell(h)).join(','),
-      ...rows.map(r => r.map(cell => escapeCSVCell(cell)).join(','))
-    ].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      toCSVLine(headers),
+      ...rows.map(r => toCSVLine(r))
+    ].join('\r\n');
+    // BOM helps Excel recognize UTF-8 and open with correct columns
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `kpi-report-${dateFrom}-to-${dateTo}.csv`;
