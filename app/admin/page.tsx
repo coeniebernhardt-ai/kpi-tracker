@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
+  const [filterIssueSearch, setFilterIssueSearch] = useState('');
   const [adminTab, setAdminTab] = useState<'tickets' | 'travelLogs'>('tickets');
   
   const [newTicketData, setNewTicketData] = useState({
@@ -253,6 +254,8 @@ export default function AdminPage() {
   const filteredTickets = tickets.filter(ticket => {
     if (filterUser !== 'all' && ticket.user_id !== filterUser) return false;
     if (filterStatus !== 'all' && ticket.status !== filterStatus) return false;
+    const issueSearch = filterIssueSearch.trim().toLowerCase();
+    if (issueSearch && !(ticket.issue || '').toLowerCase().includes(issueSearch)) return false;
     return true;
   });
 
@@ -689,6 +692,16 @@ export default function AdminPage() {
               <option value="open">Open Only</option>
               <option value="closed">Closed Only</option>
             </select>
+          </div>
+          <div className="min-w-[200px]">
+            <label className="block text-xs text-slate-500 mb-1">Search issue description</label>
+            <input
+              type="text"
+              value={filterIssueSearch}
+              onChange={(e) => setFilterIssueSearch(e.target.value)}
+              placeholder="Search in issue..."
+              className="w-full px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm outline-none focus:border-blue-500"
+            />
           </div>
           <div className="ml-auto text-sm text-slate-400">
             Showing {filteredTickets.length} of {tickets.length} tickets

@@ -90,6 +90,11 @@ export default function DashboardPage() {
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
   const [newUpdateText, setNewUpdateText] = useState('');
   const [updateAttachments, setUpdateAttachments] = useState<File[]>([]);
+  const [updateHasDependency, setUpdateHasDependency] = useState(false);
+  const [updateDependencyName, setUpdateDependencyName] = useState('');
+
+  // Search issue description (member)
+  const [searchIssue, setSearchIssue] = useState('');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -307,9 +312,14 @@ export default function DashboardPage() {
       );
 
       if (!error && data) {
+        if (updateHasDependency && updateDependencyName.trim()) {
+          await updateTicket(ticketId, { has_dependencies: true, dependency_name: updateDependencyName.trim() });
+        }
         await loadTickets();
         setNewUpdateText('');
         setUpdateAttachments([]);
+        setUpdateHasDependency(false);
+        setUpdateDependencyName('');
         setUpdatingTicketId(null);
       } else if (error) {
         alert('Error adding update: ' + (error as Error).message);
@@ -558,6 +568,13 @@ export default function DashboardPage() {
   const kpis = calculateKPIs();
   const openTickets = tickets.filter(t => t.status === 'open');
   const closedTickets = tickets.filter(t => t.status === 'closed');
+  const issueSearchLower = searchIssue.trim().toLowerCase();
+  const filteredOpenTickets = issueSearchLower
+    ? openTickets.filter(t => (t.issue || '').toLowerCase().includes(issueSearchLower))
+    : openTickets;
+  const filteredClosedTickets = issueSearchLower
+    ? closedTickets.filter(t => (t.issue || '').toLowerCase().includes(issueSearchLower))
+    : closedTickets;
 
   const getAvatarGradient = () => {
     const colors = [
@@ -678,7 +695,11 @@ export default function DashboardPage() {
               {showNewTicketForm ? 'Cancel' : 'Open New Ticket'}
             </button>
             <button
-              onClick={() => setShowTravelLogForm(!showTravelLogForm)}
+              onClick={() => {
+                // When starting a travel log, switch to the Travel Logs tab
+                setMainTab('travelLogs');
+                setShowTravelLogForm((prev) => !prev);
+              }}
               className="flex items-center gap-2 px-5 py-3 rounded-xl text-white font-medium hover:shadow-lg transition-all"
               style={{ backgroundColor: '#1e3a5f' }}
             >
@@ -1246,6 +1267,16 @@ export default function DashboardPage() {
         {/* Tickets Section - Only show when tickets tab is selected */}
         {mainTab === 'tickets' && (
           <>
+            {/* Search issue description */}
+            <div className="mb-4">
+              <input
+                type="text"
+                value={searchIssue}
+                onChange={(e) => setSearchIssue(e.target.value)}
+                placeholder="Search in issue description..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 outline-none focus:border-blue-500"
+              />
+            </div>
             {/* Tickets Tabs */}
             <div className="mb-6">
               <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
@@ -1258,7 +1289,7 @@ export default function DashboardPage() {
                     activeTab === 'open' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400'
                   }`}
                 >
-                  Open Tickets ({openTickets.length})
+                  Open Tickets ({filteredOpenTickets.length})
                 </button>
                 <button
                   onClick={() => {
@@ -1269,7 +1300,7 @@ export default function DashboardPage() {
                     activeTab === 'closed' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'
                   }`}
                 >
-                  Closed Tickets ({closedTickets.length})
+                  Closed Tickets ({filteredClosedTickets.length})
                 </button>
               </div>
             </div>
@@ -1286,16 +1317,16 @@ export default function DashboardPage() {
             }
             
             if (activeTab === 'open') {
-              if (openTickets.length === 0) {
+              if (filteredOpenTickets.length === 0) {
                 return (
                   <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
-                    <p className="text-slate-500">No open tickets. Great job!</p>
+                    <p className="text-slate-500">{searchIssue.trim() ? 'No open tickets match your search.' : 'No open tickets. Great job!'}</p>
                   </div>
                 );
               }
               return (
                 <div className="space-y-4">
-                  {openTickets.map((ticket) => {
+                  {filteredOpenTickets.map((ticket) => {
                     const isExpanded = expandedTickets.has(ticket.id);
                     return (
                       <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-amber-500/30">
@@ -1689,6 +1720,28 @@ export default function DashboardPage() {
                           placeholder="Enter update details..."
                         />
                         
+                        {/* Optional dependency when adding update */}
+                        <div className="mb-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                          <label className="flex items-center gap-2 cursor-pointer mb-2">
+                            <input
+                              type="checkbox"
+                              checked={updateHasDependency}
+                              onChange={(e) => setUpdateHasDependency(e.target.checked)}
+                              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+                            />
+                            <span className="text-sm text-slate-300">Has dependency</span>
+                          </label>
+                          {updateHasDependency && (
+                            <input
+                              type="text"
+                              value={updateDependencyName}
+                              onChange={(e) => setUpdateDependencyName(e.target.value)}
+                              placeholder="Dependency (company/department)"
+                              className="w-full mt-2 px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                            />
+                          )}
+                        </div>
+
                         {/* File Upload for Update */}
                         <div className="mb-3">
                           <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1746,6 +1799,8 @@ export default function DashboardPage() {
                               setUpdatingTicketId(null); 
                               setNewUpdateText(''); 
                               setUpdateAttachments([]);
+                              setUpdateHasDependency(false);
+                              setUpdateDependencyName('');
                             }}
                             className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm"
                           >
@@ -1908,17 +1963,17 @@ export default function DashboardPage() {
               );
             }
             
-            if (closedTickets.length === 0) {
+            if (filteredClosedTickets.length === 0) {
               return (
                 <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
-                  <p className="text-slate-500">No closed tickets yet.</p>
+                  <p className="text-slate-500">{searchIssue.trim() ? 'No closed tickets match your search.' : 'No closed tickets yet.'}</p>
                 </div>
               );
             }
             
             return (
               <div className="space-y-4">
-                {closedTickets.map((ticket) => {
+                {filteredClosedTickets.map((ticket) => {
                   const isExpanded = expandedTickets.has(ticket.id);
                   return (
                     <div key={ticket.id} className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50">
