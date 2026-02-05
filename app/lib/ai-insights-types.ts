@@ -36,6 +36,8 @@ export interface ComputedMetrics {
 export interface AIInsightsRequest {
   question: string;
   filters?: AIInsightsFilters;
+  /** Optional: pass session token when cookies are not sent (e.g. preview deployment) */
+  accessToken?: string;
 }
 
 export interface AIInsightsResponse {

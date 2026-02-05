@@ -1,10 +1,11 @@
 /**
  * POST /api/admin/ai-insights
  * Admin-only, read-only. Fetches tickets + travel, computes metrics, calls AI with metrics only.
- * Vercel serverless compatible.
+ * Vercel serverless compatible. Supports cookie auth or accessToken in body (for preview URLs where cookies may not be sent).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
 import { computeMetrics } from '@/app/lib/ai-insights-analytics';
 import { getSystemPrompt, buildUserPrompt } from '@/app/lib/ai-insights-prompts';
@@ -12,12 +13,21 @@ import type { AIInsightsRequest, AIInsightsResponse, AIInsightsFilters } from '@
 
 export const maxDuration = 30;
 
-async function ensureAdmin() {
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase server env');
+  return createClient(url, key);
+}
+
+/** Auth from cookies (server session). */
+async function ensureAdminFromCookies(): Promise<
+  { ok: true; supabase: Awaited<ReturnType<typeof createSupabaseServerClient>> } | { ok: false; status: 401 | 403; error: string }
+> {
   const supabase = await createSupabaseServerClient();
-  // Use getSession() so the server reads the session from cookies (getUser() can fail in serverless if JWT isn't passed)
   const { data: { session }, error: authError } = await supabase.auth.getSession();
   if (authError || !session?.user) {
-    return { ok: false as const, status: 401, error: 'Unauthorized' };
+    return { ok: false, status: 401, error: 'Unauthorized' };
   }
   const { data: profile } = await supabase
     .from('profiles')
@@ -25,22 +35,50 @@ async function ensureAdmin() {
     .eq('id', session.user.id)
     .single();
   if (!profile?.is_admin) {
-    return { ok: false as const, status: 403, error: 'Admin only' };
+    return { ok: false, status: 403, error: 'Admin only' };
   }
-  return { ok: true as const, supabase };
+  return { ok: true, supabase };
+}
+
+/** Auth from JWT in body (for preview deployments where cookies are not sent). */
+async function ensureAdminFromToken(accessToken: string): Promise<
+  { ok: true; supabase: ReturnType<typeof getSupabaseAdmin> } | { ok: false; status: 401 | 403; error: string }
+> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return { ok: false, status: 401, error: 'Unauthorized' };
+  const authClient = createClient(url, anonKey);
+  const { data: { user }, error: userError } = await authClient.auth.getUser(accessToken);
+  if (userError || !user) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+  const admin = getSupabaseAdmin();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.is_admin) {
+    return { ok: false, status: 403, error: 'Admin only' };
+  }
+  return { ok: true, supabase: admin };
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await ensureAdmin();
+    const body: AIInsightsRequest = await request.json();
+    const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : undefined;
+
+    const auth = accessToken
+      ? await ensureAdminFromToken(accessToken)
+      : await ensureAdminFromCookies();
+
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const { supabase } = auth;
-
-    const body: AIInsightsRequest = await request.json();
     const question = typeof body.question === 'string' ? body.question.trim() : '';
-    const filters: AIInsightsFilters = body.filters || {};
+    const filters: AIInsightsFilters = body.filters ?? {};
 
     if (!question) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 });

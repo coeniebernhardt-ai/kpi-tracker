@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useAuth } from '@/app/context/AuthContext';
 import type { AIInsightsResponse, AIInsightsFilters } from '@/app/lib/ai-insights-types';
 import { downloadInsightCsv, downloadInsightPdf } from '@/app/lib/ai-insights-export';
 
@@ -15,6 +16,7 @@ export interface AIInsightsPanelProps {
 }
 
 export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) {
+  const { session } = useAuth();
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +30,18 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
     setError(null);
     setResponse(null);
     try {
+      const payload: { question: string; filters: AIInsightsFilters; accessToken?: string } = {
+        question: q,
+        filters,
+      };
+      if (session?.access_token) {
+        payload.accessToken = session.access_token;
+      }
       const res = await fetch('/api/admin/ai-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ question: q, filters }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
