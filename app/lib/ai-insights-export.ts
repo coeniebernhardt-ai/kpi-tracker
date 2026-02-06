@@ -77,6 +77,7 @@ export function buildFlattenedSnapshotCsv(
   snapshot.ticketsByCreatedBy.forEach((r) => pushFlatten(rows, 'tickets', 'created_by_user_id', r.userId, 'count', r.count, tb));
   snapshot.ticketsByAssignedUser.forEach((r) => pushFlatten(rows, 'tickets', 'assigned_user_id', r.userId, 'count', r.count, tb));
   snapshot.ticketsByDependencyName.forEach((r) => pushFlatten(rows, 'tickets', 'dependency_name', r.dependencyName, 'count', r.count, tb));
+  snapshot.ticketsByIssueNature.forEach((r) => pushFlatten(rows, 'tickets', 'issue_nature', r.issueNature, 'count', r.count, tb));
   snapshot.ticketsByDay.forEach((r) => pushFlatten(rows, 'tickets', 'created_date', r.date, 'count', r.count, 'day'));
   snapshot.ticketsByWeek.forEach((r) => pushFlatten(rows, 'tickets', 'created_week', r.week, 'count', r.count, 'week'));
   snapshot.ticketsByMonth.forEach((r) => pushFlatten(rows, 'tickets', 'created_month', r.month, 'count', r.count, 'month'));
@@ -192,6 +193,10 @@ export function buildFullSnapshotCsv(
   lines.push(toCsvLine(['Dependency name', 'Count']));
   snapshot.ticketsByDependencyName.forEach((r) => lines.push(toCsvLine([r.dependencyName, r.count])));
   lines.push('');
+  lines.push(toCsvLine(['Tickets by issue nature (derived from issue/resolution text)']));
+  lines.push(toCsvLine(['Issue nature', 'Count']));
+  snapshot.ticketsByIssueNature.forEach((r) => lines.push(toCsvLine([r.issueNature, r.count])));
+  lines.push('');
   lines.push(toCsvLine(['Tickets by day']));
   lines.push(toCsvLine(['Date', 'Count']));
   snapshot.ticketsByDay.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
@@ -285,6 +290,9 @@ export function buildInsightCsv(response: AIInsightsResponse): string {
     ['Open older than 72h', String(m.openOlderThan72h)],
     ['Total travel logs', String(m.totalTravelLogs)],
     ['Total distance (km)', String(m.totalDistanceKm)],
+    [],
+    ['Issue nature (derived from ticket text)', 'Count'],
+    ...response.snapshot.ticketsByIssueNature.map((r) => [r.issueNature, String(r.count)]),
     [],
     ['AI explanation'],
     [response.answer],

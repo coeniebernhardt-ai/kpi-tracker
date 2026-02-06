@@ -67,6 +67,8 @@ export interface UniversalAnalyticsSnapshot {
   ticketsByCreatedBy: { userId: string; count: number }[];
   ticketsByAssignedUser: { userId: string; count: number }[];
   ticketsByDependencyName: { dependencyName: string; count: number }[];
+  /** Derived from issue/resolution text via fixed taxonomy (see ai-insights-issue-nature). */
+  ticketsByIssueNature: { issueNature: string; count: number }[];
   ticketsByDay: { date: string; count: number }[];
   ticketsByWeek: { week: string; count: number }[];
   ticketsByMonth: { month: string; count: number }[];

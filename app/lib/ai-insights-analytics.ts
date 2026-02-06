@@ -9,6 +9,7 @@ import type {
   UniversalAnalyticsSnapshot,
 } from './ai-insights-types';
 import type { TicketRowForAnalytics, TravelRowForAnalytics, ProfileRowForAnalytics } from '@/app/lib/supabase';
+import { classifyIssueNature } from './ai-insights-issue-nature';
 
 function applyFilters<T extends { created_at: string; user_id?: string }>(
   items: T[],
@@ -142,6 +143,9 @@ export function computeUniversalSnapshot(
   const ticketsByCreatedBy = countBy(filteredTickets, (t) => t.created_by ?? 'Unset').map(({ key, count }) => ({ userId: key, count }));
   const ticketsByDependencyName = countBy(filteredTickets, (t) => (t.dependency_name && String(t.dependency_name).trim()) || 'None').map(({ key, count }) => ({ dependencyName: key, count }));
 
+  // Derived from issue/resolution text via fixed taxonomy (read-only; no write back to tickets)
+  const ticketsByIssueNature = countBy(filteredTickets, (t) => classifyIssueNature(t.issue, t.resolution)).map(({ key, count }) => ({ issueNature: key, count }));
+
   const assignedCount: Record<string, number> = {};
   filteredTickets.forEach((t) => {
     const ids = t.assigned_to_array && Array.isArray(t.assigned_to_array) ? t.assigned_to_array : [];
@@ -215,6 +219,7 @@ export function computeUniversalSnapshot(
     ticketsByCreatedBy,
     ticketsByAssignedUser,
     ticketsByDependencyName,
+    ticketsByIssueNature,
     ticketsByDay,
     ticketsByWeek,
     ticketsByMonth,

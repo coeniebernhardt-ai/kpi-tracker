@@ -824,7 +824,7 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
 }
 
 // --- AI-INSIGHTS ONLY: read-only data access for analytics (all datasets, all dimensions) ---
-/** READ-ONLY. Every ticket field that is a categorical, numeric, or temporal dimension. */
+/** READ-ONLY. Every ticket field that is a categorical, numeric, or temporal dimension; plus issue/resolution for derived issueNature only. */
 export type TicketRowForAnalytics = {
   status: string;
   created_at: string;
@@ -841,11 +841,14 @@ export type TicketRowForAnalytics = {
   severity?: string | null;
   created_by?: string | null;
   dependency_name?: string | null;
+  /** Unstructured text; used only to derive issueNature (read-only, not stored back). */
+  issue?: string | null;
+  resolution?: string | null;
 };
 export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<TicketRowForAnalytics[]> {
   const { data, error } = await client
     .from('tickets')
-    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name')
+    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
     .order('created_at', { ascending: false });
   if (error) {
     console.error('[AI Insights] getAllTicketsForAnalytics:', error.message);
