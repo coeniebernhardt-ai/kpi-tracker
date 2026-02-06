@@ -29,21 +29,25 @@ export interface ComputedMetrics {
 }
 
 /**
- * Universal analytics snapshot – ALL dimensions from live data.
- * Used by AI (only this is passed) and by full CSV export.
- * Enables percentages, comparisons, and trends without new backend code.
+ * Universal analytics snapshot – ALL datasets, ALL dimensions (data-driven, no question-specific logic).
+ * Single source for AI and CSV export. If a dimension exists here, it is complete; if not, it is unavailable.
  */
 export interface UniversalAnalyticsSnapshot {
-  /** When computed and which filters were applied (for CSV header). */
   generatedAt: string;
   filters: AIInsightsFilters;
-  /** User id -> display name for labels in export/AI. */
   profileDisplayNames: Record<string, string>;
-  /** Totals. */
+  /** --- PROFILES (dataset) --- */
+  totalProfiles: number;
+  profilesByRole: { role: string; count: number }[];
+  profilesByIsAdmin: { isAdmin: string; count: number }[];
+  profilesByIsActive: { isActive: string; count: number }[];
+  profilesByDay: { date: string; count: number }[];
+  profilesByWeek: { week: string; count: number }[];
+  profilesByMonth: { month: string; count: number }[];
+  /** --- TICKETS (dataset) --- */
   totalTickets: number;
   totalTravelLogs: number;
   totalDistanceKm: number;
-  /** Ticket summary (for quick answers). */
   openTickets: number;
   closedTickets: number;
   closedRatePercent: number;
@@ -53,21 +57,27 @@ export interface UniversalAnalyticsSnapshot {
   ticketsWithDependenciesPercent: number;
   openOlderThan24h: number;
   openOlderThan72h: number;
-  /** Tickets by dimension (every bucket needed for pivots and comparisons). */
   ticketsByClient: { client: string; count: number }[];
   ticketsByEstate: { estate: string; count: number }[];
   ticketsByStatus: { status: string; count: number }[];
   ticketsByType: { type: string; count: number }[];
   ticketsByLocation: { location: string; count: number }[];
+  ticketsBySeverity: { severity: string; count: number }[];
   ticketsByCreator: { userId: string; count: number }[];
+  ticketsByCreatedBy: { userId: string; count: number }[];
   ticketsByAssignedUser: { userId: string; count: number }[];
+  ticketsByDependencyName: { dependencyName: string; count: number }[];
   ticketsByDay: { date: string; count: number }[];
   ticketsByWeek: { week: string; count: number }[];
   ticketsByMonth: { month: string; count: number }[];
-  /** Travel by dimension. */
+  /** --- TRAVEL (dataset) --- */
   travelByLocation: { location: string; count: number }[];
   travelByUser: { userId: string; count: number }[];
+  travelByReason: { reason: string; count: number }[];
+  travelByIsReturnTrip: { isReturnTrip: string; count: number }[];
   travelByDate: { date: string; count: number }[];
+  travelByWeek: { week: string; count: number }[];
+  travelByMonth: { month: string; count: number }[];
   travelDistanceByUser: { userId: string; totalDistanceKm: number }[];
 }
 

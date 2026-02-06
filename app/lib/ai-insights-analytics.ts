@@ -46,8 +46,7 @@ function toMonthKey(iso: string): string {
 }
 
 /**
- * Build the universal analytics snapshot from live ticket/travel/profile data.
- * READ-ONLY. Deterministic. Used by AI (only this) and full CSV export.
+ * Build the universal analytics snapshot from ALL live datasets. READ-ONLY. Data-driven: every categorical and time dimension aggregated.
  */
 export function computeUniversalSnapshot(
   tickets: TicketRowForAnalytics[],
@@ -58,12 +57,36 @@ export function computeUniversalSnapshot(
 ): UniversalAnalyticsSnapshot {
   const filteredTickets = applyFilters(tickets, filters);
   const filteredTravel = applyFilters(travelLogs, filters);
+  // Profiles: no user/date filter in current filters; use all for full visibility
+  const filteredProfiles = profiles;
 
   const profileDisplayNames: Record<string, string> = {};
   profiles.forEach((p) => {
     profileDisplayNames[p.id] = p.full_name ?? p.id;
   });
 
+  const countBy = <T>(items: T[], keyFn: (t: T) => string): { key: string; count: number }[] => {
+    const m: Record<string, number> = {};
+    items.forEach((t) => {
+      const k = keyFn(t);
+      m[k] = (m[k] || 0) + 1;
+    });
+    return Object.entries(m).map(([key, count]) => ({ key, count }));
+  };
+
+  // --- PROFILES ---
+  const totalProfiles = filteredProfiles.length;
+  const profilesByRole = countBy(filteredProfiles, (p) => p.role ?? 'Unknown').map(({ key, count }) => ({ role: key, count }));
+  const profilesByIsAdmin = countBy(filteredProfiles, (p) => p.is_admin === true ? 'true' : 'false').map(({ key, count }) => ({ isAdmin: key, count }));
+  const profilesByIsActive = countBy(filteredProfiles, (p) => p.is_active === true ? 'true' : 'false').map(({ key, count }) => ({ isActive: key, count }));
+  const profilesByDay = (p: ProfileRowForAnalytics) => p.created_at ? toDateKey(p.created_at) : 'Unknown';
+  const profilesByWeek = (p: ProfileRowForAnalytics) => p.created_at ? toWeekKey(p.created_at) : 'Unknown';
+  const profilesByMonth = (p: ProfileRowForAnalytics) => p.created_at ? toMonthKey(p.created_at) : 'Unknown';
+  const profByDay = countBy(filteredProfiles, profilesByDay).map(({ key, count }) => ({ date: key, count }));
+  const profByWeek = countBy(filteredProfiles, profilesByWeek).map(({ key, count }) => ({ week: key, count }));
+  const profByMonth = countBy(filteredProfiles, profilesByMonth).map(({ key, count }) => ({ month: key, count }));
+
+  // --- TICKETS ---
   const totalTickets = filteredTickets.length;
   const openTickets = filteredTickets.filter((t) => t.status === 'open').length;
   const closedTickets = filteredTickets.filter((t) => t.status === 'closed').length;
@@ -106,22 +129,6 @@ export function computeUniversalSnapshot(
   const openOlderThan24h = openTix.filter((t) => now - new Date(t.created_at).getTime() > h24).length;
   const openOlderThan72h = openTix.filter((t) => now - new Date(t.created_at).getTime() > h72).length;
 
-  const totalTravelLogs = filteredTravel.length;
-  const totalDistanceKm =
-    Math.round(
-      filteredTravel.reduce((s, t) => s + (t.distance_travelled ?? 0), 0) * 10
-    ) / 10 || 0;
-
-  // Tickets by dimension
-  const countBy = <T>(items: T[], keyFn: (t: T) => string): { key: string; count: number }[] => {
-    const m: Record<string, number> = {};
-    items.forEach((t) => {
-      const k = keyFn(t);
-      m[k] = (m[k] || 0) + 1;
-    });
-    return Object.entries(m).map(([key, count]) => ({ key, count }));
-  };
-
   const ticketsByClient = countBy(filteredTickets, (t) => t.client || 'Unknown').map(({ key, count }) => ({ client: key, count }));
   const ticketsByEstate = countBy(filteredTickets, (t) => {
     const e = t.estate_or_building || t.cml_location;
@@ -130,7 +137,10 @@ export function computeUniversalSnapshot(
   const ticketsByStatus = countBy(filteredTickets, (t) => t.status).map(({ key, count }) => ({ status: key, count }));
   const ticketsByType = countBy(filteredTickets, (t) => t.ticket_type || 'Unknown').map(({ key, count }) => ({ type: key, count }));
   const ticketsByLocation = countBy(filteredTickets, (t) => t.location || 'Unknown').map(({ key, count }) => ({ location: key, count }));
+  const ticketsBySeverity = countBy(filteredTickets, (t) => t.severity || 'Unknown').map(({ key, count }) => ({ severity: key, count }));
   const ticketsByCreator = countBy(filteredTickets, (t) => t.user_id).map(({ key, count }) => ({ userId: key, count }));
+  const ticketsByCreatedBy = countBy(filteredTickets, (t) => t.created_by ?? 'Unset').map(({ key, count }) => ({ userId: key, count }));
+  const ticketsByDependencyName = countBy(filteredTickets, (t) => (t.dependency_name && String(t.dependency_name).trim()) || 'None').map(({ key, count }) => ({ dependencyName: key, count }));
 
   const assignedCount: Record<string, number> = {};
   filteredTickets.forEach((t) => {
@@ -145,11 +155,22 @@ export function computeUniversalSnapshot(
   const ticketsByWeek = countBy(filteredTickets, (t) => toWeekKey(t.created_at)).map(({ key, count }) => ({ week: key, count }));
   const ticketsByMonth = countBy(filteredTickets, (t) => toMonthKey(t.created_at)).map(({ key, count }) => ({ month: key, count }));
 
+  // --- TRAVEL ---
+  const totalTravelLogs = filteredTravel.length;
+  const totalDistanceKm =
+    Math.round(
+      filteredTravel.reduce((s, t) => s + (t.distance_travelled ?? 0), 0) * 10
+    ) / 10 || 0;
+
   const travelByLocation = countBy(filteredTravel, (t) =>
     (t.end_address || t.start_address || 'Unknown').trim() || 'Unknown'
   ).map(({ key, count }) => ({ location: key, count }));
   const travelByUser = countBy(filteredTravel, (t) => t.user_id).map(({ key, count }) => ({ userId: key, count }));
+  const travelByReason = countBy(filteredTravel, (t) => (t.reason && String(t.reason).trim()) || 'Unknown').map(({ key, count }) => ({ reason: key, count }));
+  const travelByIsReturnTrip = countBy(filteredTravel, (t) => t.is_return_trip === true ? 'true' : 'false').map(({ key, count }) => ({ isReturnTrip: key, count }));
   const travelByDate = countBy(filteredTravel, (t) => toDateKey(t.created_at)).map(({ key, count }) => ({ date: key, count }));
+  const travelByWeek = countBy(filteredTravel, (t) => toWeekKey(t.created_at)).map(({ key, count }) => ({ week: key, count }));
+  const travelByMonth = countBy(filteredTravel, (t) => toMonthKey(t.created_at)).map(({ key, count }) => ({ month: key, count }));
 
   const travelDistanceByUser: { userId: string; totalDistanceKm: number }[] = [];
   const distByUser: Record<string, number> = {};
@@ -165,6 +186,13 @@ export function computeUniversalSnapshot(
     generatedAt,
     filters,
     profileDisplayNames,
+    totalProfiles,
+    profilesByRole,
+    profilesByIsAdmin,
+    profilesByIsActive,
+    profilesByDay: profByDay,
+    profilesByWeek: profByWeek,
+    profilesByMonth: profByMonth,
     totalTickets,
     totalTravelLogs,
     totalDistanceKm,
@@ -182,14 +210,21 @@ export function computeUniversalSnapshot(
     ticketsByStatus,
     ticketsByType,
     ticketsByLocation,
+    ticketsBySeverity,
     ticketsByCreator,
+    ticketsByCreatedBy,
     ticketsByAssignedUser,
+    ticketsByDependencyName,
     ticketsByDay,
     ticketsByWeek,
     ticketsByMonth,
     travelByLocation,
     travelByUser,
+    travelByReason,
+    travelByIsReturnTrip,
     travelByDate,
+    travelByWeek,
+    travelByMonth,
     travelDistanceByUser,
   };
 }

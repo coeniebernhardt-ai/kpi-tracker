@@ -17,7 +17,98 @@ function toCsvLine(cells: (string | number)[]): string {
   return cells.map(escapeCsvCell).join(',');
 }
 
-/** Build CSV with ALL analytics dimensions (matches what the AI sees). Excel-ready, flattened. */
+/** Flattened row: dataset, dimension_name, dimension_value, metric_name, metric_value, time_bucket. Exactly what the AI sees; pivot-table friendly. */
+type FlattenRow = [string, string, string, string, string | number, string];
+
+function pushFlatten(
+  out: FlattenRow[],
+  dataset: string,
+  dimensionName: string,
+  dimensionValue: string,
+  metricName: string,
+  metricValue: string | number,
+  timeBucket: string
+) {
+  out.push([dataset, dimensionName, dimensionValue, metricName, metricValue, timeBucket]);
+}
+
+/**
+ * Build CSV with ENTIRE snapshot in flattened structure.
+ * Each row: dataset, dimension_name, dimension_value, metric_name, metric_value, time_bucket.
+ * Excel- and pivot-friendly; EXACTLY matches what the AI sees.
+ */
+export function buildFlattenedSnapshotCsv(
+  snapshot: UniversalAnalyticsSnapshot,
+  options?: { question?: string; answer?: string }
+): string {
+  const rows: FlattenRow[] = [];
+  const tb = '';
+
+  // Meta
+  pushFlatten(rows, 'meta', 'generatedAt', snapshot.generatedAt, 'value', 1, tb);
+  pushFlatten(rows, 'meta', 'filters', JSON.stringify(snapshot.filters), 'value', 1, tb);
+
+  // PROFILES
+  pushFlatten(rows, 'profiles', 'total', '', 'count', snapshot.totalProfiles, tb);
+  snapshot.profilesByRole.forEach((r) => pushFlatten(rows, 'profiles', 'role', r.role, 'count', r.count, tb));
+  snapshot.profilesByIsAdmin.forEach((r) => pushFlatten(rows, 'profiles', 'is_admin', r.isAdmin, 'count', r.count, tb));
+  snapshot.profilesByIsActive.forEach((r) => pushFlatten(rows, 'profiles', 'is_active', r.isActive, 'count', r.count, tb));
+  snapshot.profilesByDay.forEach((r) => pushFlatten(rows, 'profiles', 'created_date', r.date, 'count', r.count, 'day'));
+  snapshot.profilesByWeek.forEach((r) => pushFlatten(rows, 'profiles', 'created_week', r.week, 'count', r.count, 'week'));
+  snapshot.profilesByMonth.forEach((r) => pushFlatten(rows, 'profiles', 'created_month', r.month, 'count', r.count, 'month'));
+
+  // TICKETS (totals and scalar metrics)
+  pushFlatten(rows, 'tickets', 'total', '', 'count', snapshot.totalTickets, tb);
+  pushFlatten(rows, 'tickets', 'open', '', 'count', snapshot.openTickets, tb);
+  pushFlatten(rows, 'tickets', 'closed', '', 'count', snapshot.closedTickets, tb);
+  pushFlatten(rows, 'tickets', 'closed_rate', '', 'percent', snapshot.closedRatePercent, tb);
+  pushFlatten(rows, 'tickets', 'avg_response_minutes', '', 'value', snapshot.avgResponseTimeMinutes, tb);
+  pushFlatten(rows, 'tickets', 'avg_resolution_minutes', '', 'value', snapshot.avgResolutionTimeMinutes, tb);
+  pushFlatten(rows, 'tickets', 'with_dependencies', '', 'count', snapshot.ticketsWithDependencies, tb);
+  pushFlatten(rows, 'tickets', 'open_older_24h', '', 'count', snapshot.openOlderThan24h, tb);
+  pushFlatten(rows, 'tickets', 'open_older_72h', '', 'count', snapshot.openOlderThan72h, tb);
+  snapshot.ticketsByClient.forEach((r) => pushFlatten(rows, 'tickets', 'client', r.client, 'count', r.count, tb));
+  snapshot.ticketsByEstate.forEach((r) => pushFlatten(rows, 'tickets', 'estate', r.estate, 'count', r.count, tb));
+  snapshot.ticketsByStatus.forEach((r) => pushFlatten(rows, 'tickets', 'status', r.status, 'count', r.count, tb));
+  snapshot.ticketsByType.forEach((r) => pushFlatten(rows, 'tickets', 'type', r.type, 'count', r.count, tb));
+  snapshot.ticketsByLocation.forEach((r) => pushFlatten(rows, 'tickets', 'location', r.location, 'count', r.count, tb));
+  snapshot.ticketsBySeverity.forEach((r) => pushFlatten(rows, 'tickets', 'severity', r.severity, 'count', r.count, tb));
+  snapshot.ticketsByCreator.forEach((r) => pushFlatten(rows, 'tickets', 'creator_user_id', r.userId, 'count', r.count, tb));
+  snapshot.ticketsByCreatedBy.forEach((r) => pushFlatten(rows, 'tickets', 'created_by_user_id', r.userId, 'count', r.count, tb));
+  snapshot.ticketsByAssignedUser.forEach((r) => pushFlatten(rows, 'tickets', 'assigned_user_id', r.userId, 'count', r.count, tb));
+  snapshot.ticketsByDependencyName.forEach((r) => pushFlatten(rows, 'tickets', 'dependency_name', r.dependencyName, 'count', r.count, tb));
+  snapshot.ticketsByDay.forEach((r) => pushFlatten(rows, 'tickets', 'created_date', r.date, 'count', r.count, 'day'));
+  snapshot.ticketsByWeek.forEach((r) => pushFlatten(rows, 'tickets', 'created_week', r.week, 'count', r.count, 'week'));
+  snapshot.ticketsByMonth.forEach((r) => pushFlatten(rows, 'tickets', 'created_month', r.month, 'count', r.count, 'month'));
+
+  // TRAVEL
+  pushFlatten(rows, 'travel', 'total', '', 'count', snapshot.totalTravelLogs, tb);
+  pushFlatten(rows, 'travel', 'total_distance_km', '', 'sum', snapshot.totalDistanceKm, tb);
+  snapshot.travelByLocation.forEach((r) => pushFlatten(rows, 'travel', 'location', r.location, 'count', r.count, tb));
+  snapshot.travelByUser.forEach((r) => pushFlatten(rows, 'travel', 'user_id', r.userId, 'count', r.count, tb));
+  snapshot.travelByReason.forEach((r) => pushFlatten(rows, 'travel', 'reason', r.reason, 'count', r.count, tb));
+  snapshot.travelByIsReturnTrip.forEach((r) => pushFlatten(rows, 'travel', 'is_return_trip', r.isReturnTrip, 'count', r.count, tb));
+  snapshot.travelByDate.forEach((r) => pushFlatten(rows, 'travel', 'date', r.date, 'count', r.count, 'day'));
+  snapshot.travelByWeek.forEach((r) => pushFlatten(rows, 'travel', 'week', r.week, 'count', r.count, 'week'));
+  snapshot.travelByMonth.forEach((r) => pushFlatten(rows, 'travel', 'month', r.month, 'count', r.count, 'month'));
+  snapshot.travelDistanceByUser.forEach((r) => pushFlatten(rows, 'travel', 'user_id', r.userId, 'total_distance_km', r.totalDistanceKm, tb));
+
+  const lines = [toCsvLine(['dataset', 'dimension_name', 'dimension_value', 'metric_name', 'metric_value', 'time_bucket'])];
+  rows.forEach((r) => lines.push(toCsvLine(r)));
+
+  if (options?.question != null) {
+    lines.push('');
+    lines.push(toCsvLine(['question', options.question.replace(/\r?\n/g, ' ')]));
+  }
+  if (options?.answer != null) {
+    lines.push(toCsvLine(['ai_answer', options.answer.replace(/\r?\n/g, ' ')]));
+  }
+
+  const BOM = '\uFEFF';
+  return BOM + lines.join('\r\n');
+}
+
+/** Build CSV with ALL analytics dimensions (section-based). Kept for human readability. */
 export function buildFullSnapshotCsv(
   snapshot: UniversalAnalyticsSnapshot,
   options?: { question?: string; answer?: string }
@@ -28,7 +119,28 @@ export function buildFullSnapshotCsv(
   lines.push(toCsvLine(['Filters', JSON.stringify(snapshot.filters)]));
   lines.push('');
 
-  lines.push(toCsvLine(['Summary']));
+  lines.push(toCsvLine(['Profiles – total', snapshot.totalProfiles]));
+  lines.push(toCsvLine(['Profiles by role']));
+  lines.push(toCsvLine(['Role', 'Count']));
+  snapshot.profilesByRole.forEach((r) => lines.push(toCsvLine([r.role, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Profiles by is_admin', 'Count']));
+  snapshot.profilesByIsAdmin.forEach((r) => lines.push(toCsvLine([r.isAdmin, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Profiles by is_active', 'Count']));
+  snapshot.profilesByIsActive.forEach((r) => lines.push(toCsvLine([r.isActive, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Profiles by day', 'Date', 'Count']));
+  snapshot.profilesByDay.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Profiles by week', 'Week', 'Count']));
+  snapshot.profilesByWeek.forEach((r) => lines.push(toCsvLine([r.week, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Profiles by month', 'Month', 'Count']));
+  snapshot.profilesByMonth.forEach((r) => lines.push(toCsvLine([r.month, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets – Summary']));
   lines.push(toCsvLine(['Total tickets', snapshot.totalTickets]));
   lines.push(toCsvLine(['Open tickets', snapshot.openTickets]));
   lines.push(toCsvLine(['Closed tickets', snapshot.closedTickets]));
@@ -38,86 +150,88 @@ export function buildFullSnapshotCsv(
   lines.push(toCsvLine(['Tickets with dependencies', snapshot.ticketsWithDependencies]));
   lines.push(toCsvLine(['Open older than 24h', snapshot.openOlderThan24h]));
   lines.push(toCsvLine(['Open older than 72h', snapshot.openOlderThan72h]));
-  lines.push(toCsvLine(['Total travel logs', snapshot.totalTravelLogs]));
-  lines.push(toCsvLine(['Total distance (km)', snapshot.totalDistanceKm]));
   lines.push('');
 
   lines.push(toCsvLine(['Tickets by client']));
   lines.push(toCsvLine(['Client', 'Count']));
   snapshot.ticketsByClient.forEach((r) => lines.push(toCsvLine([r.client, r.count])));
   lines.push('');
-
-  lines.push(toCsvLine(['Tickets by estate/location']));
+  lines.push(toCsvLine(['Tickets by estate']));
   lines.push(toCsvLine(['Estate', 'Count']));
   snapshot.ticketsByEstate.forEach((r) => lines.push(toCsvLine([r.estate, r.count])));
   lines.push('');
-
   lines.push(toCsvLine(['Tickets by status']));
   lines.push(toCsvLine(['Status', 'Count']));
   snapshot.ticketsByStatus.forEach((r) => lines.push(toCsvLine([r.status, r.count])));
   lines.push('');
-
   lines.push(toCsvLine(['Tickets by type']));
   lines.push(toCsvLine(['Type', 'Count']));
   snapshot.ticketsByType.forEach((r) => lines.push(toCsvLine([r.type, r.count])));
   lines.push('');
-
-  lines.push(toCsvLine(['Tickets by location (on-site/remote)']));
+  lines.push(toCsvLine(['Tickets by location']));
   lines.push(toCsvLine(['Location', 'Count']));
   snapshot.ticketsByLocation.forEach((r) => lines.push(toCsvLine([r.location, r.count])));
   lines.push('');
-
+  lines.push(toCsvLine(['Tickets by severity']));
+  lines.push(toCsvLine(['Severity', 'Count']));
+  snapshot.ticketsBySeverity.forEach((r) => lines.push(toCsvLine([r.severity, r.count])));
+  lines.push('');
   lines.push(toCsvLine(['Tickets by creator']));
-  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
-  snapshot.ticketsByCreator.forEach((r) =>
-    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
-  );
+  lines.push(toCsvLine(['User id', 'Count']));
+  snapshot.ticketsByCreator.forEach((r) => lines.push(toCsvLine([r.userId, r.count])));
   lines.push('');
-
+  lines.push(toCsvLine(['Tickets by created_by']));
+  lines.push(toCsvLine(['User id', 'Count']));
+  snapshot.ticketsByCreatedBy.forEach((r) => lines.push(toCsvLine([r.userId, r.count])));
+  lines.push('');
   lines.push(toCsvLine(['Tickets by assigned user']));
-  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
-  snapshot.ticketsByAssignedUser.forEach((r) =>
-    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
-  );
+  lines.push(toCsvLine(['User id', 'Count']));
+  snapshot.ticketsByAssignedUser.forEach((r) => lines.push(toCsvLine([r.userId, r.count])));
   lines.push('');
-
+  lines.push(toCsvLine(['Tickets by dependency name']));
+  lines.push(toCsvLine(['Dependency name', 'Count']));
+  snapshot.ticketsByDependencyName.forEach((r) => lines.push(toCsvLine([r.dependencyName, r.count])));
+  lines.push('');
   lines.push(toCsvLine(['Tickets by day']));
   lines.push(toCsvLine(['Date', 'Count']));
   snapshot.ticketsByDay.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
   lines.push('');
-
   lines.push(toCsvLine(['Tickets by week']));
   lines.push(toCsvLine(['Week', 'Count']));
   snapshot.ticketsByWeek.forEach((r) => lines.push(toCsvLine([r.week, r.count])));
   lines.push('');
-
   lines.push(toCsvLine(['Tickets by month']));
   lines.push(toCsvLine(['Month', 'Count']));
   snapshot.ticketsByMonth.forEach((r) => lines.push(toCsvLine([r.month, r.count])));
   lines.push('');
 
-  lines.push(toCsvLine(['Travel by location']));
-  lines.push(toCsvLine(['Location', 'Count']));
+  lines.push(toCsvLine(['Travel – Summary']));
+  lines.push(toCsvLine(['Total travel logs', snapshot.totalTravelLogs]));
+  lines.push(toCsvLine(['Total distance (km)', snapshot.totalDistanceKm]));
+  lines.push('');
+  lines.push(toCsvLine(['Travel by location', 'Location', 'Count']));
   snapshot.travelByLocation.forEach((r) => lines.push(toCsvLine([r.location, r.count])));
   lines.push('');
-
-  lines.push(toCsvLine(['Travel by user']));
-  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
-  snapshot.travelByUser.forEach((r) =>
-    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
-  );
+  lines.push(toCsvLine(['Travel by user', 'User id', 'Count']));
+  snapshot.travelByUser.forEach((r) => lines.push(toCsvLine([r.userId, r.count])));
   lines.push('');
-
-  lines.push(toCsvLine(['Travel by date']));
-  lines.push(toCsvLine(['Date', 'Count']));
+  lines.push(toCsvLine(['Travel by reason', 'Reason', 'Count']));
+  snapshot.travelByReason.forEach((r) => lines.push(toCsvLine([r.reason, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Travel by is_return_trip', 'Is return trip', 'Count']));
+  snapshot.travelByIsReturnTrip.forEach((r) => lines.push(toCsvLine([r.isReturnTrip, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Travel by date', 'Date', 'Count']));
   snapshot.travelByDate.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
   lines.push('');
-
-  lines.push(toCsvLine(['Travel distance by user']));
-  lines.push(toCsvLine(['User id', 'Display name', 'Total distance (km)']));
-  snapshot.travelDistanceByUser.forEach((r) =>
-    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.totalDistanceKm]))
-  );
+  lines.push(toCsvLine(['Travel by week', 'Week', 'Count']));
+  snapshot.travelByWeek.forEach((r) => lines.push(toCsvLine([r.week, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Travel by month', 'Month', 'Count']));
+  snapshot.travelByMonth.forEach((r) => lines.push(toCsvLine([r.month, r.count])));
+  lines.push('');
+  lines.push(toCsvLine(['Travel distance by user', 'User id', 'Total distance (km)']));
+  snapshot.travelDistanceByUser.forEach((r) => lines.push(toCsvLine([r.userId, r.totalDistanceKm])));
   lines.push('');
 
   if (options?.question != null) {
@@ -134,9 +248,9 @@ export function buildFullSnapshotCsv(
   return BOM + lines.join('\r\n');
 }
 
-/** Download full snapshot CSV (for Excel verification / pivot / audit). */
+/** Download full snapshot CSV – flattened format (dataset, dimension_name, dimension_value, metric_name, metric_value, time_bucket). Exactly what the AI sees; Excel/pivot ready. */
 export function downloadFullSnapshotCsv(response: AIInsightsResponse): void {
-  const csv = buildFullSnapshotCsv(response.snapshot, {
+  const csv = buildFlattenedSnapshotCsv(response.snapshot, {
     question: response.question,
     answer: response.answer,
   });

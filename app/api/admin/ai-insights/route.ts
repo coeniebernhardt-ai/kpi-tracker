@@ -100,11 +100,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [tickets, travelLogs, profiles] = await Promise.all([
+    const [ticketsRaw, travelLogsRaw, profilesRaw] = await Promise.all([
       getAllTicketsForAnalytics(supabase),
       getAllTravelLogsForAnalytics(supabase),
       getProfilesForAnalytics(supabase),
     ]);
+
+    // Defensive: cap row counts to avoid OOM / huge payloads (read-only; no write)
+    const MAX_TICKETS = 15_000;
+    const MAX_TRAVEL_LOGS = 10_000;
+    const MAX_PROFILES = 2_000;
+    const tickets = ticketsRaw.slice(0, MAX_TICKETS);
+    const travelLogs = travelLogsRaw.slice(0, MAX_TRAVEL_LOGS);
+    const profiles = profilesRaw.slice(0, MAX_PROFILES);
 
     const generatedAt = new Date().toISOString();
     const snapshot = computeUniversalSnapshot(tickets, travelLogs, profiles, filters, generatedAt);
