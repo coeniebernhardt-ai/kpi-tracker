@@ -39,17 +39,20 @@ The admin ticket deletion feature requires the `SUPABASE_SERVICE_ROLE_KEY` to be
    - Click the **three dots** (⋯) on the latest deployment
    - Click **Redeploy**
 
-### 3. AI Insights (optional)
+### 3. AI Insights (optional, off by default)
 
-For the **AI Insights** admin feature:
+AI Insights is **disabled by default**. To enable it:
 
 1. In Vercel: **Settings** → **Environment Variables** → **Add New**
-2. **Key**: `OPENAI_API_KEY`
-3. **Value**: your OpenAI API key (starts with `sk-proj-` or `sk-`)
-4. **Environment**: enable **Production**, **Preview**, and **Development**
-5. Save and **redeploy** so the new variable is applied
+2. **Key**: `ENABLE_AI_INSIGHTS`  
+   **Value**: `true`  
+   **Environment**: Production / Preview / Development as needed  
+3. **Key**: `OPENAI_API_KEY`  
+   **Value**: your OpenAI API key (starts with `sk-proj-` or `sk-`)  
+   **Environment**: same as above  
+4. Save and **redeploy** so the new variables are applied.
 
-Get a key at https://platform.openai.com/api-keys if needed.
+If `ENABLE_AI_INSIGHTS` is not set or not `true`, the AI Insights API returns 503. Get a key at https://platform.openai.com/api-keys if needed.
 
 ### 4. Verify Environment Variables
 
@@ -58,7 +61,8 @@ After redeploying, the following environment variables should be set in Vercel:
 - ✅ `NEXT_PUBLIC_SUPABASE_URL` (should already be set)
 - ✅ `NEXT_PUBLIC_SUPABASE_ANON_KEY` (should already be set)
 - ✅ `SUPABASE_SERVICE_ROLE_KEY` (for admin features)
-- ✅ `OPENAI_API_KEY` (for AI Insights; optional)
+- ✅ `ENABLE_AI_INSIGHTS` (set to `true` to enable AI Insights; optional)
+- ✅ `OPENAI_API_KEY` (required when AI Insights is enabled; optional otherwise)
 
 ### 5. Test Ticket Deletion
 

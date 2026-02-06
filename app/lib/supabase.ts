@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -822,6 +822,38 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
     return [];
   }
 }
+
+// --- AI-INSIGHTS ONLY: read-only data access for analytics (reuses same tables/columns as getAllTickets / getAllTravelLogs) ---
+/** READ-ONLY. Minimal ticket fields for analytics. Pass any Supabase client (e.g. server admin) to use from API routes. */
+export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<
+  { status: string; created_at: string; closed_at?: string | null; response_time_minutes?: number | null; has_dependencies?: boolean | null; ticket_type?: string | null; client?: string | null; user_id: string }[]
+> {
+  const { data, error } = await client
+    .from('tickets')
+    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[AI Insights] getAllTicketsForAnalytics:', error.message);
+    return [];
+  }
+  return (data ?? []) as { status: string; created_at: string; closed_at?: string | null; response_time_minutes?: number | null; has_dependencies?: boolean | null; ticket_type?: string | null; client?: string | null; user_id: string }[];
+}
+
+/** READ-ONLY. Minimal travel log fields for analytics. Pass any Supabase client to use from API routes. */
+export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Promise<
+  { created_at: string; user_id: string; end_address?: string | null; start_address?: string | null; distance_travelled?: number | null }[]
+> {
+  const { data, error } = await client
+    .from('travel_logs')
+    .select('created_at, user_id, end_address, start_address, distance_travelled')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[AI Insights] getAllTravelLogsForAnalytics:', error.message);
+    return [];
+  }
+  return (data ?? []) as { created_at: string; user_id: string; end_address?: string | null; start_address?: string | null; distance_travelled?: number | null }[];
+}
+// --- END AI-INSIGHTS ONLY ---
 
 export async function createTravelLog(travelLog: {
   user_id: string;

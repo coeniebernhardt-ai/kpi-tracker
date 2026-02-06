@@ -1,17 +1,25 @@
 /**
  * POST /api/admin/ai-insights
- * Admin-only, read-only. Fetches tickets + travel, computes metrics, calls AI with metrics only.
- * Vercel serverless compatible. Supports cookie auth or accessToken in body (for preview URLs where cookies may not be sent).
+ * AI-INSIGHTS ONLY. Admin-only, read-only.
+ * Uses the SAME live data layer as the rest of the app (getAllTicketsForAnalytics / getAllTravelLogsForAnalytics from supabase.ts).
+ * Data is fetched READ-ONLY; analytics computed in code; AI grounded ONLY in computed metrics.
+ * Disabled unless ENABLE_AI_INSIGHTS=true and OPENAI_API_KEY is set.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
+import { getAllTicketsForAnalytics, getAllTravelLogsForAnalytics } from '@/app/lib/supabase';
 import { computeMetrics } from '@/app/lib/ai-insights-analytics';
 import { getSystemPrompt, buildUserPrompt } from '@/app/lib/ai-insights-prompts';
 import type { AIInsightsRequest, AIInsightsResponse, AIInsightsFilters } from '@/app/lib/ai-insights-types';
 
 export const maxDuration = 30;
+
+/** AI-INSIGHTS ONLY: feature gate. When false, API returns 503. */
+function isAiInsightsEnabled(): boolean {
+  return process.env.ENABLE_AI_INSIGHTS === 'true' && !!process.env.OPENAI_API_KEY?.trim();
+}
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -84,28 +92,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 });
     }
 
-    // Read-only fetch: only the columns needed for analytics
-    const [ticketsRes, travelRes] = await Promise.all([
-      supabase
-        .from('tickets')
-        .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id'),
-      supabase
-        .from('travel_logs')
-        .select('created_at, user_id, end_address, start_address, distance_travelled'),
-    ]);
-
-    const tickets = ticketsRes.data || [];
-    const travelLogs = travelRes.data || [];
-
-    const metrics = computeMetrics(tickets, travelLogs, filters);
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    // AI-INSIGHTS ONLY: use same live data layer as app (read-only)
+    if (!isAiInsightsEnabled()) {
       return NextResponse.json(
-        { error: 'AI insights not configured (OPENAI_API_KEY missing)' },
+        { error: 'AI insights disabled. Set ENABLE_AI_INSIGHTS=true and OPENAI_API_KEY to enable.' },
         { status: 503 }
       );
     }
+
+    const [tickets, travelLogs] = await Promise.all([
+      getAllTicketsForAnalytics(supabase),
+      getAllTravelLogsForAnalytics(supabase),
+    ]);
+
+    const metrics = computeMetrics(tickets, travelLogs, filters);
+
+    const apiKey = process.env.OPENAI_API_KEY!.trim();
 
     const systemPrompt = getSystemPrompt();
     const userPrompt = buildUserPrompt(question, metrics, filters);
