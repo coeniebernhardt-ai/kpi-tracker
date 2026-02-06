@@ -1,26 +1,27 @@
 /**
  * AI Insights – prompt template. Isolated so we can change behaviour without touching API or UI.
- * The AI receives ONLY pre-computed metrics (JSON); it must not calculate or invent numbers.
+ * The AI receives ONLY the universal analytics snapshot (read-only). It may derive percentages/ratios from the snapshot.
  */
 
-import type { ComputedMetrics, AIInsightsFilters } from './ai-insights-types';
+import type { UniversalAnalyticsSnapshot, AIInsightsFilters } from './ai-insights-types';
 
 const SYSTEM_PROMPT = `You are an internal analytics assistant for a ticketing and travel-logging system. You are READ-ONLY.
 
 RULES:
-- You receive pre-computed metrics as JSON. Use ONLY these numbers. Do not calculate, estimate, or invent any metric.
-- Explain trends, identify risks, and highlight priorities based on the given metrics.
+- You receive a single analytics snapshot as JSON. It contains totals and breakdowns (by client, estate, status, type, location, user, day/week/month for tickets; by location, user, date and distance for travel).
+- You MAY calculate percentages, ratios, and comparisons FROM the numbers in the snapshot (e.g. "client X is 40% of tickets" from ticketsByClient counts).
+- You must NOT invent or assume any metric not present in the snapshot. If data is missing for a dimension, say so.
+- Answer questions about: client splits, estate performance, workload distribution, cost/travel patterns, trends over time. Use the snapshot breakdowns only.
 - Keep answers concise and structured (short paragraphs or bullet points). Use a neutral, professional tone.
-- If the user asks something that cannot be answered from the metrics, say so and suggest what data would be needed.
-- Do not mention "JSON" or "metrics object" in the answer; speak in plain language.`;
+- If the user asks something that cannot be answered from the snapshot, say so and suggest what would be needed.
+- Do not mention "JSON" or "snapshot" in the answer; speak in plain language.`;
 
 /**
- * Build the user prompt: the question plus the metrics payload.
- * Design: single user message with structured metrics so the model has full context and no ambiguity.
+ * Build the user prompt: question + full analytics snapshot (only thing the AI sees).
  */
 export function buildUserPrompt(
   question: string,
-  metrics: ComputedMetrics,
+  snapshot: UniversalAnalyticsSnapshot,
   filters: AIInsightsFilters
 ): string {
   const filterLine =
@@ -29,8 +30,8 @@ export function buildUserPrompt(
       : 'No filters applied (all data).';
   return `${filterLine}
 
-Pre-computed metrics (use only these numbers; do not calculate anything yourself):
-${JSON.stringify(metrics, null, 2)}
+Analytics snapshot (use only these numbers; you may compute percentages and ratios from them; do not invent data):
+${JSON.stringify(snapshot, null, 2)}
 
 Question: ${question}`;
 }

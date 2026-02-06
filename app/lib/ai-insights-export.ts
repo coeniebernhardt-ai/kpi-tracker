@@ -1,19 +1,155 @@
 /**
  * AI Insights – download as CSV or PDF. Client-side only.
- * Includes timestamp, filters, key metrics, and AI explanation.
+ * Full snapshot CSV = exactly what the AI sees, flattened for Excel/pivot/audit.
  */
 
-import type { AIInsightsResponse, ComputedMetrics } from './ai-insights-types';
+import type { AIInsightsResponse, ComputedMetrics, UniversalAnalyticsSnapshot } from './ai-insights-types';
 
 function escapeCsvCell(value: string | number): string {
-  const s = String(value);
+  const s = String(value).replace(/\r?\n/g, ' ');
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
 }
 
-/** Build CSV content for the current insight (timestamp, filters, metrics summary, AI text). */
+function toCsvLine(cells: (string | number)[]): string {
+  return cells.map(escapeCsvCell).join(',');
+}
+
+/** Build CSV with ALL analytics dimensions (matches what the AI sees). Excel-ready, flattened. */
+export function buildFullSnapshotCsv(
+  snapshot: UniversalAnalyticsSnapshot,
+  options?: { question?: string; answer?: string }
+): string {
+  const lines: string[] = [];
+  lines.push(toCsvLine(['AI Insights – Full Analytics Snapshot (read-only)']));
+  lines.push(toCsvLine(['Generated at', snapshot.generatedAt]));
+  lines.push(toCsvLine(['Filters', JSON.stringify(snapshot.filters)]));
+  lines.push('');
+
+  lines.push(toCsvLine(['Summary']));
+  lines.push(toCsvLine(['Total tickets', snapshot.totalTickets]));
+  lines.push(toCsvLine(['Open tickets', snapshot.openTickets]));
+  lines.push(toCsvLine(['Closed tickets', snapshot.closedTickets]));
+  lines.push(toCsvLine(['Closed rate %', snapshot.closedRatePercent]));
+  lines.push(toCsvLine(['Avg response time (min)', snapshot.avgResponseTimeMinutes]));
+  lines.push(toCsvLine(['Avg resolution time (min)', snapshot.avgResolutionTimeMinutes]));
+  lines.push(toCsvLine(['Tickets with dependencies', snapshot.ticketsWithDependencies]));
+  lines.push(toCsvLine(['Open older than 24h', snapshot.openOlderThan24h]));
+  lines.push(toCsvLine(['Open older than 72h', snapshot.openOlderThan72h]));
+  lines.push(toCsvLine(['Total travel logs', snapshot.totalTravelLogs]));
+  lines.push(toCsvLine(['Total distance (km)', snapshot.totalDistanceKm]));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by client']));
+  lines.push(toCsvLine(['Client', 'Count']));
+  snapshot.ticketsByClient.forEach((r) => lines.push(toCsvLine([r.client, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by estate/location']));
+  lines.push(toCsvLine(['Estate', 'Count']));
+  snapshot.ticketsByEstate.forEach((r) => lines.push(toCsvLine([r.estate, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by status']));
+  lines.push(toCsvLine(['Status', 'Count']));
+  snapshot.ticketsByStatus.forEach((r) => lines.push(toCsvLine([r.status, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by type']));
+  lines.push(toCsvLine(['Type', 'Count']));
+  snapshot.ticketsByType.forEach((r) => lines.push(toCsvLine([r.type, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by location (on-site/remote)']));
+  lines.push(toCsvLine(['Location', 'Count']));
+  snapshot.ticketsByLocation.forEach((r) => lines.push(toCsvLine([r.location, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by creator']));
+  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
+  snapshot.ticketsByCreator.forEach((r) =>
+    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
+  );
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by assigned user']));
+  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
+  snapshot.ticketsByAssignedUser.forEach((r) =>
+    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
+  );
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by day']));
+  lines.push(toCsvLine(['Date', 'Count']));
+  snapshot.ticketsByDay.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by week']));
+  lines.push(toCsvLine(['Week', 'Count']));
+  snapshot.ticketsByWeek.forEach((r) => lines.push(toCsvLine([r.week, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Tickets by month']));
+  lines.push(toCsvLine(['Month', 'Count']));
+  snapshot.ticketsByMonth.forEach((r) => lines.push(toCsvLine([r.month, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Travel by location']));
+  lines.push(toCsvLine(['Location', 'Count']));
+  snapshot.travelByLocation.forEach((r) => lines.push(toCsvLine([r.location, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Travel by user']));
+  lines.push(toCsvLine(['User id', 'Display name', 'Count']));
+  snapshot.travelByUser.forEach((r) =>
+    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.count]))
+  );
+  lines.push('');
+
+  lines.push(toCsvLine(['Travel by date']));
+  lines.push(toCsvLine(['Date', 'Count']));
+  snapshot.travelByDate.forEach((r) => lines.push(toCsvLine([r.date, r.count])));
+  lines.push('');
+
+  lines.push(toCsvLine(['Travel distance by user']));
+  lines.push(toCsvLine(['User id', 'Display name', 'Total distance (km)']));
+  snapshot.travelDistanceByUser.forEach((r) =>
+    lines.push(toCsvLine([r.userId, snapshot.profileDisplayNames[r.userId] ?? r.userId, r.totalDistanceKm]))
+  );
+  lines.push('');
+
+  if (options?.question != null) {
+    lines.push(toCsvLine(['Question']));
+    lines.push(toCsvLine([options.question]));
+    lines.push('');
+  }
+  if (options?.answer != null) {
+    lines.push(toCsvLine(['AI explanation']));
+    lines.push(toCsvLine([options.answer.replace(/\r?\n/g, ' ')]));
+  }
+
+  const BOM = '\uFEFF';
+  return BOM + lines.join('\r\n');
+}
+
+/** Download full snapshot CSV (for Excel verification / pivot / audit). */
+export function downloadFullSnapshotCsv(response: AIInsightsResponse): void {
+  const csv = buildFullSnapshotCsv(response.snapshot, {
+    question: response.question,
+    answer: response.answer,
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ai-insights-snapshot-${response.generatedAt.slice(0, 10)}-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Build CSV content for the current insight (timestamp, filters, metrics summary, AI text). Legacy short form. */
 export function buildInsightCsv(response: AIInsightsResponse): string {
   const m = response.metrics;
   const rows: string[][] = [
@@ -39,7 +175,7 @@ export function buildInsightCsv(response: AIInsightsResponse): string {
     ['AI explanation'],
     [response.answer],
   ];
-  return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
+  return rows.map((row) => toCsvLine(row)).join('\r\n');
 }
 
 /** Trigger download of CSV file. */

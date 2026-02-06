@@ -824,25 +824,42 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
 }
 
 // --- AI-INSIGHTS ONLY: read-only data access for analytics (reuses same tables/columns as getAllTickets / getAllTravelLogs) ---
-/** READ-ONLY. Minimal ticket fields for analytics. Pass any Supabase client (e.g. server admin) to use from API routes. */
-export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<
-  { status: string; created_at: string; closed_at?: string | null; response_time_minutes?: number | null; has_dependencies?: boolean | null; ticket_type?: string | null; client?: string | null; user_id: string }[]
-> {
+/** READ-ONLY. Ticket fields needed for universal analytics (all dimensions). Pass any Supabase client for API routes. */
+export type TicketRowForAnalytics = {
+  status: string;
+  created_at: string;
+  closed_at?: string | null;
+  response_time_minutes?: number | null;
+  has_dependencies?: boolean | null;
+  ticket_type?: string | null;
+  client?: string | null;
+  user_id: string;
+  location?: string | null;
+  estate_or_building?: string | null;
+  cml_location?: string | null;
+  assigned_to_array?: string[] | null;
+};
+export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<TicketRowForAnalytics[]> {
   const { data, error } = await client
     .from('tickets')
-    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id')
+    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array')
     .order('created_at', { ascending: false });
   if (error) {
     console.error('[AI Insights] getAllTicketsForAnalytics:', error.message);
     return [];
   }
-  return (data ?? []) as { status: string; created_at: string; closed_at?: string | null; response_time_minutes?: number | null; has_dependencies?: boolean | null; ticket_type?: string | null; client?: string | null; user_id: string }[];
+  return (data ?? []) as TicketRowForAnalytics[];
 }
 
-/** READ-ONLY. Minimal travel log fields for analytics. Pass any Supabase client to use from API routes. */
-export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Promise<
-  { created_at: string; user_id: string; end_address?: string | null; start_address?: string | null; distance_travelled?: number | null }[]
-> {
+/** READ-ONLY. Travel log fields for analytics. Pass any Supabase client to use from API routes. */
+export type TravelRowForAnalytics = {
+  created_at: string;
+  user_id: string;
+  end_address?: string | null;
+  start_address?: string | null;
+  distance_travelled?: number | null;
+};
+export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Promise<TravelRowForAnalytics[]> {
   const { data, error } = await client
     .from('travel_logs')
     .select('created_at, user_id, end_address, start_address, distance_travelled')
@@ -851,7 +868,21 @@ export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Prom
     console.error('[AI Insights] getAllTravelLogsForAnalytics:', error.message);
     return [];
   }
-  return (data ?? []) as { created_at: string; user_id: string; end_address?: string | null; start_address?: string | null; distance_travelled?: number | null }[];
+  return (data ?? []) as TravelRowForAnalytics[];
+}
+
+/** READ-ONLY. Minimal profile fields for labeling users in analytics (id, full_name). Pass any Supabase client. */
+export type ProfileRowForAnalytics = { id: string; full_name: string | null };
+export async function getProfilesForAnalytics(client: SupabaseClient): Promise<ProfileRowForAnalytics[]> {
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, full_name')
+    .order('full_name');
+  if (error) {
+    console.error('[AI Insights] getProfilesForAnalytics:', error.message);
+    return [];
+  }
+  return (data ?? []) as ProfileRowForAnalytics[];
 }
 // --- END AI-INSIGHTS ONLY ---
 

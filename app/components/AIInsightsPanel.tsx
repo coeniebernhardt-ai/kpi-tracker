@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import type { AIInsightsResponse, AIInsightsFilters } from '@/app/lib/ai-insights-types';
-import { downloadInsightCsv, downloadInsightPdf } from '@/app/lib/ai-insights-export';
+import { downloadInsightCsv, downloadInsightPdf, downloadFullSnapshotCsv } from '@/app/lib/ai-insights-export';
 
 export interface AIInsightsPanelProps {
   /** Optional filters to apply to the data (e.g. date range, user). */
@@ -102,10 +102,18 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={() => downloadFullSnapshotCsv(response)}
+              className="px-4 py-2 rounded-xl bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600"
+              title="All dimensions, Excel-ready, matches what the AI sees"
+            >
+              Export full snapshot (CSV)
+            </button>
+            <button
+              type="button"
               onClick={() => downloadInsightCsv(response)}
               className="px-4 py-2 rounded-xl bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600"
             >
-              Download CSV
+              Download summary CSV
             </button>
             <button
               type="button"

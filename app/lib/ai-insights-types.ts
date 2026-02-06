@@ -1,6 +1,6 @@
 /**
  * AI Insights – shared types for metrics and API.
- * All numbers are pre-computed; the AI only interprets and explains.
+ * Universal snapshot is the single source for AI and CSV export.
  */
 
 export interface AIInsightsFilters {
@@ -9,9 +9,8 @@ export interface AIInsightsFilters {
   userId?: string;
 }
 
-/** Pre-computed metrics only. AI must NOT calculate or invent these. */
+/** Pre-computed metrics (legacy summary view; derived from UniversalAnalyticsSnapshot). */
 export interface ComputedMetrics {
-  // Tickets
   totalTickets: number;
   openTickets: number;
   closedTickets: number;
@@ -20,17 +19,56 @@ export interface ComputedMetrics {
   avgResolutionTimeMinutes: number;
   ticketsWithDependencies: number;
   ticketsWithDependenciesPercent: number;
-  // SLA-style risk: open tickets older than 24h (configurable threshold)
   openOlderThan24h: number;
   openOlderThan72h: number;
-  // By type
   byType: { type: string; count: number }[];
-  // By client
   byClient: { client: string; count: number }[];
-  // Travel
   totalTravelLogs: number;
   travelFrequencyByLocation: { location: string; count: number }[];
   totalDistanceKm: number;
+}
+
+/**
+ * Universal analytics snapshot – ALL dimensions from live data.
+ * Used by AI (only this is passed) and by full CSV export.
+ * Enables percentages, comparisons, and trends without new backend code.
+ */
+export interface UniversalAnalyticsSnapshot {
+  /** When computed and which filters were applied (for CSV header). */
+  generatedAt: string;
+  filters: AIInsightsFilters;
+  /** User id -> display name for labels in export/AI. */
+  profileDisplayNames: Record<string, string>;
+  /** Totals. */
+  totalTickets: number;
+  totalTravelLogs: number;
+  totalDistanceKm: number;
+  /** Ticket summary (for quick answers). */
+  openTickets: number;
+  closedTickets: number;
+  closedRatePercent: number;
+  avgResponseTimeMinutes: number;
+  avgResolutionTimeMinutes: number;
+  ticketsWithDependencies: number;
+  ticketsWithDependenciesPercent: number;
+  openOlderThan24h: number;
+  openOlderThan72h: number;
+  /** Tickets by dimension (every bucket needed for pivots and comparisons). */
+  ticketsByClient: { client: string; count: number }[];
+  ticketsByEstate: { estate: string; count: number }[];
+  ticketsByStatus: { status: string; count: number }[];
+  ticketsByType: { type: string; count: number }[];
+  ticketsByLocation: { location: string; count: number }[];
+  ticketsByCreator: { userId: string; count: number }[];
+  ticketsByAssignedUser: { userId: string; count: number }[];
+  ticketsByDay: { date: string; count: number }[];
+  ticketsByWeek: { week: string; count: number }[];
+  ticketsByMonth: { month: string; count: number }[];
+  /** Travel by dimension. */
+  travelByLocation: { location: string; count: number }[];
+  travelByUser: { userId: string; count: number }[];
+  travelByDate: { date: string; count: number }[];
+  travelDistanceByUser: { userId: string; totalDistanceKm: number }[];
 }
 
 export interface AIInsightsRequest {
@@ -43,6 +81,9 @@ export interface AIInsightsRequest {
 export interface AIInsightsResponse {
   question: string;
   filters: AIInsightsFilters;
+  /** Full snapshot (what AI and CSV export use). */
+  snapshot: UniversalAnalyticsSnapshot;
+  /** Legacy summary derived from snapshot (for existing UI). */
   metrics: ComputedMetrics;
   answer: string;
   generatedAt: string;

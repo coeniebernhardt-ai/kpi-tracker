@@ -1,26 +1,14 @@
 /**
- * AI Insights – compute metrics from raw data (read-only).
- * Used only on the server; no mutations. All numbers are derived here so the AI never calculates.
+ * AI Insights – compute universal analytics snapshot from live data (read-only).
+ * Single source of truth for AI and CSV export. No mutations.
  */
 
-import type { ComputedMetrics, AIInsightsFilters } from './ai-insights-types';
-
-// Minimal shapes for server-side use (no need to import full Ticket/TravelLog)
-interface TicketRow {
-  status: string;
-  created_at: string;
-  closed_at?: string | null;
-  response_time_minutes?: number | null;
-  has_dependencies?: boolean | null;
-  ticket_type?: string | null;
-  client?: string | null;
-}
-
-interface TravelRow {
-  end_address?: string | null;
-  start_address?: string | null;
-  distance_travelled?: number | null;
-}
+import type {
+  ComputedMetrics,
+  AIInsightsFilters,
+  UniversalAnalyticsSnapshot,
+} from './ai-insights-types';
+import type { TicketRowForAnalytics, TravelRowForAnalytics, ProfileRowForAnalytics } from '@/app/lib/supabase';
 
 function applyFilters<T extends { created_at: string; user_id?: string }>(
   items: T[],
@@ -37,25 +25,44 @@ function applyFilters<T extends { created_at: string; user_id?: string }>(
     out = out.filter((t) => new Date(t.created_at).getTime() <= to);
   }
   if (filters.userId) {
-    out = out.filter((t) => (t as any).user_id === filters.userId);
+    out = out.filter((t) => (t as { user_id?: string }).user_id === filters.userId);
   }
   return out;
 }
 
-/** Compute all metrics from ticket and travel arrays. Pure function, read-only. */
-export function computeMetrics(
-  tickets: TicketRow[],
-  travelLogs: TravelRow[],
-  filters?: AIInsightsFilters
-): ComputedMetrics {
-  const filteredTickets = applyFilters(
-    tickets as any[],
-    filters
-  ) as TicketRow[];
-  const filteredTravel = applyFilters(
-    travelLogs as any[],
-    filters
-  ) as TravelRow[];
+function toDateKey(iso: string): string {
+  return iso.slice(0, 10);
+}
+function toWeekKey(iso: string): string {
+  const d = new Date(iso);
+  const start = new Date(d);
+  start.setDate(d.getDate() - d.getDay() + 1);
+  const y = start.getFullYear();
+  const w = Math.ceil((start.getTime() - new Date(y, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+function toMonthKey(iso: string): string {
+  return iso.slice(0, 7);
+}
+
+/**
+ * Build the universal analytics snapshot from live ticket/travel/profile data.
+ * READ-ONLY. Deterministic. Used by AI (only this) and full CSV export.
+ */
+export function computeUniversalSnapshot(
+  tickets: TicketRowForAnalytics[],
+  travelLogs: TravelRowForAnalytics[],
+  profiles: ProfileRowForAnalytics[],
+  filters: AIInsightsFilters,
+  generatedAt: string
+): UniversalAnalyticsSnapshot {
+  const filteredTickets = applyFilters(tickets, filters);
+  const filteredTravel = applyFilters(travelLogs, filters);
+
+  const profileDisplayNames: Record<string, string> = {};
+  profiles.forEach((p) => {
+    profileDisplayNames[p.id] = p.full_name ?? p.id;
+  });
 
   const totalTickets = filteredTickets.length;
   const openTickets = filteredTickets.filter((t) => t.status === 'open').length;
@@ -69,8 +76,7 @@ export function computeMetrics(
   const avgResponseTimeMinutes =
     withResponse.length > 0
       ? Math.round(
-          withResponse.reduce((s, t) => s + (t.response_time_minutes ?? 0), 0) /
-            withResponse.length
+          withResponse.reduce((s, t) => s + (t.response_time_minutes ?? 0), 0) / withResponse.length
         )
       : 0;
 
@@ -84,13 +90,10 @@ export function computeMetrics(
   });
   const avgResolutionTimeMinutes =
     resolutionTimes.length > 0
-      ? Math.round(
-          resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length
-        )
+      ? Math.round(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
       : 0;
 
-  const withDeps = filteredTickets.filter((t) => t.has_dependencies === true);
-  const ticketsWithDependencies = withDeps.length;
+  const ticketsWithDependencies = filteredTickets.filter((t) => t.has_dependencies === true).length;
   const ticketsWithDependenciesPercent =
     totalTickets > 0
       ? Math.round((ticketsWithDependencies / totalTickets) * 1000) / 10
@@ -100,51 +103,71 @@ export function computeMetrics(
   const h24 = 24 * 60 * 60 * 1000;
   const h72 = 72 * 60 * 60 * 1000;
   const openTix = filteredTickets.filter((t) => t.status === 'open');
-  const openOlderThan24h = openTix.filter(
-    (t) => now - new Date(t.created_at).getTime() > h24
-  ).length;
-  const openOlderThan72h = openTix.filter(
-    (t) => now - new Date(t.created_at).getTime() > h72
-  ).length;
-
-  const byType: { type: string; count: number }[] = [];
-  const typeCount: Record<string, number> = {};
-  filteredTickets.forEach((t) => {
-    const type = t.ticket_type || 'Unknown';
-    typeCount[type] = (typeCount[type] || 0) + 1;
-  });
-  Object.entries(typeCount).forEach(([type, count]) =>
-    byType.push({ type, count })
-  );
-
-  const byClient: { client: string; count: number }[] = [];
-  const clientCount: Record<string, number> = {};
-  filteredTickets.forEach((t) => {
-    const client = t.client || 'Unknown';
-    clientCount[client] = (clientCount[client] || 0) + 1;
-  });
-  Object.entries(clientCount).forEach(([client, count]) =>
-    byClient.push({ client, count })
-  );
+  const openOlderThan24h = openTix.filter((t) => now - new Date(t.created_at).getTime() > h24).length;
+  const openOlderThan72h = openTix.filter((t) => now - new Date(t.created_at).getTime() > h72).length;
 
   const totalTravelLogs = filteredTravel.length;
-  const locationCount: Record<string, number> = {};
-  filteredTravel.forEach((t) => {
-    const loc =
-      (t.end_address || t.start_address || 'Unknown').trim() || 'Unknown';
-    locationCount[loc] = (locationCount[loc] || 0) + 1;
-  });
-  const travelFrequencyByLocation = Object.entries(locationCount).map(
-    ([location, count]) => ({ location, count })
-  );
   const totalDistanceKm =
     Math.round(
-      (filteredTravel.reduce((s, t) => s + (t.distance_travelled ?? 0), 0) *
-        10) / 10
-  ) || 0;
+      filteredTravel.reduce((s, t) => s + (t.distance_travelled ?? 0), 0) * 10
+    ) / 10 || 0;
+
+  // Tickets by dimension
+  const countBy = <T>(items: T[], keyFn: (t: T) => string): { key: string; count: number }[] => {
+    const m: Record<string, number> = {};
+    items.forEach((t) => {
+      const k = keyFn(t);
+      m[k] = (m[k] || 0) + 1;
+    });
+    return Object.entries(m).map(([key, count]) => ({ key, count }));
+  };
+
+  const ticketsByClient = countBy(filteredTickets, (t) => t.client || 'Unknown').map(({ key, count }) => ({ client: key, count }));
+  const ticketsByEstate = countBy(filteredTickets, (t) => {
+    const e = t.estate_or_building || t.cml_location;
+    return (e && String(e).trim()) || 'Unknown';
+  }).map(({ key, count }) => ({ estate: key, count }));
+  const ticketsByStatus = countBy(filteredTickets, (t) => t.status).map(({ key, count }) => ({ status: key, count }));
+  const ticketsByType = countBy(filteredTickets, (t) => t.ticket_type || 'Unknown').map(({ key, count }) => ({ type: key, count }));
+  const ticketsByLocation = countBy(filteredTickets, (t) => t.location || 'Unknown').map(({ key, count }) => ({ location: key, count }));
+  const ticketsByCreator = countBy(filteredTickets, (t) => t.user_id).map(({ key, count }) => ({ userId: key, count }));
+
+  const assignedCount: Record<string, number> = {};
+  filteredTickets.forEach((t) => {
+    const ids = t.assigned_to_array && Array.isArray(t.assigned_to_array) ? t.assigned_to_array : [];
+    ids.forEach((id) => {
+      if (id) assignedCount[id] = (assignedCount[id] || 0) + 1;
+    });
+  });
+  const ticketsByAssignedUser = Object.entries(assignedCount).map(([userId, count]) => ({ userId, count }));
+
+  const ticketsByDay = countBy(filteredTickets, (t) => toDateKey(t.created_at)).map(({ key, count }) => ({ date: key, count }));
+  const ticketsByWeek = countBy(filteredTickets, (t) => toWeekKey(t.created_at)).map(({ key, count }) => ({ week: key, count }));
+  const ticketsByMonth = countBy(filteredTickets, (t) => toMonthKey(t.created_at)).map(({ key, count }) => ({ month: key, count }));
+
+  const travelByLocation = countBy(filteredTravel, (t) =>
+    (t.end_address || t.start_address || 'Unknown').trim() || 'Unknown'
+  ).map(({ key, count }) => ({ location: key, count }));
+  const travelByUser = countBy(filteredTravel, (t) => t.user_id).map(({ key, count }) => ({ userId: key, count }));
+  const travelByDate = countBy(filteredTravel, (t) => toDateKey(t.created_at)).map(({ key, count }) => ({ date: key, count }));
+
+  const travelDistanceByUser: { userId: string; totalDistanceKm: number }[] = [];
+  const distByUser: Record<string, number> = {};
+  filteredTravel.forEach((t) => {
+    const d = t.distance_travelled ?? 0;
+    distByUser[t.user_id] = (distByUser[t.user_id] || 0) + d;
+  });
+  Object.entries(distByUser).forEach(([userId, totalDistanceKm]) => {
+    travelDistanceByUser.push({ userId, totalDistanceKm: Math.round(totalDistanceKm * 10) / 10 });
+  });
 
   return {
+    generatedAt,
+    filters,
+    profileDisplayNames,
     totalTickets,
+    totalTravelLogs,
+    totalDistanceKm,
     openTickets,
     closedTickets,
     closedRatePercent,
@@ -154,10 +177,40 @@ export function computeMetrics(
     ticketsWithDependenciesPercent,
     openOlderThan24h,
     openOlderThan72h,
-    byType,
-    byClient,
-    totalTravelLogs,
-    travelFrequencyByLocation,
-    totalDistanceKm,
+    ticketsByClient,
+    ticketsByEstate,
+    ticketsByStatus,
+    ticketsByType,
+    ticketsByLocation,
+    ticketsByCreator,
+    ticketsByAssignedUser,
+    ticketsByDay,
+    ticketsByWeek,
+    ticketsByMonth,
+    travelByLocation,
+    travelByUser,
+    travelByDate,
+    travelDistanceByUser,
+  };
+}
+
+/** Derive legacy ComputedMetrics from snapshot (for existing UI/export). */
+export function snapshotToLegacyMetrics(snapshot: UniversalAnalyticsSnapshot): ComputedMetrics {
+  return {
+    totalTickets: snapshot.totalTickets,
+    openTickets: snapshot.openTickets,
+    closedTickets: snapshot.closedTickets,
+    closedRatePercent: snapshot.closedRatePercent,
+    avgResponseTimeMinutes: snapshot.avgResponseTimeMinutes,
+    avgResolutionTimeMinutes: snapshot.avgResolutionTimeMinutes,
+    ticketsWithDependencies: snapshot.ticketsWithDependencies,
+    ticketsWithDependenciesPercent: snapshot.ticketsWithDependenciesPercent,
+    openOlderThan24h: snapshot.openOlderThan24h,
+    openOlderThan72h: snapshot.openOlderThan72h,
+    byType: snapshot.ticketsByType,
+    byClient: snapshot.ticketsByClient,
+    totalTravelLogs: snapshot.totalTravelLogs,
+    travelFrequencyByLocation: snapshot.travelByLocation,
+    totalDistanceKm: snapshot.totalDistanceKm,
   };
 }

@@ -9,8 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
-import { getAllTicketsForAnalytics, getAllTravelLogsForAnalytics } from '@/app/lib/supabase';
-import { computeMetrics } from '@/app/lib/ai-insights-analytics';
+import { getAllTicketsForAnalytics, getAllTravelLogsForAnalytics, getProfilesForAnalytics } from '@/app/lib/supabase';
+import { computeUniversalSnapshot, snapshotToLegacyMetrics } from '@/app/lib/ai-insights-analytics';
 import { getSystemPrompt, buildUserPrompt } from '@/app/lib/ai-insights-prompts';
 import type { AIInsightsRequest, AIInsightsResponse, AIInsightsFilters } from '@/app/lib/ai-insights-types';
 
@@ -100,17 +100,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [tickets, travelLogs] = await Promise.all([
+    const [tickets, travelLogs, profiles] = await Promise.all([
       getAllTicketsForAnalytics(supabase),
       getAllTravelLogsForAnalytics(supabase),
+      getProfilesForAnalytics(supabase),
     ]);
 
-    const metrics = computeMetrics(tickets, travelLogs, filters);
+    const generatedAt = new Date().toISOString();
+    const snapshot = computeUniversalSnapshot(tickets, travelLogs, profiles, filters, generatedAt);
+    const metrics = snapshotToLegacyMetrics(snapshot);
 
     const apiKey = process.env.OPENAI_API_KEY!.trim();
 
     const systemPrompt = getSystemPrompt();
-    const userPrompt = buildUserPrompt(question, metrics, filters);
+    const userPrompt = buildUserPrompt(question, snapshot, filters);
 
     const completion = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -145,9 +148,10 @@ export async function POST(request: NextRequest) {
     const response: AIInsightsResponse = {
       question,
       filters,
+      snapshot,
       metrics,
       answer,
-      generatedAt: new Date().toISOString(),
+      generatedAt,
     };
 
     return NextResponse.json(response);
