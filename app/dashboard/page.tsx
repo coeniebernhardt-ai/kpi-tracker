@@ -61,6 +61,10 @@ export default function DashboardPage() {
   // FEATURE C: Member notifications
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // FEATURE B: Notification detail view (modal); server-validated fetch
+  const [notificationDetailId, setNotificationDetailId] = useState<string | null>(null);
+  const [notificationDetail, setNotificationDetail] = useState<Notification | null>(null);
+  const [notificationDetailLoading, setNotificationDetailLoading] = useState(false);
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -156,6 +160,29 @@ export default function DashboardPage() {
     }, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
+
+  // FEATURE B: Fetch notification detail with server-side validation when opening detail view
+  useEffect(() => {
+    if (!notificationDetailId) {
+      setNotificationDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setNotificationDetailLoading(true);
+    setNotificationDetail(null);
+    fetch(`/api/notifications/${notificationDetailId}`)
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled && data) setNotificationDetail(data as Notification);
+        if (!cancelled && !data) setNotificationDetailId(null);
+      })
+      .catch(() => { if (!cancelled) setNotificationDetailId(null); })
+      .finally(() => { if (!cancelled) setNotificationDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [notificationDetailId]);
 
   const loadNotifications = async () => {
     if (!user?.id) return;
@@ -818,27 +845,15 @@ export default function DashboardPage() {
                               type="button"
                               className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors block"
                               onClick={async () => {
-                                if (n.type === 'admin_broadcast') {
-                                  if (!n.read) {
-                                    await markNotificationAsRead(n.id);
-                                    await loadNotifications();
-                                  }
-                                  setNotificationsOpen(false);
-                                  return;
-                                }
-                                if (n.ticket_id) {
-                                  setMainTab('tickets');
-                                  setExpandedTickets((prev) => new Set(prev).add(n.ticket_id!));
-                                  const t = tickets.find((x) => x.id === n.ticket_id);
-                                  if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
-                                }
                                 if (!n.read) {
                                   await markNotificationAsRead(n.id);
                                   await loadNotifications();
                                 }
                                 setNotificationsOpen(false);
+                                setNotificationDetailId(n.id);
                               }}
                             >
+                              {/* FEATURE B: List view shows summary/preview only */}
                               {n.type === 'admin_broadcast' && (
                                 <>
                                   {n.image_url && (
@@ -849,7 +864,9 @@ export default function DashboardPage() {
                                   <p className={`text-sm font-medium ${n.read ? 'text-slate-400' : 'text-white'}`}>
                                     {n.title ? `Admin: ${n.title}` : 'Admin announcement'}
                                   </p>
-                                  <p className={`text-sm ${n.read ? 'text-slate-500' : 'text-slate-300'}`}>{n.message || '—'}</p>
+                                  <p className={`text-sm ${n.read ? 'text-slate-500' : 'text-slate-300'} line-clamp-2`}>
+                                    {n.message ? (n.message.length > 80 ? `${n.message.slice(0, 80)}…` : n.message) : '—'}
+                                  </p>
                                 </>
                               )}
                               {n.type !== 'admin_broadcast' && (
@@ -919,6 +936,77 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* FEATURE B: Notification detail view (modal) – full content, read-only; marked read when opened */}
+      {notificationDetailId && (
+        <div className="fixed inset-0 z-50 overflow-auto">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); }} aria-hidden="true" />
+          <div className="relative flex min-h-full items-center justify-center p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-700/50 bg-slate-900 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-700/50 p-4">
+                <h2 className="text-lg font-semibold text-white">Notification</h2>
+                <button type="button" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4">
+                {notificationDetailLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-8 w-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {!notificationDetailLoading && notificationDetail && (
+                  <div className="space-y-4">
+                    {notificationDetail.type === 'admin_broadcast' && (
+                      <>
+                        {notificationDetail.title && (
+                          <p className="text-lg font-medium text-white">{notificationDetail.title}</p>
+                        )}
+                        <p className="text-sm text-slate-300 whitespace-pre-wrap">{notificationDetail.message || '—'}</p>
+                        {notificationDetail.image_url && (
+                          <div className="rounded-xl overflow-hidden bg-slate-800/50 border border-slate-700/50">
+                            <img src={notificationDetail.image_url} alt="" className="w-full max-h-80 object-contain" onError={(e) => { const el = e.target as HTMLImageElement; el.style.display = 'none'; el.nextElementSibling?.classList.remove('hidden'); }} />
+                            <p className="hidden p-3 text-sm text-slate-500">Image could not be loaded.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {notificationDetail.type !== 'admin_broadcast' && (
+                      <p className="text-slate-300">
+                        {notificationDetail.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to.'}
+                        {notificationDetail.type === 'added_to_ticket' && 'You were added to a ticket.'}
+                      </p>
+                    )}
+                    <div className="pt-2 border-t border-slate-700/50 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-slate-500">Sender: Admin</span>
+                      <span className="text-xs text-slate-500">{new Date(notificationDetail.created_at).toLocaleString()}</span>
+                    </div>
+                    {notificationDetail.ticket_id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainTab('tickets');
+                          setExpandedTickets((prev) => new Set(prev).add(notificationDetail.ticket_id!));
+                          const t = tickets.find((x) => x.id === notificationDetail.ticket_id);
+                          if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                          setNotificationDetailId(null);
+                          setNotificationDetail(null);
+                        }}
+                        className="w-full py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium hover:bg-blue-500/30"
+                      >
+                        View ticket
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!notificationDetailLoading && !notificationDetail && (
+                  <p className="py-4 text-sm text-slate-500">Unable to load notification.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-4xl mx-auto px-6 py-8">
 
