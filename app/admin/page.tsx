@@ -584,44 +584,44 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <section className="mb-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
-            <p className="text-xs text-slate-500 mb-1">Total Tickets</p>
-            <p className="text-3xl font-bold text-white">{tickets.length}</p>
+        {/* Stats: single horizontal row, flex nowrap, cards scale to fit */}
+        <section className="mb-8 flex flex-row flex-nowrap gap-2 md:gap-4 w-full min-w-0">
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words">Total Tickets</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{tickets.length}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-xs text-blue-400 mb-1">Open</p>
-            <p className="text-3xl font-bold text-blue-400">{totalOpen}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Open</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{totalOpen}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-xs text-blue-300 mb-1">Closed</p>
-            <p className="text-3xl font-bold text-blue-300">{totalClosed}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-[10px] sm:text-xs text-blue-300 mb-0.5 md:mb-1 break-words">Closed</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-300 leading-tight">{totalClosed}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
-            <p className="text-xs text-slate-500 mb-1">Team Members</p>
-            <p className="text-3xl font-bold text-white">{profiles.length}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words">Team Members</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{profiles.length}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-xs text-blue-400 mb-1">Tickets Handled</p>
-            <p className="text-3xl font-bold text-blue-400">{ticketsHandled}</p>
-            <p className="text-xs text-blue-300 mt-1">All closed tickets</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Tickets Handled</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{ticketsHandled}</p>
+            <p className="text-[10px] sm:text-xs text-blue-300 mt-0.5 md:mt-1 break-words">All closed tickets</p>
           </div>
-          <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-xs text-blue-400 mb-1">Avg Response Time</p>
-            <p className="text-3xl font-bold text-blue-400">{overallAvgResponseTime}</p>
-            <p className="text-xs text-blue-300 mt-1">{overallAvgResponseTime > 0 ? 'minutes' : 'No data'}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+            <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Avg Response Time</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{overallAvgResponseTime}</p>
+            <p className="text-[10px] sm:text-xs text-blue-300 mt-0.5 md:mt-1 break-words">{overallAvgResponseTime > 0 ? 'minutes' : 'No data'}</p>
           </div>
           {/* FEATURE A: Dependency-aware response time (admin analytics only) */}
-          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
-            <p className="text-xs text-slate-500 mb-1">Average Response Time (No Dependencies)</p>
-            <p className="text-3xl font-bold text-white">{avgResponseTimeNoDependencies}</p>
-            <p className="text-xs text-slate-400 mt-1">{avgResponseTimeNoDependencies > 0 ? 'minutes' : 'No data'}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words" title="Average Response Time (No Dependencies)">Avg (No Deps)</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeNoDependencies}</p>
+            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 md:mt-1 break-words">{avgResponseTimeNoDependencies > 0 ? 'min' : 'No data'}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
-            <p className="text-xs text-slate-500 mb-1">Average Response Time (With Dependencies)</p>
-            <p className="text-3xl font-bold text-white">{avgResponseTimeWithDependencies}</p>
-            <p className="text-xs text-slate-400 mt-1">{avgResponseTimeWithDependencies > 0 ? 'minutes' : 'No data'}</p>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words" title="Average Response Time (With Dependencies)">Avg (With Deps)</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeWithDependencies}</p>
+            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 md:mt-1 break-words">{avgResponseTimeWithDependencies > 0 ? 'min' : 'No data'}</p>
           </div>
         </section>
 
