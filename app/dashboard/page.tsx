@@ -148,6 +148,15 @@ export default function DashboardPage() {
     }
   }, [user?.id]);
 
+  // FEATURE A: Poll for new notifications (e.g. admin broadcast) without page refresh
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(() => {
+      getNotificationsByUserId(user.id).then(setNotifications);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   const loadNotifications = async () => {
     if (!user?.id) return;
     const data = await getNotificationsByUserId(user.id);
@@ -809,10 +818,20 @@ export default function DashboardPage() {
                               type="button"
                               className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors block"
                               onClick={async () => {
-                                setMainTab('tickets');
-                                setExpandedTickets((prev) => new Set(prev).add(n.ticket_id));
-                                const t = tickets.find((x) => x.id === n.ticket_id);
-                                if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                                if (n.type === 'admin_broadcast') {
+                                  if (!n.read) {
+                                    await markNotificationAsRead(n.id);
+                                    await loadNotifications();
+                                  }
+                                  setNotificationsOpen(false);
+                                  return;
+                                }
+                                if (n.ticket_id) {
+                                  setMainTab('tickets');
+                                  setExpandedTickets((prev) => new Set(prev).add(n.ticket_id!));
+                                  const t = tickets.find((x) => x.id === n.ticket_id);
+                                  if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                                }
                                 if (!n.read) {
                                   await markNotificationAsRead(n.id);
                                   await loadNotifications();
@@ -820,10 +839,25 @@ export default function DashboardPage() {
                                 setNotificationsOpen(false);
                               }}
                             >
-                              <p className={`text-sm ${n.read ? 'text-slate-400' : 'text-white'}`}>
-                                {n.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to'}
-                                {n.type === 'added_to_ticket' && 'You were added to a ticket'}
-                              </p>
+                              {n.type === 'admin_broadcast' && (
+                                <>
+                                  {n.image_url && (
+                                    <div className="mb-2 rounded-lg overflow-hidden bg-slate-800/50">
+                                      <img src={n.image_url} alt="" className="w-full max-h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    </div>
+                                  )}
+                                  <p className={`text-sm font-medium ${n.read ? 'text-slate-400' : 'text-white'}`}>
+                                    {n.title ? `Admin: ${n.title}` : 'Admin announcement'}
+                                  </p>
+                                  <p className={`text-sm ${n.read ? 'text-slate-500' : 'text-slate-300'}`}>{n.message || '—'}</p>
+                                </>
+                              )}
+                              {n.type !== 'admin_broadcast' && (
+                                <p className={`text-sm ${n.read ? 'text-slate-400' : 'text-white'}`}>
+                                  {n.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to'}
+                                  {n.type === 'added_to_ticket' && 'You were added to a ticket'}
+                                </p>
+                              )}
                               <p className="text-xs text-slate-500 mt-0.5">
                                 {new Date(n.created_at).toLocaleString()}
                               </p>

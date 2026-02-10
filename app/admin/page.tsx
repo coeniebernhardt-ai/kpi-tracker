@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
+import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments, sendAdminBroadcast } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -64,6 +64,16 @@ export default function AdminPage() {
   const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
   const [adminCommentText, setAdminCommentText] = useState('');
   const [adminCommentSubmitting, setAdminCommentSubmitting] = useState(false);
+  // FEATURE A: Admin push notification (optional image, All or Selected members)
+  const [showSendNotification, setShowSendNotification] = useState(false);
+  const [notificationTitle, setNotificationTitle] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationImageUrl, setNotificationImageUrl] = useState<string | null>(null);
+  const [notificationImageFile, setNotificationImageFile] = useState<File | null>(null);
+  const [notificationRecipientMode, setNotificationRecipientMode] = useState<'all' | 'selected'>('all');
+  const [notificationSelectedIds, setNotificationSelectedIds] = useState<Set<string>>(new Set());
+  const [notificationConfirmSend, setNotificationConfirmSend] = useState(false);
+  const [notificationSending, setNotificationSending] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -502,83 +512,87 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient">
-      {/* Header */}
+      {/* FEATURE B: Header – logo + admin identity as one block; action buttons in row below */}
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex-shrink-0">
-                <Logo variant="team" className="opacity-90 hover:opacity-100 transition-opacity" />
-              </Link>
-              <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-              
-              <div className="relative group">
-                {profile?.avatar_url ? (
-                  <Image src={profile.avatar_url} alt={profile.full_name} width={48} height={48} className="w-12 h-12 rounded-xl object-cover shadow-lg" />
-                ) : (
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg`}>
-                    {profile?.avatar || 'A'}
-                  </div>
-                )}
-                {profile && (
-                  <button 
-                    onClick={() => setUploadingFor(profile)}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-400"
-                    title="Upload profile picture"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              
-              <div>
-                <h1 className="text-xl font-bold text-white">{profile?.full_name || 'Admin'}</h1>
-                <p className="text-sm text-slate-400">{profile?.role || 'Administrator'} • Admin</p>
-              </div>
+          {/* Row 1: Think Q logo immediately next to admin profile, name, designation */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <Link href="/dashboard" className="flex-shrink-0">
+              <Logo variant="team" className="opacity-90 hover:opacity-100 transition-opacity" />
+            </Link>
+            <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <div className="relative group flex-shrink-0">
+              {profile?.avatar_url ? (
+                <Image src={profile.avatar_url} alt={profile.full_name} width={48} height={48} className="w-12 h-12 rounded-xl object-cover shadow-lg" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
+                  {profile?.avatar || 'A'}
+                </div>
+              )}
+              {profile && (
+                <button
+                  onClick={() => setUploadingFor(profile)}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-400"
+                  title="Upload profile picture"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
-            
-            <div className="flex items-center gap-3">
-              <button onClick={() => setShowUserManagement(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                Manage Users
-              </button>
-              <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export Stats
-              </button>
-              <button onClick={() => setShowTravelLogExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-                Export Travel Logs
-              </button>
-              <button onClick={() => setShowImageLinks(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                View All Images
-              </button>
-              <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg hover:shadow-blue-500/25 transition-all">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Create Ticket
-              </button>
-              <button onClick={handleSignOut} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors">
-                Sign Out
-              </button>
+            <div className="flex-shrink-0">
+              <h1 className="text-xl font-bold text-white">{profile?.full_name || 'Admin'}</h1>
+              <p className="text-sm text-slate-400">{profile?.role || 'Administrator'} • Admin</p>
             </div>
+          </div>
+          {/* Row 2: All admin action buttons */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button onClick={() => setShowUserManagement(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Manage Users
+            </button>
+            <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export Stats
+            </button>
+            <button onClick={() => setShowTravelLogExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Export Travel Logs
+            </button>
+            <button onClick={() => setShowImageLinks(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              View All Images
+            </button>
+            <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg hover:shadow-blue-500/25 transition-all">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Ticket
+            </button>
+            {/* FEATURE A: Send Notification (admin push with optional image) */}
+            <button onClick={() => { setNotificationConfirmSend(false); setNotificationTitle(''); setNotificationMessage(''); setNotificationImageUrl(null); setNotificationImageFile(null); setNotificationSelectedIds(new Set()); setShowSendNotification(true); }} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30 transition-all">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              Send Notification
+            </button>
+            <button onClick={handleSignOut} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors">
+              Sign Out
+            </button>
           </div>
         </div>
       </header>
@@ -1395,6 +1409,118 @@ export default function AdminPage() {
                   <button type="button" onClick={() => setShowCreateForm(false)} className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300">Cancel</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FEATURE A: Send Notification Modal (admin push: title, message, optional image, All or Selected members) */}
+      {showSendNotification && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !notificationSending && setShowSendNotification(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-slate-700/50 sticky top-0 bg-slate-900 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">Send Notification</h2>
+                <button type="button" onClick={() => !notificationSending && setShowSendNotification(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Title <span className="text-slate-500">(optional)</span></label>
+                  <input type="text" value={notificationTitle} onChange={(e) => setNotificationTitle(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white" placeholder="e.g. Announcement" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Message <span className="text-amber-400">*</span></label>
+                  <textarea value={notificationMessage} onChange={(e) => setNotificationMessage(e.target.value)} rows={3} required className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white resize-none" placeholder="Notification message..." />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Image <span className="text-slate-500">(optional)</span></label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" id="notification-image-file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setNotificationImageFile(f); setNotificationImageUrl(null); } }} />
+                      <label htmlFor="notification-image-file" className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-center cursor-pointer hover:bg-slate-700">Upload (jpg, png, webp, max 2MB)</label>
+                      <input type="url" value={notificationImageUrl ?? ''} onChange={(e) => { setNotificationImageUrl(e.target.value || null); setNotificationImageFile(null); }} placeholder="Or paste image URL" className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm" />
+                    </div>
+                    {(notificationImageFile || notificationImageUrl) && (
+                      <div className="mt-2 rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50">
+                        <p className="text-xs text-slate-500 px-2 py-1">Preview</p>
+                        {notificationImageFile ? (
+                          <img src={URL.createObjectURL(notificationImageFile)} alt="Preview" className="w-full max-h-40 object-contain" />
+                        ) : notificationImageUrl ? (
+                          <img src={notificationImageUrl} alt="Preview" className="w-full max-h-40 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Recipients</label>
+                  <div className="flex gap-4 mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="recipient" checked={notificationRecipientMode === 'all'} onChange={() => setNotificationRecipientMode('all')} className="rounded-full" />
+                      <span className="text-white">All Members</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="recipient" checked={notificationRecipientMode === 'selected'} onChange={() => setNotificationRecipientMode('selected')} className="rounded-full" />
+                      <span className="text-white">Selected Members</span>
+                    </label>
+                  </div>
+                  {notificationRecipientMode === 'selected' && (
+                    <div className="max-h-40 overflow-y-auto rounded-xl bg-slate-800 border border-slate-700 p-2 space-y-1">
+                      {profiles.filter((p) => !p.is_admin).map((p) => (
+                        <label key={p.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-slate-700/50">
+                          <input type="checkbox" checked={notificationSelectedIds.has(p.id)} onChange={(e) => setNotificationSelectedIds((prev) => { const next = new Set(prev); if (e.target.checked) next.add(p.id); else next.delete(p.id); return next; })} className="rounded" />
+                          <span className="text-slate-200">{p.full_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {!notificationConfirmSend ? (
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setNotificationConfirmSend(true)} disabled={!notificationMessage.trim() || (notificationRecipientMode === 'selected' && notificationSelectedIds.size === 0)} className="flex-1 px-5 py-3 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-medium disabled:opacity-50">Preview &amp; Confirm</button>
+                    <button type="button" onClick={() => setShowSendNotification(false)} className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-300">
+                      <p><span className="text-slate-500">Recipients:</span> {notificationRecipientMode === 'all' ? `All members (${profiles.filter((p) => !p.is_admin).length})` : `${notificationSelectedIds.size} selected`}</p>
+                      <p className="mt-1"><span className="text-slate-500">Message:</span> {notificationMessage.slice(0, 80)}{notificationMessage.length > 80 ? '...' : ''}</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <button type="button" onClick={async () => {
+                        if (!user?.id || !notificationMessage.trim()) return;
+                        setNotificationSending(true);
+                        try {
+                          let imageUrl: string | null = notificationImageUrl || null;
+                          if (notificationImageFile) {
+                            const form = new FormData();
+                            form.append('file', notificationImageFile);
+                            form.append('userId', user.id);
+                            const res = await fetch('/api/admin/upload-notification-image', { method: 'POST', body: form });
+                            if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Upload failed'); }
+                            const j = await res.json(); imageUrl = j.url ?? null;
+                          }
+                          const recipientIds = notificationRecipientMode === 'all' ? profiles.filter((p) => !p.is_admin).map((p) => p.id) : Array.from(notificationSelectedIds);
+                          const { sent } = await sendAdminBroadcast(user.id, { title: notificationTitle.trim() || undefined, message: notificationMessage.trim(), image_url: imageUrl }, recipientIds);
+                          alert(`Notification sent to ${sent} member(s).`);
+                          setShowSendNotification(false);
+                          setNotificationTitle(''); setNotificationMessage(''); setNotificationImageUrl(null); setNotificationImageFile(null); setNotificationConfirmSend(false); setNotificationSelectedIds(new Set());
+                        } catch (err: any) {
+                          alert(err.message || 'Failed to send');
+                        } finally {
+                          setNotificationSending(false);
+                        }
+                      }} disabled={notificationSending} className="flex-1 px-5 py-3 rounded-xl bg-amber-500 text-white font-medium disabled:opacity-50">
+                        {notificationSending ? 'Sending...' : 'Confirm Send'}
+                      </button>
+                      <button type="button" onClick={() => setNotificationConfirmSend(false)} disabled={notificationSending} className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300">Back</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

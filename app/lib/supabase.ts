@@ -75,18 +75,23 @@ export interface Ticket {
 }
 
 // FEATURE C: Notifications (member-only; admin/member triggers create these)
-export type NotificationType = 'admin_comment' | 'added_to_ticket';
+// FEATURE A: admin_broadcast added for admin push notifications (optional title, message, image_url)
+export type NotificationType = 'admin_comment' | 'added_to_ticket' | 'admin_broadcast';
 export type TriggeringUserRole = 'admin' | 'member';
 
 export interface Notification {
   id: string;
   user_id: string;
   type: NotificationType;
-  ticket_id: string;
+  ticket_id?: string | null;
   triggering_user_role: TriggeringUserRole;
   triggering_user_id?: string | null;
   created_at: string;
   read: boolean;
+  /** FEATURE A: Optional for admin_broadcast */
+  title?: string | null;
+  message?: string | null;
+  image_url?: string | null;
 }
 
 // Auth helpers
@@ -828,21 +833,54 @@ export async function addTicketAdminComment(
 }
 
 /** FEATURE C: Internal helper to insert one notification (append-only). */
+/** FEATURE A: Supports admin_broadcast with optional ticket_id, title, message, image_url. */
 async function createNotification(notification: {
   user_id: string;
   type: NotificationType;
-  ticket_id: string;
+  ticket_id?: string | null;
   triggering_user_role: TriggeringUserRole;
   triggering_user_id?: string | null;
+  title?: string | null;
+  message?: string | null;
+  image_url?: string | null;
 }): Promise<void> {
-  await supabase.from('notifications').insert({
+  const row: Record<string, unknown> = {
     user_id: notification.user_id,
     type: notification.type,
-    ticket_id: notification.ticket_id,
+    ticket_id: notification.ticket_id ?? null,
     triggering_user_role: notification.triggering_user_role,
     triggering_user_id: notification.triggering_user_id ?? null,
     read: false,
-  });
+  };
+  if (notification.title != null) row.title = notification.title;
+  if (notification.message != null) row.message = notification.message;
+  if (notification.image_url != null) row.image_url = notification.image_url;
+  await supabase.from('notifications').insert(row);
+}
+
+/**
+ * FEATURE A: Send admin broadcast to selected recipients. One notification per recipient.
+ * Admin does NOT receive their own notification. Duplicates per user per call are avoided by recipient list.
+ */
+export async function sendAdminBroadcast(
+  adminUserId: string,
+  payload: { title?: string; message: string; image_url?: string | null },
+  recipientUserIds: string[]
+): Promise<{ sent: number; error: Error | null }> {
+  const deduped = [...new Set(recipientUserIds)].filter((id) => id !== adminUserId);
+  for (const userId of deduped) {
+    await createNotification({
+      user_id: userId,
+      type: 'admin_broadcast',
+      ticket_id: null,
+      triggering_user_role: 'admin',
+      triggering_user_id: adminUserId,
+      title: payload.title ?? null,
+      message: payload.message,
+      image_url: payload.image_url ?? null,
+    });
+  }
+  return { sent: deduped.length, error: null };
 }
 
 /** FEATURE C: Create one notification per newly assigned user (excludes actor). Call after updateTicket(assigned_to). */
