@@ -70,25 +70,97 @@ export async function GET(
     const senderRole = (notification as { triggering_user_role?: string }).triggering_user_role;
 
     // Record-level auth: member may only open notifications addressed to them
-    if (recipientUserId === currentUser.id) {
-      return NextResponse.json(notification);
+    let authorized = recipientUserId === currentUser.id;
+    if (!authorized) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', currentUser.id)
+        .single();
+      authorized = profile?.is_admin === true;
+    }
+    if (!authorized) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Admin: allowed if sender is admin or admin has global access
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', currentUser.id)
-      .single();
-
-    const isAdmin = profile?.is_admin === true;
-    if (isAdmin) {
-      return NextResponse.json(notification);
+    // Full payload for detail view: add sender name from profiles (triggering_user_id = sender)
+    const triggeringUserId = (notification as { triggering_user_id?: string | null }).triggering_user_id;
+    let sender_name: string | null = null;
+    if (triggeringUserId) {
+      const { data: senderProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', triggeringUserId)
+        .maybeSingle();
+      sender_name = senderProfile?.full_name ?? null;
     }
 
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const fullPayload = {
+      ...notification,
+      sender_name: sender_name ?? (senderRole === 'admin' ? 'Admin' : null),
+    };
+    return NextResponse.json(fullPayload);
   } catch (err: unknown) {
     console.error('GET /api/notifications/[id]:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/** Task 4: Mark notification as read. Idempotent; same auth as GET. */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json({ error: 'Notification ID required' }, { status: 400 });
+    }
+
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: notification, error: fetchError } = await supabaseAdmin
+      .from('notifications')
+      .select('user_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !notification) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const recipientUserId = (notification as { user_id: string }).user_id;
+    if (recipientUserId !== currentUser.id) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', currentUser.id)
+        .single();
+      if (profile?.is_admin !== true) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json(updated ?? { id, read: true });
+  } catch (err: unknown) {
+    console.error('PATCH /api/notifications/[id]:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal server error' },
       { status: 500 }

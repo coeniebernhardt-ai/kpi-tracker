@@ -92,6 +92,8 @@ export interface Notification {
   title?: string | null;
   message?: string | null;
   image_url?: string | null;
+  /** Set by detail API from profiles (sender name) */
+  sender_name?: string | null;
 }
 
 // Auth helpers
