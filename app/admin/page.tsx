@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket } from '../lib/supabase';
+import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -60,6 +60,10 @@ export default function AdminPage() {
   // Assignment UI toggle state
   const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null);
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  // FEATURE 3: Admin comment state (admin-only)
+  const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
+  const [adminCommentText, setAdminCommentText] = useState('');
+  const [adminCommentSubmitting, setAdminCommentSubmitting] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -148,6 +152,27 @@ export default function AdminPage() {
       }
     } catch (err) {
       alert('Error updating ClickUp ticket: ' + ((err as Error)?.message || 'Unknown error'));
+    }
+  };
+
+  /** FEATURE 3: Add admin comment (does not change ownership or status). */
+  const handleAddAdminComment = async (ticketId: string) => {
+    const text = adminCommentText.trim();
+    if (!text || !user?.id) return;
+    setAdminCommentSubmitting(true);
+    try {
+      const { error } = await addTicketAdminComment(ticketId, text, user.id);
+      if (!error) {
+        await loadData();
+        setAdminCommentTicketId(null);
+        setAdminCommentText('');
+      } else {
+        alert('Error adding comment: ' + (error.message || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error: ' + ((err as Error)?.message || 'Unknown error'));
+    } finally {
+      setAdminCommentSubmitting(false);
     }
   };
 
@@ -1028,13 +1053,14 @@ export default function AdminPage() {
                           )}
                         </div>
 
-                        {/* Show Updates */}
+                        {/* Show Updates (member updates and FEATURE 3: admin comments) */}
                         {ticket.updates && ticket.updates.length > 0 && (
                           <div className="mt-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                             <p className="text-xs text-blue-400 mb-2">Updates ({ticket.updates.length}):</p>
                             <div className="space-y-2 max-h-32 overflow-y-auto">
                               {ticket.updates.map((update: any, idx: number) => (
-                                <div key={idx} className="text-xs">
+                                <div key={idx} className={`text-xs ${update.authorRole === 'admin' ? 'pl-2 border-l-2 border-amber-500/50' : ''}`}>
+                                  {update.authorRole === 'admin' && <span className="text-amber-400 font-medium mr-1">Admin comment:</span>}
                                   <span className="text-blue-300">[{new Date(update.timestamp).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}]</span>
                                   <span className="text-slate-300 ml-1">{update.text}</span>
                                   {update.attachments && update.attachments.length > 0 && (
@@ -1059,6 +1085,47 @@ export default function AdminPage() {
                             </div>
                           </div>
                         )}
+
+                        {/* FEATURE 3: Add admin comment (admin-only; does not change ownership or status) */}
+                        <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                          <p className="text-xs text-amber-400 mb-1">Add admin comment</p>
+                          {adminCommentTicketId === ticket.id ? (
+                            <div>
+                              <textarea
+                                value={adminCommentText}
+                                onChange={(e) => setAdminCommentText(e.target.value)}
+                                placeholder="Comment (visible to member)"
+                                rows={2}
+                                className="w-full px-2 py-1.5 rounded bg-slate-900 border border-slate-600 text-white text-xs placeholder-slate-500"
+                              />
+                              <div className="flex gap-2 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddAdminComment(ticket.id)}
+                                  disabled={!adminCommentText.trim() || adminCommentSubmitting}
+                                  className="px-2 py-1 rounded bg-amber-500/30 text-amber-300 text-xs font-medium disabled:opacity-50"
+                                >
+                                  {adminCommentSubmitting ? 'Adding...' : 'Add comment'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setAdminCommentTicketId(null); setAdminCommentText(''); }}
+                                  className="px-2 py-1 rounded bg-slate-700 text-slate-300 text-xs"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => { setAdminCommentTicketId(ticket.id); setAdminCommentText(''); }}
+                              className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 text-xs hover:bg-amber-500/30"
+                            >
+                              + Add admin comment
+                            </button>
+                          )}
+                        </div>
 
                         {/* Show Time Tracked */}
                         {(ticket.total_time_minutes || (ticket.time_logs && ticket.time_logs.length > 0)) && (

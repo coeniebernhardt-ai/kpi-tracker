@@ -64,7 +64,7 @@ export interface Ticket {
   target_date?: string;
   // Attachments for regular tickets
   attachments?: { url: string; name: string; type: string }[];
-  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[] }[];
+  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[]; authorRole?: 'admin'; authorId?: string }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
   // Assignment (can have multiple assigned members)
@@ -495,12 +495,35 @@ export async function createTicket(ticket: {
   return { data, error: error as Error | null };
 }
 
+/** Parse existing dependency_name into a list (comma-separated or single value). Backward-compatible. */
+function parseDependencyList(dependencyName: string | null | undefined): string[] {
+  if (!dependencyName || typeof dependencyName !== 'string') return [];
+  return dependencyName.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** Merge a new dependency into existing list; dedupe; return comma-separated string. */
+function mergeDependencies(existing: string | null | undefined, newValue: string): string {
+  const list = parseDependencyList(existing);
+  const trimmed = newValue.trim();
+  if (!trimmed) return list.join(', ');
+  if (list.map((s) => s.toLowerCase()).includes(trimmed.toLowerCase())) return list.join(', ');
+  return [...list, trimmed].join(', ');
+}
+
 export async function updateTicket(ticketId: string, updates: Partial<Ticket>) {
   // Only include fields that should be updated, exclude joined data
   const updateData: any = { ...updates };
   delete updateData.profile;
   delete updateData.assigned_profiles;
-  
+
+  // FEATURE 2: Merge dependencies instead of overwriting. Fetch current ticket when dependency_name is being updated.
+  if ('dependency_name' in updateData && updateData.dependency_name != null && String(updateData.dependency_name).trim() !== '') {
+    const { data: current } = await supabase.from('tickets').select('dependency_name').eq('id', ticketId).maybeSingle();
+    const merged = mergeDependencies((current as any)?.dependency_name, String(updateData.dependency_name));
+    updateData.dependency_name = merged;
+    updateData.has_dependencies = true;
+  }
+
   // Convert assigned_to array to the database column name (assigned_to_array)
   if ('assigned_to' in updateData) {
     // Ensure it's a proper array (not null/undefined)
@@ -724,6 +747,45 @@ export async function addTicketUpdate(
   }
 
   return { data, error };
+}
+
+/**
+ * FEATURE 3: Add an admin-only comment to a ticket. Stored in updates with authorRole 'admin'.
+ * Does not change ticket ownership or status. Only admins should call this (enforce in UI).
+ */
+export async function addTicketAdminComment(
+  ticketId: string,
+  text: string,
+  authorId: string
+): Promise<{ data: unknown; error: Error | null }> {
+  const { data: ticket, error: fetchError } = await supabase
+    .from('tickets')
+    .select('updates')
+    .eq('id', ticketId)
+    .single();
+
+  if (fetchError || !ticket) {
+    return { data: null, error: (fetchError || new Error('Ticket not found')) as Error };
+  }
+
+  const now = new Date().toISOString();
+  const existingUpdates = Array.isArray((ticket as any).updates) ? (ticket as any).updates : [];
+  const newEntry = {
+    text: text.trim(),
+    timestamp: now,
+    authorRole: 'admin' as const,
+    authorId,
+  };
+  const updatedUpdates = [...existingUpdates, newEntry];
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ updates: updatedUpdates })
+    .eq('id', ticketId)
+    .select()
+    .single();
+
+  return { data, error: error as Error | null };
 }
 
 export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {

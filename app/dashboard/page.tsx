@@ -104,6 +104,8 @@ export default function DashboardPage() {
   const [updateAttachments, setUpdateAttachments] = useState<File[]>([]);
   const [updateHasDependency, setUpdateHasDependency] = useState(false);
   const [updateDependencyName, setUpdateDependencyName] = useState('');
+  // FEATURE 1: Optional ClickUp ticket when adding an update (editable if empty or explicitly changed)
+  const [updateClickUpValue, setUpdateClickUpValue] = useState('');
 
   // Search issue description (member)
   const [searchIssue, setSearchIssue] = useState('');
@@ -355,14 +357,20 @@ export default function DashboardPage() {
       );
 
       if (!error && data) {
+        // FEATURE 2: dependency_name is merged (not overwritten) in updateTicket
         if (updateHasDependency && updateDependencyName.trim()) {
           await updateTicket(ticketId, { has_dependencies: true, dependency_name: updateDependencyName.trim() });
+        }
+        // FEATURE 1: Optionally add or link ClickUp ticket during update (does not overwrite other fields)
+        if (updateClickUpValue.trim()) {
+          await updateTicket(ticketId, { clickup_ticket: updateClickUpValue.trim() });
         }
         await loadTickets();
         setNewUpdateText('');
         setUpdateAttachments([]);
         setUpdateHasDependency(false);
         setUpdateDependencyName('');
+        setUpdateClickUpValue('');
         setUpdatingTicketId(null);
       } else if (error) {
         alert('Error adding update: ' + (error as Error).message);
@@ -1814,7 +1822,10 @@ export default function DashboardPage() {
                         <p className="text-xs text-slate-500 mb-2">Updates</p>
                         <div className="space-y-2">
                           {ticket.updates.map((update: any, idx: number) => (
-                            <div key={idx} className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                            <div key={idx} className={`p-3 rounded-xl border ${update.authorRole === 'admin' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                              {update.authorRole === 'admin' && (
+                                <p className="text-xs font-medium text-amber-400 mb-1">Admin comment</p>
+                              )}
                               <p className="text-sm text-slate-300">{update.text}</p>
                               {update.attachments && update.attachments.length > 0 && (
                                 <div className="mt-3 p-2 rounded-lg bg-slate-900/50 border border-slate-700/50">
@@ -1868,7 +1879,19 @@ export default function DashboardPage() {
                           placeholder="Enter update details..."
                         />
                         
-                        {/* Optional dependency when adding update */}
+                        {/* FEATURE 1: Optional ClickUp ticket – add or link during update; editable if empty or explicitly changed */}
+                        <div className="mb-3">
+                          <label className="block text-sm text-slate-400 mb-1">ClickUp Ticket (optional)</label>
+                          <input
+                            type="text"
+                            value={updateClickUpValue}
+                            onChange={(e) => setUpdateClickUpValue(e.target.value)}
+                            placeholder={ticket.clickup_ticket || 'Paste ClickUp ticket ID or URL'}
+                            className="w-full px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
+                          />
+                        </div>
+
+                        {/* Optional dependency when adding update – FEATURE 2: dependencies are merged, not overwritten */}
                         <div className="mb-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
                           <label className="flex items-center gap-2 cursor-pointer mb-2">
                             <input
@@ -1884,7 +1907,7 @@ export default function DashboardPage() {
                               type="text"
                               value={updateDependencyName}
                               onChange={(e) => setUpdateDependencyName(e.target.value)}
-                              placeholder="Dependency (company/department)"
+                              placeholder="Dependency (company/department) – will be appended"
                               className="w-full mt-2 px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm placeholder-slate-500 outline-none focus:border-blue-500"
                             />
                           )}
@@ -1949,6 +1972,7 @@ export default function DashboardPage() {
                               setUpdateAttachments([]);
                               setUpdateHasDependency(false);
                               setUpdateDependencyName('');
+                              setUpdateClickUpValue('');
                             }}
                             className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm"
                           >
@@ -1962,7 +1986,10 @@ export default function DashboardPage() {
                       return ticket.user_id === user?.id || isAssigned || isAdmin;
                     })() ? (
                       <button
-                        onClick={() => setUpdatingTicketId(ticket.id)}
+                        onClick={() => {
+                          setUpdatingTicketId(ticket.id);
+                          setUpdateClickUpValue(ticket.clickup_ticket || '');
+                        }}
                         className="mb-4 w-full px-4 py-2 rounded-xl border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2217,7 +2244,10 @@ export default function DashboardPage() {
                         <p className="text-xs text-slate-500 mb-2">Updates ({ticket.updates.length})</p>
                         <div className="space-y-2">
                           {ticket.updates.map((update: any, idx: number) => (
-                            <div key={idx} className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                            <div key={idx} className={`p-3 rounded-xl border ${update.authorRole === 'admin' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                              {update.authorRole === 'admin' && (
+                                <p className="text-xs font-medium text-amber-400 mb-1">Admin comment</p>
+                              )}
                               <p className="text-sm text-slate-300">{update.text}</p>
                               {update.attachments && update.attachments.length > 0 && (
                                 <div className="mt-3 p-2 rounded-lg bg-slate-900/50 border border-slate-700/50">
