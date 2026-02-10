@@ -74,6 +74,21 @@ export interface Ticket {
   profile?: Profile;
 }
 
+// FEATURE C: Notifications (member-only; admin/member triggers create these)
+export type NotificationType = 'admin_comment' | 'added_to_ticket';
+export type TriggeringUserRole = 'admin' | 'member';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  ticket_id: string;
+  triggering_user_role: TriggeringUserRole;
+  triggering_user_id?: string | null;
+  created_at: string;
+  read: boolean;
+}
+
 // Auth helpers
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -785,7 +800,90 @@ export async function addTicketAdminComment(
     .select()
     .single();
 
-  return { data, error: error as Error | null };
+  if (error) return { data, error: error as Error | null };
+
+  // FEATURE C: Notify all involved members (creator + assignees) except the admin who commented.
+  const { data: ticketRow } = await supabase
+    .from('tickets')
+    .select('user_id, assigned_to_array')
+    .eq('id', ticketId)
+    .single();
+  if (ticketRow) {
+    const creatorId = (ticketRow as any).user_id;
+    const assignees: string[] = Array.isArray((ticketRow as any).assigned_to_array) ? (ticketRow as any).assigned_to_array : [];
+    const involved = [...new Set([creatorId, ...assignees].filter(Boolean))];
+    for (const uid of involved) {
+      if (uid === authorId) continue; // Do not notify the actor
+      await createNotification({
+        user_id: uid,
+        type: 'admin_comment',
+        ticket_id: ticketId,
+        triggering_user_role: 'admin',
+        triggering_user_id: authorId,
+      });
+    }
+  }
+
+  return { data, error: null };
+}
+
+/** FEATURE C: Internal helper to insert one notification (append-only). */
+async function createNotification(notification: {
+  user_id: string;
+  type: NotificationType;
+  ticket_id: string;
+  triggering_user_role: TriggeringUserRole;
+  triggering_user_id?: string | null;
+}): Promise<void> {
+  await supabase.from('notifications').insert({
+    user_id: notification.user_id,
+    type: notification.type,
+    ticket_id: notification.ticket_id,
+    triggering_user_role: notification.triggering_user_role,
+    triggering_user_id: notification.triggering_user_id ?? null,
+    read: false,
+  });
+}
+
+/** FEATURE C: Create one notification per newly assigned user (excludes actor). Call after updateTicket(assigned_to). */
+export async function createNotificationsForNewAssignments(
+  ticketId: string,
+  previousAssignedIds: string[],
+  newAssignedIds: string[],
+  actorUserId: string,
+  actorRole: TriggeringUserRole
+): Promise<void> {
+  const prev = new Set(previousAssignedIds);
+  const added = newAssignedIds.filter((id) => !prev.has(id) && id !== actorUserId);
+  for (const userId of added) {
+    await createNotification({
+      user_id: userId,
+      type: 'added_to_ticket',
+      ticket_id: ticketId,
+      triggering_user_role: actorRole,
+      triggering_user_id: actorUserId,
+    });
+  }
+}
+
+export async function getNotificationsByUserId(userId: string): Promise<Notification[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return (data ?? []) as Notification[];
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+  return { error: error as Error | null };
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.from('notifications').update({ read: true }).eq('user_id', userId);
+  return { error: error as Error | null };
 }
 
 export async function logTicketTime(ticketId: string, minutes: number, description: string, loggedBy?: string) {

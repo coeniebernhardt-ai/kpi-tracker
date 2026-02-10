@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile } from '../lib/supabase';
+import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, getNotificationsByUserId, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -58,6 +58,9 @@ export default function DashboardPage() {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
   const [expandedTravelLogs, setExpandedTravelLogs] = useState<Set<string>>(new Set());
+  // FEATURE C: Member notifications
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -137,6 +140,19 @@ export default function DashboardPage() {
       loadTravelLogs();
     }
   }, [user?.id, mainTab]);
+
+  // FEATURE C: Load member notifications
+  useEffect(() => {
+    if (user?.id) {
+      getNotificationsByUserId(user.id).then(setNotifications);
+    }
+  }, [user?.id]);
+
+  const loadNotifications = async () => {
+    if (!user?.id) return;
+    const data = await getNotificationsByUserId(user.id);
+    setNotifications(data);
+  };
 
   const loadProfiles = async () => {
     try {
@@ -448,6 +464,8 @@ export default function DashboardPage() {
       
       if (data) {
         console.log('Ticket assignment updated successfully:', data);
+        // FEATURE C: Notify newly assigned members (excludes current user)
+        await createNotificationsForNewAssignments(ticketId, currentAssignedArray, newAssigned, user?.id ?? '', 'member');
         await loadTickets();
         // Close assignment UI after successful assignment
         if (assigningTicketId === ticketId) {
@@ -617,6 +635,33 @@ export default function DashboardPage() {
   };
 
   const kpis = calculateKPIs();
+
+  // FEATURE B – Member self-analytics: tickets where member is creator OR assignee (already loaded via getTicketsByUserId).
+  const hasDependencies = (t: Ticket) =>
+    t.has_dependencies === true && (t.dependency_name?.trim()?.length ?? 0) > 0;
+  const involvedClosedWithResponse = tickets.filter(
+    (t) => t.status === 'closed' && t.response_time_minutes != null && t.response_time_minutes > 0
+  );
+  const myStatsNoDeps = involvedClosedWithResponse.filter((t) => !hasDependencies(t));
+  const myStatsWithDeps = involvedClosedWithResponse.filter(hasDependencies);
+  const myTicketStats = {
+    total: tickets.length,
+    open: tickets.filter((t) => t.status === 'open').length,
+    closed: tickets.filter((t) => t.status === 'closed').length,
+    avgResponseNoDependencies:
+      myStatsNoDeps.length > 0
+        ? Math.round(
+            myStatsNoDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / myStatsNoDeps.length
+          )
+        : 0,
+    avgResponseWithDependencies:
+      myStatsWithDeps.length > 0
+        ? Math.round(
+            myStatsWithDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / myStatsWithDeps.length
+          )
+        : 0,
+  };
+
   const openTickets = tickets.filter(t => t.status === 'open');
   const closedTickets = tickets.filter(t => t.status === 'closed');
   const issueSearchLower = searchIssue.trim().toLowerCase();
@@ -713,6 +758,84 @@ export default function DashboardPage() {
               <h1 className="text-xl font-bold text-white">{profile.full_name}</h1>
               <p className="text-sm text-slate-400">{profile.role}</p>
             </div>
+
+            {/* FEATURE C: Member notification indicator */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={async () => {
+                  setNotificationsOpen((o) => !o);
+                  if (!notificationsOpen) await loadNotifications();
+                }}
+                className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-colors relative"
+                title="Notifications"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {notifications.filter((n) => !n.read).length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center">
+                    {notifications.filter((n) => !n.read).length > 10 ? '10+' : notifications.filter((n) => !n.read).length}
+                  </span>
+                )}
+              </button>
+              {notificationsOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setNotificationsOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-auto rounded-xl bg-slate-800 border border-slate-700 shadow-xl z-20">
+                    <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+                      <span className="text-sm font-medium text-white">Notifications</span>
+                      {notifications.some((n) => !n.read) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!user?.id) return;
+                            await markAllNotificationsRead(user.id);
+                            await loadNotifications();
+                          }}
+                          className="text-xs text-indigo-400 hover:text-indigo-300"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <ul className="divide-y divide-slate-700">
+                      {notifications.length === 0 ? (
+                        <li className="p-4 text-sm text-slate-500">No notifications</li>
+                      ) : (
+                        notifications.map((n) => (
+                          <li key={n.id}>
+                            <button
+                              type="button"
+                              className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors block"
+                              onClick={async () => {
+                                setMainTab('tickets');
+                                setExpandedTickets((prev) => new Set(prev).add(n.ticket_id));
+                                const t = tickets.find((x) => x.id === n.ticket_id);
+                                if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                                if (!n.read) {
+                                  await markNotificationAsRead(n.id);
+                                  await loadNotifications();
+                                }
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              <p className={`text-sm ${n.read ? 'text-slate-400' : 'text-white'}`}>
+                                {n.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to'}
+                                {n.type === 'added_to_ticket' && 'You were added to a ticket'}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {new Date(n.created_at).toLocaleString()}
+                              </p>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
             
             {isAdmin && (
               <Link
@@ -764,6 +887,38 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
+
+        {/* FEATURE B – My Ticket Stats (member self-analytics: creator or assignee only) */}
+        <section className="mb-8 animate-fade-in">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            My Ticket Stats
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+              <p className="text-xs text-indigo-400 mb-1">Total tickets involved in</p>
+              <p className="text-2xl font-bold text-white">{myTicketStats.total}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+              <p className="text-xs text-indigo-400 mb-1">Total OPEN</p>
+              <p className="text-2xl font-bold text-indigo-400">{myTicketStats.open}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+              <p className="text-xs text-indigo-400 mb-1">Total CLOSED</p>
+              <p className="text-2xl font-bold text-indigo-300">{myTicketStats.closed}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+              <p className="text-xs text-slate-500 mb-1">Avg response time (no dependencies)</p>
+              <p className="text-2xl font-bold text-white">{myTicketStats.avgResponseNoDependencies > 0 ? `${myTicketStats.avgResponseNoDependencies} min` : 'N/A'}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+              <p className="text-xs text-slate-500 mb-1">Avg response time (with dependencies)</p>
+              <p className="text-2xl font-bold text-white">{myTicketStats.avgResponseWithDependencies > 0 ? `${myTicketStats.avgResponseWithDependencies} min` : 'N/A'}</p>
+            </div>
+          </div>
+        </section>
 
         {/* KPI Summary */}
         {kpis && (

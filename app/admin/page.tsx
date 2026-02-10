@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment } from '../lib/supabase';
+import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -289,19 +289,37 @@ export default function AdminPage() {
   const totalOpen = tickets.filter(t => t.status === 'open').length;
   const totalClosed = tickets.filter(t => t.status === 'closed').length;
   const totalOnSite = tickets.filter(t => t.location === 'on-site').length;
-  
-  // Calculate overall KPI metrics
-  const closedTicketsWithResponseTime = tickets.filter(t => 
-    t.status === 'closed' && t.response_time_minutes && t.response_time_minutes > 0
-  );
-  const overallAvgResponseTime = closedTicketsWithResponseTime.length > 0
-    ? Math.round(
-        closedTicketsWithResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / 
-        closedTicketsWithResponseTime.length
-      )
-    : 0;
-  const ticketsHandled = totalClosed; // All closed tickets
   const totalRemote = tickets.filter(t => t.location === 'remote').length;
+
+  // FEATURE A – Admin analytics: dependency-aware response time (reuse existing response_time_minutes logic).
+  // "With dependencies" = has_dependencies AND dependency_name has content (length > 0).
+  const hasDependencies = (t: Ticket) =>
+    t.has_dependencies === true && (t.dependency_name?.trim()?.length ?? 0) > 0;
+  const closedWithResponse = tickets.filter(
+    (t) => t.status === 'closed' && t.response_time_minutes != null && t.response_time_minutes > 0
+  );
+  const closedNoDeps = closedWithResponse.filter((t) => !hasDependencies(t));
+  const closedWithDeps = closedWithResponse.filter(hasDependencies);
+  const avgResponseTimeNoDependencies =
+    closedNoDeps.length > 0
+      ? Math.round(
+          closedNoDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / closedNoDeps.length
+        )
+      : 0;
+  const avgResponseTimeWithDependencies =
+    closedWithDeps.length > 0
+      ? Math.round(
+          closedWithDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / closedWithDeps.length
+        )
+      : 0;
+  const overallAvgResponseTime =
+    closedWithResponse.length > 0
+      ? Math.round(
+          closedWithResponse.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) /
+            closedWithResponse.length
+        )
+      : 0;
+  const ticketsHandled = totalClosed;
 
   // Export functions
   const getFilteredTicketsForExport = () => {
@@ -593,6 +611,17 @@ export default function AdminPage() {
             <p className="text-xs text-blue-400 mb-1">Avg Response Time</p>
             <p className="text-3xl font-bold text-blue-400">{overallAvgResponseTime}</p>
             <p className="text-xs text-blue-300 mt-1">{overallAvgResponseTime > 0 ? 'minutes' : 'No data'}</p>
+          </div>
+          {/* FEATURE A: Dependency-aware response time (admin analytics only) */}
+          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-xs text-slate-500 mb-1">Average Response Time (No Dependencies)</p>
+            <p className="text-3xl font-bold text-white">{avgResponseTimeNoDependencies}</p>
+            <p className="text-xs text-slate-400 mt-1">{avgResponseTimeNoDependencies > 0 ? 'minutes' : 'No data'}</p>
+          </div>
+          <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
+            <p className="text-xs text-slate-500 mb-1">Average Response Time (With Dependencies)</p>
+            <p className="text-3xl font-bold text-white">{avgResponseTimeWithDependencies}</p>
+            <p className="text-xs text-slate-400 mt-1">{avgResponseTimeWithDependencies > 0 ? 'minutes' : 'No data'}</p>
           </div>
         </section>
 
@@ -1004,6 +1033,8 @@ export default function AdminPage() {
                                           }
                                           const { error } = await updateTicket(ticket.id, { assigned_to: newAssigned });
                                           if (!error) {
+                                            // FEATURE C: Notify newly assigned members (excludes current admin)
+                                            await createNotificationsForNewAssignments(ticket.id, currentAssigned, newAssigned, user?.id ?? '', 'admin');
                                             await loadData();
                                             // Close assignment UI after successful assignment
                                             if (assigningTicketId === ticket.id) {
