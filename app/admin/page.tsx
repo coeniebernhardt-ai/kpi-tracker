@@ -598,15 +598,6 @@ export default function AdminPage() {
             <p className="text-[10px] sm:text-xs text-blue-300 mb-0.5 md:mb-1 break-words">Closed</p>
             <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-300 leading-tight">{totalClosed}</p>
           </div>
-          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
-            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words">Team Members</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{profiles.length}</p>
-          </div>
-          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Tickets Handled</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{ticketsHandled}</p>
-            <p className="text-[10px] sm:text-xs text-blue-300 mt-0.5 md:mt-1 break-words">All closed tickets</p>
-          </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
             <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Avg Response Time</p>
             <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{overallAvgResponseTime}</p>
