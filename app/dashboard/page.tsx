@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, getNotificationsByUserId, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
+import { supabase, getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, getNotificationsByUserId, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -161,7 +161,7 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  // FEATURE B: Fetch notification detail with server-side validation when opening detail view
+  // FEATURE B: Fetch notification detail with server-side validation; pass session so API can auth when cookies aren't available
   useEffect(() => {
     if (!notificationDetailId) {
       setNotificationDetail(null);
@@ -170,17 +170,25 @@ export default function DashboardPage() {
     let cancelled = false;
     setNotificationDetailLoading(true);
     setNotificationDetail(null);
-    fetch(`/api/notifications/${notificationDetailId}`)
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data) => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      try {
+        const res = await fetch(`/api/notifications/${notificationDetailId}`, { headers, credentials: 'include' });
+        if (!res.ok) {
+          if (!cancelled) setNotificationDetailId(null);
+          return;
+        }
+        const data = await res.json();
         if (!cancelled && data) setNotificationDetail(data as Notification);
         if (!cancelled && !data) setNotificationDetailId(null);
-      })
-      .catch(() => { if (!cancelled) setNotificationDetailId(null); })
-      .finally(() => { if (!cancelled) setNotificationDetailLoading(false); });
+      } catch {
+        if (!cancelled) setNotificationDetailId(null);
+      } finally {
+        if (!cancelled) setNotificationDetailLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [notificationDetailId]);
 
