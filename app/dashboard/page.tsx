@@ -182,7 +182,12 @@ export default function DashboardPage() {
       try {
         const res = await fetch(`/api/notifications/${notificationDetailId}`, opts);
         if (!res.ok) {
-          if (!cancelled) setNotificationDetailId(null);
+          if (!cancelled) {
+            setNotificationDetailId(null);
+            if (res.status === 404) {
+              setNotifications((prev) => prev.filter((n) => n.id !== notificationDetailId));
+            }
+          }
           return;
         }
         const data = await res.json();

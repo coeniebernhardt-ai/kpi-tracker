@@ -102,6 +102,8 @@ export interface Notification {
   imageUrl?: string | null;
   /** Attachments (secure download via /api/notifications/attachment/[id]); returned by detail API only */
   attachments?: Array<{ id: string; fileName: string; fileType: string; fileSize: number }>;
+  /** Soft delete; hidden from members when set (RLS + client filter) */
+  deleted_at?: string | null;
 }
 
 // Auth helpers
@@ -926,7 +928,8 @@ export async function getNotificationsByUserId(userId: string): Promise<Notifica
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (error) return [];
-  return (data ?? []) as Notification[];
+  const list = (data ?? []) as Notification[];
+  return list.filter((n) => !n.deleted_at);
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<{ error: Error | null }> {
