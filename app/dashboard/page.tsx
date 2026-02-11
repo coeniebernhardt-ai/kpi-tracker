@@ -110,6 +110,9 @@ export default function DashboardPage() {
   const [closeTicketData, setCloseTicketData] = useState({
     resolution: ''
   });
+  // Completion celebration modal (member only, when creator closes a ticket)
+  const [completionModal, setCompletionModal] = useState<{ firstName: string; ticketType: string; duration: string } | null>(null);
+  const [completionAcknowledgedTicketIds, setCompletionAcknowledgedTicketIds] = useState<Set<string>>(new Set());
 
   // Update ticket state
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
@@ -590,7 +593,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCloseTicket = async (ticketId: string) => {
+  const handleCloseTicket = async (ticketId: string, ticket: Ticket) => {
     if (!closeTicketData.resolution.trim()) return;
 
     const { data, error } = await closeTicket(
@@ -602,6 +605,28 @@ export default function DashboardPage() {
       await loadTickets();
       setClosingTicketId(null);
       setCloseTicketData({ resolution: '' });
+      // Completion modal: only for creator (member), not admin; prevent repeat
+      const isCreator = (ticket.created_by === user?.id || ticket.user_id === user?.id);
+      if (isCreator && data.closed_at && !completionAcknowledgedTicketIds.has(ticketId)) {
+        const created = new Date(ticket.created_at).getTime();
+        const closed = new Date(data.closed_at).getTime();
+        const minutes = Math.round((closed - created) / (1000 * 60));
+        let duration: string;
+        if (minutes < 24 * 60) {
+          const h = Math.floor(minutes / 60);
+          const m = minutes % 60;
+          duration = m ? `${h}h ${m}m` : `${h}h`;
+        } else {
+          const days = Math.floor(minutes / (24 * 60));
+          const remainder = minutes % (24 * 60);
+          const h = Math.floor(remainder / 60);
+          duration = `${days} day${days !== 1 ? 's' : ''}${h ? ` ${h}h` : ''}`;
+        }
+        const firstName = profile?.full_name?.split(' ')[0] || 'there';
+        const ticketType = ticket.ticket_type === 'New Site' ? 'New Site request' : 'ticket';
+        setCompletionModal({ firstName, ticketType, duration });
+        setCompletionAcknowledgedTicketIds((prev) => new Set(prev).add(ticketId));
+      }
     }
   };
 
@@ -821,6 +846,27 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient">
+      {/* Well Done completion modal (member only, when creator closes ticket) */}
+      {completionModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-300">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCompletionModal(null)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-800 border border-slate-600 shadow-2xl p-6 text-center">
+            <p className="text-4xl mb-3">🎉</p>
+            <h3 className="text-xl font-bold text-white mb-2">Well Done, {completionModal.firstName}!</h3>
+            <p className="text-slate-300 mb-4">
+              Your {completionModal.ticketType} has been successfully completed.
+            </p>
+            <p className="text-sm text-slate-400 mb-2">Total Time to Resolution:</p>
+            <p className="text-lg font-semibold text-emerald-400 mb-6">{completionModal.duration}</p>
+            <button
+              onClick={() => setCompletionModal(null)}
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
         <div className="max-w-4xl mx-auto px-6 py-4">
@@ -1338,9 +1384,9 @@ export default function DashboardPage() {
                   className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-blue-500 outline-none appearance-none cursor-pointer"
                 >
                   <option value="">Select type...</option>
-                  <option value="Hardware">Hardware</option>
-                  <option value="Software">Software</option>
-                  <option value="New Site">New Site</option>
+                  <option value="Hardware">🔧 Hardware</option>
+                  <option value="Software">💻 Software</option>
+                  <option value="New Site">🏗 New Site</option>
                 </select>
               </div>
 
@@ -1991,7 +2037,7 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center flex-wrap gap-2 flex-1">
                         <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 text-xs font-bold font-mono">
-                          {ticket.ticket_number}
+                          {ticket.ticket_type === 'Hardware' ? '🔧' : ticket.ticket_type === 'Software' ? '💻' : ticket.ticket_type === 'New Site' ? '🏗' : ''} {ticket.ticket_number}
                         </span>
                         <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
                           {ticket.client}
@@ -2598,7 +2644,7 @@ export default function DashboardPage() {
                           </p>
                           <div className="flex gap-3">
                             <button
-                              onClick={() => handleCloseTicket(ticket.id)}
+                              onClick={() => handleCloseTicket(ticket.id, ticket)}
                               disabled={!closeTicketData.resolution.trim()}
                               className="flex-1 px-4 py-2 rounded-xl bg-emerald-500 text-white disabled:opacity-50"
                             >
@@ -2657,7 +2703,7 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center flex-wrap gap-2 flex-1">
                         <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold font-mono">
-                          {ticket.ticket_number}
+                          {ticket.ticket_type === 'Hardware' ? '🔧' : ticket.ticket_type === 'Software' ? '💻' : ticket.ticket_type === 'New Site' ? '🏗' : ''} {ticket.ticket_number}
                         </span>
                         <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
                           {ticket.client}

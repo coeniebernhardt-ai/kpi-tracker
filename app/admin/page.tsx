@@ -421,6 +421,7 @@ export default function AdminPage() {
                       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
                       return headers;
                     }}
+                    memberOptions={profiles.map((p) => ({ id: p.id, full_name: p.full_name }))}
                   />
                 </>
               )}
@@ -929,7 +930,9 @@ export default function AdminPage() {
                         {/* Show ticket details */}
                         <div className="flex flex-wrap gap-2 mb-2 text-xs">
                           {ticket.ticket_type && (
-                            <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300">{ticket.ticket_type}</span>
+                            <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300">
+                              {ticket.ticket_type === 'Hardware' ? '🔧' : ticket.ticket_type === 'Software' ? '💻' : ticket.ticket_type === 'New Site' ? '🏗' : ''} {ticket.ticket_type}
+                            </span>
                           )}
                           {ticket.estate_or_building && (
                             <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300">{ticket.estate_or_building}</span>
@@ -1189,8 +1192,8 @@ export default function AdminPage() {
                     className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white appearance-none cursor-pointer"
                   >
                     <option value="">Select type...</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Software">Software</option>
+                    <option value="Hardware">🔧 Hardware</option>
+                    <option value="Software">💻 Software</option>
                   </select>
                 </div>
 

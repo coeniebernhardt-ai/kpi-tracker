@@ -10,6 +10,8 @@ export interface ExportsPanelProps {
   anchorRef?: React.RefObject<HTMLElement | null>;
   /** Callback to get auth headers (e.g. Bearer token) for fetch */
   getAuthHeaders: () => Promise<HeadersInit>;
+  /** Admin only: list of members for "Filter by Member" dropdown */
+  memberOptions?: { id: string; full_name: string }[];
 }
 
 const QUICK_FILTERS = [
@@ -53,7 +55,7 @@ const MEMBER_OPTIONS: { type: ExportType; label: string; icon: string }[] = [
   { type: 'travel-logs', label: 'Export My Travel Logs', icon: '🚗' },
 ];
 
-export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders }: ExportsPanelProps) {
+export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders, memberOptions = [] }: ExportsPanelProps) {
   const today = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -61,6 +63,7 @@ export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders }: Expor
     return d.toISOString().slice(0, 10);
   });
   const [endDate, setEndDate] = useState(today);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
   const [loading, setLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -83,7 +86,8 @@ export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders }: Expor
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const url = `/api/export?type=${encodeURIComponent(type)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+      let url = `/api/export?type=${encodeURIComponent(type)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+      if (isAdmin && selectedMemberId) url += `&memberId=${encodeURIComponent(selectedMemberId)}`;
       const res = await fetch(url, { credentials: 'include', headers });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -106,75 +110,95 @@ export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders }: Expor
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, loading, getAuthHeaders, onClose]);
+  }, [startDate, endDate, selectedMemberId, isAdmin, loading, getAuthHeaders, onClose]);
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-[380px] rounded-xl bg-slate-800/95 border border-slate-600/50 shadow-xl shadow-black/20 z-50 overflow-hidden">
-      <div className="p-4 border-b border-slate-700/70">
+    <div className="absolute right-0 top-full mt-2 min-w-[420px] w-[420px] max-h-[85vh] rounded-xl bg-slate-800/95 border border-slate-600/50 shadow-xl shadow-black/20 z-50 overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-slate-700/70 flex-shrink-0">
         <h3 className="text-sm font-semibold text-white">Exports</h3>
       </div>
 
-      {/* Date Range */}
-      <div className="p-4 border-b border-slate-700/70 space-y-3">
-        <p className="text-xs font-medium text-slate-400">📅 Date Range</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              disabled={loading}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm disabled:opacity-60"
-            />
+      <div className="overflow-y-auto flex-1">
+        {/* Date Range */}
+        <div className="p-4 border-b border-slate-700/70 space-y-3">
+          <p className="text-xs font-medium text-slate-400">📅 Date Range</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                disabled={loading}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                disabled={loading}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm disabled:opacity-60"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              disabled={loading}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm disabled:opacity-60"
-            />
+          <div className="flex flex-wrap gap-2">
+            {QUICK_FILTERS.map((q) => (
+              <button
+                key={q.label}
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  const { start, end } = q.getRange();
+                  setStartDate(start);
+                  setEndDate(end);
+                  setExportError(null);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-slate-700/80 text-slate-300 text-xs hover:bg-slate-600 disabled:opacity-50"
+              >
+                {q.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {QUICK_FILTERS.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              disabled={loading}
-              onClick={() => {
-                const { start, end } = q.getRange();
-                setStartDate(start);
-                setEndDate(end);
-                setExportError(null);
-              }}
-              className="px-2.5 py-1 rounded-lg bg-slate-700/80 text-slate-300 text-xs hover:bg-slate-600 disabled:opacity-50"
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Export Options */}
-      <div className="p-4 space-y-2">
-        <p className="text-xs font-medium text-slate-400">📦 Export Options</p>
-        <div className="grid gap-1.5">
-          {options.map((opt) => (
-            <button
-              key={opt.type}
-              type="button"
+        {/* Member filter (Admin only) */}
+        {isAdmin && memberOptions.length > 0 && (
+          <div className="p-4 border-b border-slate-700/70 space-y-2">
+            <p className="text-xs font-medium text-slate-400">👤 Filter by Member (Optional)</p>
+            <select
+              value={selectedMemberId}
+              onChange={(e) => setSelectedMemberId(e.target.value)}
               disabled={loading}
-              onClick={() => triggerExport(opt.type)}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg bg-slate-700/50 border border-slate-600/50 text-left text-sm text-white hover:bg-slate-600/50 hover:border-slate-500 disabled:opacity-60 disabled:pointer-events-none transition-colors"
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm disabled:opacity-60"
             >
-              <span className="text-lg">{opt.icon}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
+              <option value="">All Members</option>
+              {memberOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.full_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Export Options */}
+        <div className="p-4 space-y-2">
+          <p className="text-xs font-medium text-slate-400">📦 Export Options</p>
+          <div className="grid gap-1.5">
+            {options.map((opt) => (
+              <button
+                key={opt.type}
+                type="button"
+                disabled={loading}
+                onClick={() => triggerExport(opt.type)}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg bg-slate-700/50 border border-slate-600/50 text-left text-sm text-white hover:bg-slate-600/50 hover:border-slate-500 disabled:opacity-60 disabled:pointer-events-none transition-colors"
+              >
+                <span className="text-lg">{opt.icon}</span>
+                <span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
