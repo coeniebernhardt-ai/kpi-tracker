@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../lib/safe-api-error';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -126,11 +127,8 @@ export async function GET(
     };
     return NextResponse.json(fullPayload);
   } catch (err: unknown) {
-    console.error('GET /api/notifications/[id]:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('GET /api/notifications/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }
 
@@ -185,14 +183,11 @@ export async function PATCH(
       .maybeSingle();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: getSafeErrorMessage(error) }, { status: 500 });
     }
     return NextResponse.json(updated ?? { id, read: true });
   } catch (err: unknown) {
-    console.error('PATCH /api/notifications/[id]:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('PATCH /api/notifications/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

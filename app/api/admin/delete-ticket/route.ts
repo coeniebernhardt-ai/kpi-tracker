@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSafeErrorMessage, logSafeError } from '../../../lib/safe-api-error';
 
 // Helper function to create admin client (lazy initialization to avoid build-time errors)
 function getSupabaseAdmin() {
@@ -56,18 +57,18 @@ export async function POST(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error('Error deleting ticket:', error);
+      logSafeError('Error deleting ticket', error);
       return NextResponse.json(
-        { error: error.message, code: error.code },
+        { error: getSafeErrorMessage(error) },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ success: true, data });
-  } catch (err: any) {
-    console.error('Exception in delete-ticket API:', err);
+  } catch (err: unknown) {
+    logSafeError('Exception in delete-ticket API', err);
     return NextResponse.json(
-      { error: err.message || 'Internal server error' },
+      { error: getSafeErrorMessage(err) },
       { status: 500 }
     );
   }

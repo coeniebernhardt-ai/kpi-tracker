@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../lib/safe-api-error';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -80,10 +81,7 @@ export async function GET(
       },
     });
   } catch (err: unknown) {
-    console.error('GET /api/notifications/[id]/image:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('GET /api/notifications/[id]/image', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

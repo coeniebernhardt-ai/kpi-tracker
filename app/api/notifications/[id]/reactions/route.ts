@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../lib/safe-api-error';
 
 const VALID_REACTION_TYPES = ['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'] as const;
 
@@ -97,10 +98,7 @@ export async function GET(
 
     return NextResponse.json({ summary, userReaction });
   } catch (err: unknown) {
-    console.error('GET /api/notifications/[id]/reactions:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('GET /api/notifications/[id]/reactions', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

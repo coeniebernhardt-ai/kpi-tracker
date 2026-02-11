@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/app/lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '@/app/lib/safe-api-error';
 import { getAllTicketsForAnalytics, getAllTravelLogsForAnalytics, getProfilesForAnalytics } from '@/app/lib/supabase';
 import { computeUniversalSnapshot, snapshotToLegacyMetrics } from '@/app/lib/ai-insights-analytics';
 import { getSystemPrompt, buildUserPrompt } from '@/app/lib/ai-insights-prompts';
@@ -141,10 +142,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (!completion.ok) {
-      const err = await completion.text();
-      console.error('OpenAI error:', completion.status, err);
+      logSafeError('OpenAI error', { status: completion.status });
       return NextResponse.json(
-        { error: 'AI service error', details: completion.status },
+        { error: 'AI service error' },
         { status: 502 }
       );
     }
@@ -164,9 +164,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (err: unknown) {
-    console.error('ai-insights API error:', err);
+    logSafeError('ai-insights API error', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { error: getSafeErrorMessage(err) },
       { status: 500 }
     );
   }

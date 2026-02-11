@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSafeErrorMessage, logSafeError } from '../../../lib/safe-api-error';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_EXT = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -62,14 +63,14 @@ export async function POST(request: NextRequest) {
       .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+      logSafeError('Upload error', uploadError);
+      return NextResponse.json({ error: getSafeErrorMessage(uploadError) }, { status: 500 });
     }
 
     const { data: urlData } = supabaseAdmin.storage.from('tickets').getPublicUrl(filePath);
     return NextResponse.json({ url: urlData.publicUrl });
-  } catch (err: any) {
-    console.error('upload-notification-image:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  } catch (err: unknown) {
+    logSafeError('upload-notification-image', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

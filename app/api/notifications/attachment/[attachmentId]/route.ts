@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../lib/safe-api-error';
 
 const BUCKET = 'notification-attachments';
 
@@ -24,8 +25,6 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   const { data: { user: tokenUser } } = await client.auth.getUser();
   return tokenUser ? { id: tokenUser.id } : null;
 }
-
-const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp']);
 
 /**
  * GET /api/notifications/attachment/[attachmentId]
@@ -73,31 +72,24 @@ export async function GET(
     const path = (attachment as { file_url: string }).file_url;
     const { data: blob, error: downloadError } = await supabase.storage.from(BUCKET).download(path);
     if (downloadError || !blob) {
-      console.error('attachment download:', downloadError);
+      logSafeError('attachment download', downloadError);
       return NextResponse.json({ error: 'File unavailable' }, { status: 404 });
     }
 
     const fileName = (attachment as { file_name: string }).file_name;
     const mime = (attachment as { file_type: string }).file_type || 'application/octet-stream';
-    const isImage = IMAGE_MIMES.has(mime.toLowerCase());
+    const safeFileName = fileName.replace(/"/g, '\\"');
 
     const headers: HeadersInit = {
       'Content-Type': mime,
       'Content-Length': String(blob.size),
       'Cache-Control': 'private, no-cache',
+      'Content-Disposition': `attachment; filename="${safeFileName}"`,
     };
-    if (isImage) {
-      headers['Content-Disposition'] = `inline; filename="${fileName.replace(/"/g, '\\"')}"`;
-    } else {
-      headers['Content-Disposition'] = `attachment; filename="${fileName.replace(/"/g, '\\"')}"`;
-    }
 
     return new NextResponse(blob, { status: 200, headers });
   } catch (err: unknown) {
-    console.error('GET /api/notifications/attachment/[id]:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('GET /api/notifications/attachment/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

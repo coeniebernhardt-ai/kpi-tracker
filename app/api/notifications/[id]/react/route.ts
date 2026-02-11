@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../lib/safe-api-error';
 
 const VALID_REACTION_TYPES = ['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'] as const;
 
@@ -114,16 +115,13 @@ export async function POST(
       });
 
     if (insertError) {
-      console.error('POST react:', insertError);
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      logSafeError('POST react', insertError);
+      return NextResponse.json({ error: getSafeErrorMessage(insertError) }, { status: 500 });
     }
     return NextResponse.json({ reactionType: typedReaction });
   } catch (err: unknown) {
-    console.error('POST /api/notifications/[id]/react:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('POST /api/notifications/[id]/react', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }
 
@@ -159,10 +157,7 @@ export async function DELETE(
 
     return NextResponse.json({ reactionType: null });
   } catch (err: unknown) {
-    console.error('DELETE /api/notifications/[id]/react:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('DELETE /api/notifications/[id]/react', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

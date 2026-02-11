@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../../lib/safe-api-error';
 
 function getSupabaseAdmin() {
   const u = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -125,7 +126,7 @@ export async function GET(
       attachments,
     });
   } catch (err: unknown) {
-    console.error('GET /api/admin/notifications/broadcasts/[id]:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    logSafeError('GET /api/admin/notifications/broadcasts/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }

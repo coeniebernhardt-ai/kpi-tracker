@@ -12,10 +12,10 @@ const ALLOWED_ORIGINS = [
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
-// Rate limit configuration
+// Rate limit configuration: 100 requests per minute per IP (production hardening)
 const RATE_LIMIT = {
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 100, // Max requests per window
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 100,
 };
 
 function getRateLimitKey(request: NextRequest): string {
@@ -134,7 +134,7 @@ export async function proxy(request: NextRequest) {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
-          'Retry-After': '900', // 15 minutes
+          'Retry-After': '60', // 1 minute
         },
       }
     );

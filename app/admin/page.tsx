@@ -447,8 +447,8 @@ export default function AdminPage() {
     return colors[name.charCodeAt(0) % colors.length];
   };
 
-  // Debug overlay: preview only; never appear in production (VERCEL_ENV === 'production')
-  const showDebugOverlay = (process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.VERCEL_ENV ?? '') !== 'production';
+  // Debug overlay: only when not production (NEXT_PUBLIC_VERCEL_ENV set by Vercel at build; client-safe)
+  const showDebugOverlay = (process.env.NEXT_PUBLIC_VERCEL_ENV ?? '') !== 'production';
   const debugInfo = showDebugOverlay ? (
     <div className="fixed bottom-4 right-4 p-4 bg-slate-800 border border-slate-600 rounded-xl text-xs font-mono z-50">
       <p className="text-slate-400">Debug Info:</p>

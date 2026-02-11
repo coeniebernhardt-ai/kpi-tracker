@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../../lib/supabase-server';
+import { getSafeErrorMessage, logSafeError } from '../../../../lib/safe-api-error';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB per file (configurable)
 const BUCKET = 'notification-attachments'; // Must be a private bucket in Supabase Storage
@@ -99,8 +100,8 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     if (insertError || !inserted?.length) {
-      console.error('notification insert:', insertError);
-      return NextResponse.json({ error: insertError?.message || 'Failed to create notifications' }, { status: 500 });
+      logSafeError('notification insert', insertError);
+      return NextResponse.json({ error: getSafeErrorMessage(insertError) }, { status: 500 });
     }
 
     const notificationIds = (inserted as { id: string }[]).map((r) => r.id);
@@ -111,8 +112,8 @@ export async function POST(request: NextRequest) {
       const path = `${crypto.randomUUID()}_${safeName}`;
       const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
       if (uploadError) {
-        console.error('storage upload:', uploadError);
-        return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 });
+        logSafeError('storage upload', uploadError);
+        return NextResponse.json({ error: getSafeErrorMessage(uploadError) }, { status: 500 });
       }
       uploadedMeta.push({ path, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size });
     }
@@ -132,17 +133,14 @@ export async function POST(request: NextRequest) {
     if (attachmentRows.length > 0) {
       const { error: attError } = await supabase.from('notification_attachments').insert(attachmentRows);
       if (attError) {
-        console.error('attachment insert:', attError);
-        return NextResponse.json({ error: attError.message }, { status: 500 });
+        logSafeError('attachment insert', attError);
+        return NextResponse.json({ error: getSafeErrorMessage(attError) }, { status: 500 });
       }
     }
 
     return NextResponse.json({ sent: deduped.length, broadcastGroupId });
   } catch (err: unknown) {
-    console.error('POST /api/admin/notifications/send:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    );
+    logSafeError('POST /api/admin/notifications/send', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
   }
 }
