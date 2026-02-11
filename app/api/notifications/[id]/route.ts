@@ -95,9 +95,13 @@ export async function GET(
       sender_name = senderProfile?.full_name ?? null;
     }
 
-    // Part 1: imageUrl = resolvable URL (proxy) so frontend can use it directly; avoids CORS/private storage
-    const imageUrl = (notification as { image_url?: string | null }).image_url
-      ? `/api/notifications/${id}/image`
+    // Part 1: imageUrl = resolvable URL. If stored value is already absolute (e.g. Supabase public URL), use it
+    // so the detail view loads the image the same way as the list preview. Otherwise use proxy for private paths.
+    const rawImageUrl = (notification as { image_url?: string | null }).image_url?.trim();
+    const imageUrl = rawImageUrl
+      ? (rawImageUrl.startsWith('http://') || rawImageUrl.startsWith('https://')
+          ? rawImageUrl
+          : `/api/notifications/${id}/image`)
       : null;
     const fullPayload = {
       ...notification,
