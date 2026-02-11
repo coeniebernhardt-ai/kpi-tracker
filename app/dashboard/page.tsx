@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, getNotificationsByUserId, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
+import { supabase, getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -149,18 +149,33 @@ export default function DashboardPage() {
     }
   }, [user?.id, mainTab]);
 
-  // FEATURE C: Load member notifications
-  useEffect(() => {
-    if (user?.id) {
-      getNotificationsByUserId(user.id).then(setNotifications);
-    }
-  }, [user?.id]);
-
-  // FEATURE A: Poll for new notifications (e.g. admin broadcast) without page refresh
+  // FEATURE C: Load member notifications via API (explicit query filter: user_id + deleted_at IS NULL; service role bypasses RLS)
   useEffect(() => {
     if (!user?.id) return;
-    const interval = setInterval(() => {
-      getNotificationsByUserId(user.id).then(setNotifications);
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/notifications', { credentials: 'include', headers });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      }
+    })();
+  }, [user?.id]);
+
+  // FEATURE A: Poll for new notifications (e.g. admin broadcast) without page refresh; same API with explicit filter
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/notifications', { credentials: 'include', headers });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      }
     }, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
@@ -239,8 +254,14 @@ export default function DashboardPage() {
 
   const loadNotifications = async () => {
     if (!user?.id) return;
-    const data = await getNotificationsByUserId(user.id);
-    setNotifications(data);
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {};
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    const res = await fetch('/api/notifications', { credentials: 'include', headers });
+    if (res.ok) {
+      const data = await res.json();
+      setNotifications(Array.isArray(data) ? data : []);
+    }
   };
 
   const loadProfiles = async () => {

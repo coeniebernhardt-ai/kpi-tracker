@@ -56,17 +56,15 @@ export async function GET(
     }
 
     const supabaseAdmin = getSupabaseAdmin();
+    // Explicit filter at query level (service role bypasses RLS): do not return deleted notifications
     const { data: notification, error } = await supabaseAdmin
       .from('notifications')
       .select('*')
       .eq('id', id)
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (error || !notification) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    if ((notification as { deleted_at?: string | null }).deleted_at) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
