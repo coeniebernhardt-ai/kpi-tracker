@@ -44,6 +44,7 @@ export async function GET(
       .select('id, user_id, title, message, image_url, created_at, read, read_at')
       .eq('type', 'admin_broadcast')
       .eq('broadcast_group_id', broadcastGroupId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (!rows || rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });

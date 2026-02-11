@@ -251,27 +251,50 @@ export default function NotificationCentrePage() {
           <section>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <h2 className="text-lg font-semibold text-white">Sent Notifications</h2>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!user?.id) return;
-                  const { data: { session } } = await supabase.auth.getSession();
-                  const headers: HeadersInit = {};
-                  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-                  const res = await fetch('/api/admin/notifications/export', { credentials: 'include', headers });
-                  if (!res.ok) return;
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'notification-history.csv';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm hover:bg-slate-600"
-              >
-                Export CSV
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!user?.id) return;
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const headers: HeadersInit = {};
+                    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                    const res = await fetch('/api/admin/notifications/export?scope=broadcasts', { credentials: 'include', headers });
+                    if (!res.ok) return;
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'notification-history.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm hover:bg-slate-600"
+                >
+                  Export CSV (broadcasts)
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!user?.id) return;
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const headers: HeadersInit = {};
+                    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                    const res = await fetch('/api/admin/notifications/export?scope=all', { credentials: 'include', headers });
+                    if (!res.ok) return;
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'notification-history-all.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm hover:bg-slate-600"
+                >
+                  Export All (CSV)
+                </button>
+              </div>
             </div>
             {broadcastHistoryLoading ? (
               <p className="text-slate-500 text-sm">Loading…</p>
@@ -280,25 +303,48 @@ export default function NotificationCentrePage() {
             ) : (
               <div className="space-y-2">
                 {broadcastGroups.map((g) => (
-                  <button
+                  <div
                     key={g.broadcastGroupId}
-                    type="button"
-                    onClick={() => setSelectedBroadcastId(g.broadcastGroupId)}
-                    className="w-full text-left p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-slate-600"
+                    className="flex items-stretch gap-2 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-slate-600 overflow-hidden"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-white">{g.title || 'Announcement'}</span>
-                      <span className="text-xs text-slate-500">{new Date(g.createdAt).toLocaleString()}</span>
-                    </div>
-                    <p className="text-sm text-slate-400 mt-1 line-clamp-1">{g.messagePreview}</p>
-                    <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-                      <span className="text-slate-500">{g.hasImage ? 'Image: Yes' : 'Image: No'}</span>
-                      <span className="text-slate-500">Recipients: {g.totalRecipients}</span>
-                      <span className="text-green-500">Read: {g.totalRead}</span>
-                      <span className="text-amber-500">Unread: {g.totalUnread}</span>
-                      <span className="text-blue-400">{g.readPercentage}% read</span>
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBroadcastId(g.broadcastGroupId)}
+                      className="flex-1 text-left p-4 min-w-0"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-white">{g.title || 'Announcement'}</span>
+                        <span className="text-xs text-slate-500">{new Date(g.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="text-sm text-slate-400 mt-1 line-clamp-1">{g.messagePreview}</p>
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                        <span className="text-slate-500">{g.hasImage ? 'Image: Yes' : 'Image: No'}</span>
+                        <span className="text-slate-500">Recipients: {g.totalRecipients}</span>
+                        <span className="text-green-500">Read: {g.totalRead}</span>
+                        <span className="text-amber-500">Unread: {g.totalUnread}</span>
+                        <span className="text-blue-400">{g.readPercentage}% read</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm('Delete this entire broadcast? It will be hidden from the list and export.')) return;
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const headers: HeadersInit = {};
+                        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                        const res = await fetch(`/api/admin/notifications/delete?broadcastGroupId=${encodeURIComponent(g.broadcastGroupId)}`, { method: 'DELETE', credentials: 'include', headers });
+                        if (res.ok) {
+                          if (selectedBroadcastId === g.broadcastGroupId) { setSelectedBroadcastId(null); setBroadcastDetail(null); }
+                          loadBroadcasts();
+                        } else alert('Failed to delete');
+                      }}
+                      className="p-3 text-slate-400 hover:text-red-400 hover:bg-slate-700/50"
+                      title="Delete broadcast"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

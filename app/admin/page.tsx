@@ -9,6 +9,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
 import AIInsightsPanel from '../components/AIInsightsPanel';
+import WorkspaceLoader from '../components/WorkspaceLoader';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -87,23 +88,16 @@ export default function AdminPage() {
     setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
   }, []);
 
+  // Performance: parallel fetch for tickets, team (profiles), travel logs; no blocking full-page spinner
   const loadData = async () => {
-    console.log('loadData: Starting...');
     setLoadingData(true);
-    setExpandedTickets(new Set()); // Ensure all tickets are collapsed when loading
+    setExpandedTickets(new Set());
     try {
-      console.log('loadData: Fetching profiles...');
-      const profilesData = await getAllProfiles();
-      console.log('loadData: Profiles result:', profilesData);
-      
-      console.log('loadData: Fetching tickets...');
-      const ticketsData = await getAllTickets();
-      console.log('loadData: Tickets result:', ticketsData);
-      
-      console.log('loadData: Fetching travel logs...');
-      const travelLogsData = await getAllTravelLogs();
-      console.log('loadData: Travel logs result:', travelLogsData);
-      
+      const [profilesData, ticketsData, travelLogsData] = await Promise.all([
+        getAllProfiles(),
+        getAllTickets(),
+        getAllTravelLogs(),
+      ]);
       setProfiles(profilesData);
       setTickets(ticketsData);
       setTravelLogs(travelLogsData);
@@ -111,7 +105,6 @@ export default function AdminPage() {
       console.error('loadData: Error:', err);
     }
     setLoadingData(false);
-    console.log('loadData: Done');
   };
 
   const handleCreateTicket = async (e: React.FormEvent) => {
@@ -454,11 +447,9 @@ export default function AdminPage() {
     return colors[name.charCodeAt(0) % colors.length];
   };
 
-  // Debug info - expanded
-  console.log('Admin Page Debug:', JSON.stringify({ loading, loadingData, hasUser: !!user, hasProfile: !!profile, isAdmin }, null, 2));
-
-  // Show debug panel instead of blocking
-  const debugInfo = (
+  // Debug overlay: preview only; never appear in production (VERCEL_ENV === 'production')
+  const showDebugOverlay = (process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.VERCEL_ENV ?? '') !== 'production';
+  const debugInfo = showDebugOverlay ? (
     <div className="fixed bottom-4 right-4 p-4 bg-slate-800 border border-slate-600 rounded-xl text-xs font-mono z-50">
       <p className="text-slate-400">Debug Info:</p>
       <p className={loading ? 'text-blue-400' : 'text-blue-300'}>loading: {String(loading)}</p>
@@ -467,7 +458,7 @@ export default function AdminPage() {
       <p className={!isAdmin ? 'text-blue-400' : 'text-blue-300'}>isAdmin: {String(isAdmin)}</p>
       <p className={loadingData ? 'text-blue-400' : 'text-blue-300'}>loadingData: {String(loadingData)}</p>
     </div>
-  );
+  ) : null;
 
   if (loading && !user) {
     return (
@@ -489,18 +480,11 @@ export default function AdminPage() {
     );
   }
 
-  if (loadingData) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-400">Loading tickets and team data...</p>
-        {debugInfo}
-      </div>
-    );
-  }
-
+  // Progressive loading: show main layout; branded loader overlay while data loads (no global block)
   return (
     <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient">
+      <WorkspaceLoader active={loadingData} />
+      {debugInfo}
       {/* FEATURE B: Header – logo + admin identity as one block; action buttons in row below */}
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
         <div className="max-w-7xl mx-auto px-6 py-4">

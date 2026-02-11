@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       .select('id, broadcast_group_id, title, message, image_url, triggering_user_id, created_at, read, read_at, user_id')
       .eq('type', 'admin_broadcast')
       .not('broadcast_group_id', 'is', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     const byGroup = new Map<string, {
