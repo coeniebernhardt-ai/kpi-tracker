@@ -66,6 +66,10 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    if ((notification as { deleted_at?: string | null }).deleted_at) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const recipientUserId = (notification as { user_id: string }).user_id;
     const senderRole = (notification as { triggering_user_role?: string }).triggering_user_role;
 

@@ -923,6 +923,7 @@ export async function getNotificationsByUserId(userId: string): Promise<Notifica
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (error) return [];
   return (data ?? []) as Notification[];
