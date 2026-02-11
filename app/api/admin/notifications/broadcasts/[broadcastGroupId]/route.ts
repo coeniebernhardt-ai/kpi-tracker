@@ -96,6 +96,19 @@ export async function GET(
       .map((r) => ({ userName: reactorNameMap.get(r.user_id) || r.user_id, reactionType: r.reaction_type }))
       .sort((a, b) => a.userName.localeCompare(b.userName));
 
+    // Attachments: same for all notifications in this broadcast; use first notification id
+    const firstNotificationId = (rows[0] as { id: string }).id;
+    const { data: attachmentRows } = await supabase
+      .from('notification_attachments')
+      .select('id, file_name, file_type, file_size')
+      .eq('notification_id', firstNotificationId);
+    const attachments = (attachmentRows ?? []).map((a: { id: string; file_name: string; file_type: string; file_size: number }) => ({
+      id: a.id,
+      fileName: a.file_name,
+      fileType: a.file_type,
+      fileSize: a.file_size,
+    }));
+
     return NextResponse.json({
       broadcastGroupId,
       title: first.title ?? null,
@@ -109,6 +122,7 @@ export async function GET(
       recipients: sortedRecipients,
       reactionsSummary: summary,
       reactionsByUser,
+      attachments,
     });
   } catch (err: unknown) {
     console.error('GET /api/admin/notifications/broadcasts/[id]:', err);

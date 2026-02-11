@@ -9,6 +9,9 @@ import type { Profile } from '../../lib/supabase';
 
 type NotificationCentreTab = 'create' | 'sent';
 
+// Vercel serverless request body limit ~4.5 MB; keep total attachments under 4 MB to avoid 413
+const MAX_TOTAL_ATTACHMENTS_BYTES = 4 * 1024 * 1024;
+
 export default function NotificationCentrePage() {
   const router = useRouter();
   const { user, loading, isAdmin } = useAuth();
@@ -30,7 +33,7 @@ export default function NotificationCentrePage() {
   const [broadcastGroups, setBroadcastGroups] = useState<Array<{ broadcastGroupId: string; title: string | null; messagePreview: string; hasImage: boolean; createdAt: string; totalRecipients: number; totalRead: number; readPercentage: number; totalUnread: number }>>([]);
   const [broadcastHistoryLoading, setBroadcastHistoryLoading] = useState(false);
   const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
-  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }>; reactionsSummary?: { LIKE: number; MUSCLE: number; LAUGH: number; COPY_THAT: number }; reactionsByUser?: Array<{ userName: string; reactionType: string }> } | null>(null);
+  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }>; reactionsSummary?: { LIKE: number; MUSCLE: number; LAUGH: number; COPY_THAT: number }; reactionsByUser?: Array<{ userName: string; reactionType: string }>; attachments?: Array<{ id: string; fileName: string; fileType: string; fileSize: number }> } | null>(null);
   const [broadcastDetailLoading, setBroadcastDetailLoading] = useState(false);
 
   useEffect(() => {
@@ -154,7 +157,7 @@ export default function NotificationCentrePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Attachments <span className="text-slate-500">(optional)</span></label>
-                <p className="text-xs text-slate-500 mb-2">Any file type, max 10MB per file. Multiple files allowed.</p>
+                <p className="text-xs text-slate-500 mb-2">Any file type, max 10 MB per file. Total attachments must be 4 MB or less.</p>
                 <input
                   type="file"
                   multiple
@@ -190,15 +193,20 @@ export default function NotificationCentrePage() {
                   <label htmlFor="notification-attachments" className="cursor-pointer text-slate-300 hover:text-amber-400 text-sm">Click to select files or drag and drop</label>
                 </div>
                 {notificationAttachmentFiles.length > 0 && (
-                  <ul className="space-y-2 rounded-xl bg-slate-800/50 border border-slate-700 p-2">
-                    {notificationAttachmentFiles.map((f, i) => (
-                      <li key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between gap-2 text-sm text-slate-200">
-                        <span className="truncate" title={f.name}>{f.name}</span>
-                        <span className="text-slate-500 shrink-0">{(f.size / 1024).toFixed(1)} KB</span>
-                        <button type="button" onClick={() => setNotificationAttachmentFiles((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 shrink-0">Remove</button>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="space-y-2 rounded-xl bg-slate-800/50 border border-slate-700 p-2">
+                      {notificationAttachmentFiles.map((f, i) => (
+                        <li key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between gap-2 text-sm text-slate-200">
+                          <span className="truncate" title={f.name}>{f.name}</span>
+                          <span className="text-slate-500 shrink-0">{(f.size / 1024).toFixed(1)} KB</span>
+                          <button type="button" onClick={() => setNotificationAttachmentFiles((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 shrink-0">Remove</button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className={`mt-1 text-xs ${notificationAttachmentFiles.reduce((s, f) => s + f.size, 0) > MAX_TOTAL_ATTACHMENTS_BYTES ? 'text-amber-400' : 'text-slate-500'}`}>
+                      Total: {(notificationAttachmentFiles.reduce((s, f) => s + f.size, 0) / (1024 * 1024)).toFixed(2)} MB (max 4 MB)
+                    </p>
+                  </>
                 )}
                 {notificationUploadProgress !== 'idle' && (
                   <p className="mt-2 text-sm text-slate-400">Uploading… {typeof notificationUploadProgress === 'number' ? `${notificationUploadProgress}%` : ''}</p>
@@ -246,16 +254,30 @@ export default function NotificationCentrePage() {
                         setNotificationSending(true);
                         setNotificationUploadProgress(0);
                         try {
+                          const totalSizeBytes = notificationAttachmentFiles.reduce((sum, f) => sum + f.size, 0);
+                          if (totalSizeBytes > MAX_TOTAL_ATTACHMENTS_BYTES) {
+                            alert(`Total attachments (${(totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) exceed the 4 MB limit. Please remove some files.`);
+                            setNotificationSending(false);
+                            setNotificationUploadProgress('idle');
+                            return;
+                          }
                           const recipientIds = notificationRecipientMode === 'all' ? profiles.filter((p) => !p.is_admin).map((p) => p.id) : Array.from(notificationSelectedIds);
                           const form = new FormData();
                           form.append('title', notificationTitle.trim());
                           form.append('message', notificationMessage.trim());
                           form.append('recipientIds', JSON.stringify(recipientIds));
                           for (const f of notificationAttachmentFiles) form.append('files', f);
+                          // #region agent log
+                          const fileCount = notificationAttachmentFiles.length;
+                          fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'app/admin/notifications/page.tsx:beforeSend', message: 'Notification send request', data: { fileCount, totalSizeBytes, totalSizeMB: (totalSizeBytes / (1024 * 1024)).toFixed(2) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+                          // #endregion
                           const { data: { session } } = await supabase.auth.getSession();
                           const headers: HeadersInit = {};
                           if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
                           const res = await fetch('/api/admin/notifications/send', { method: 'POST', body: form, credentials: 'include', headers });
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'app/admin/notifications/page.tsx:afterSend', message: 'Notification send response', data: { status: res.status, ok: res.ok }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+                          // #endregion
                           setNotificationUploadProgress(100);
                           if (!res.ok) {
                             const j = await res.json().catch(() => ({}));
@@ -277,10 +299,10 @@ export default function NotificationCentrePage() {
                           setNotificationUploadProgress('idle');
                         }
                       }}
-                      disabled={notificationSending}
+                      disabled={notificationSending || notificationAttachmentFiles.reduce((s, f) => s + f.size, 0) > MAX_TOTAL_ATTACHMENTS_BYTES}
                       className="flex-1 min-w-[140px] px-5 py-3 rounded-xl bg-amber-500 text-white font-medium disabled:opacity-50"
                     >
-                      {notificationSending ? 'Sending...' : 'Confirm Send'}
+                      {notificationSending ? 'Sending...' : notificationAttachmentFiles.reduce((s, f) => s + f.size, 0) > MAX_TOTAL_ATTACHMENTS_BYTES ? 'Total attachments over 4 MB' : 'Confirm Send'}
                     </button>
                     <button type="button" onClick={() => setNotificationConfirmSend(false)} disabled={notificationSending} className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300">Back</button>
                   </div>
@@ -413,6 +435,27 @@ export default function NotificationCentrePage() {
                     {broadcastDetail.title && <h4 className="text-xl font-medium text-white">{broadcastDetail.title}</h4>}
                     <p className="text-slate-300 whitespace-pre-wrap">{broadcastDetail.message}</p>
                     <p className="text-xs text-slate-500">Sent: {new Date(broadcastDetail.createdAt).toLocaleString()}</p>
+                    {broadcastDetail.attachments && broadcastDetail.attachments.length > 0 && (
+                      <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3">
+                        <p className="text-xs text-slate-500 mb-2">Attachments</p>
+                        <ul className="space-y-2">
+                          {broadcastDetail.attachments.map((att) => (
+                            <li key={att.id} className="flex items-center justify-between gap-2 text-sm">
+                              <span className="text-slate-300 truncate" title={att.fileName}>{att.fileName}</span>
+                              <a
+                                href={`/api/notifications/attachment/${att.id}`}
+                                className="shrink-0 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 text-xs font-medium"
+                                download={att.fileName}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Download
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-800/50 text-sm">
                         <span className="text-slate-300">Total Recipients: <strong>{broadcastDetail.totalRecipients}</strong></span>
