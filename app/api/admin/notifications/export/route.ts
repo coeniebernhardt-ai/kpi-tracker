@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     for (const r of allRows) {
       if (r.type !== 'admin_broadcast' || !r.broadcast_group_id) continue;
       const n = r;
-      const gid = n.broadcast_group_id;
+      const gid = n.broadcast_group_id as string;
       if (!byGroup.has(gid)) {
         byGroup.set(gid, {
           title: n.title ?? null,
