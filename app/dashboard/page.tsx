@@ -65,7 +65,6 @@ export default function DashboardPage() {
   const [notificationDetailId, setNotificationDetailId] = useState<string | null>(null);
   const [notificationDetail, setNotificationDetail] = useState<Notification | null>(null);
   const [notificationDetailLoading, setNotificationDetailLoading] = useState(false);
-  const [notificationDetailImageUrl, setNotificationDetailImageUrl] = useState<string | null>(null);
   const [notificationDetailImageError, setNotificationDetailImageError] = useState(false);
   
   const [newTicketData, setNewTicketData] = useState({
@@ -200,40 +199,10 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [notificationDetailId]);
 
-  // Task 2: Resolve image via proxy (auth) so it loads reliably; use blob URL for img src
+  // Part 1: Reset image error when detail changes (imageUrl from API is resolvable proxy URL; cookies sent same-origin)
   useEffect(() => {
-    if (!notificationDetail?.image_url || !notificationDetailId) {
-      setNotificationDetailImageUrl(null);
-      setNotificationDetailImageError(false);
-      return;
-    }
-    setNotificationDetailImageError(false);
-    let cancelled = false;
-    let blobUrl: string | null = null;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      try {
-        const res = await fetch(`/api/notifications/${notificationDetailId}/image`, { headers, credentials: 'include' });
-        if (cancelled) return;
-        if (!res.ok) {
-          setNotificationDetailImageError(true);
-          return;
-        }
-        const blob = await res.blob();
-        if (cancelled) return;
-        blobUrl = URL.createObjectURL(blob);
-        setNotificationDetailImageUrl(blobUrl);
-      } catch {
-        setNotificationDetailImageError(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [notificationDetail?.image_url, notificationDetailId]);
+    if (!notificationDetailId) setNotificationDetailImageError(false);
+  }, [notificationDetailId]);
 
   const loadNotifications = async () => {
     if (!user?.id) return;
@@ -991,12 +960,12 @@ export default function DashboardPage() {
       {/* Task 1–4: Notification detail modal – full payload, image via proxy, mark-as-read on open */}
       {notificationDetailId && (
         <div className="fixed inset-0 z-50 overflow-auto">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); setNotificationDetailImageUrl(null); setNotificationDetailImageError(false); }} aria-hidden="true" />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); setNotificationDetailImageError(false); }} aria-hidden="true" />
           <div className="relative flex min-h-full items-center justify-center p-4">
             <div className="w-full max-w-lg rounded-2xl border border-slate-700/50 bg-slate-900 shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-700/50 p-4">
                 <h2 className="text-lg font-semibold text-white">Notification</h2>
-                <button type="button" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); setNotificationDetailImageUrl(null); setNotificationDetailImageError(false); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+                <button type="button" onClick={() => { setNotificationDetailId(null); setNotificationDetail(null); setNotificationDetailImageError(false); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -1022,16 +991,14 @@ export default function DashboardPage() {
                         {notificationDetail.type === 'added_to_ticket' && 'You were added to a ticket.'}
                       </p>
                     )}
-                    {/* Image: always show section when image_url present; fallback container if load fails (Task 2) */}
-                    {notificationDetail.image_url && (
+                    {/* Part 1: imageUrl from API is resolvable (proxy); use directly; graceful fallback */}
+                    {(notificationDetail.imageUrl ?? notificationDetail.image_url) && (
                       <div className="rounded-xl overflow-hidden bg-slate-800/50 border border-slate-700/50 min-h-[120px] flex items-center justify-center">
-                        {notificationDetailImageUrl && !notificationDetailImageError && (
-                          <img src={notificationDetailImageUrl} alt="" className="w-full max-h-80 object-contain" onError={() => setNotificationDetailImageError(true)} />
+                        {!notificationDetailImageError && (
+                          <img src={notificationDetail.imageUrl ?? notificationDetail.image_url ?? ''} alt="" className="w-full max-h-80 object-contain" onError={() => setNotificationDetailImageError(true)} />
                         )}
-                        {(!notificationDetailImageUrl || notificationDetailImageError) && (
-                          <p className="p-4 text-sm text-slate-500 text-center">
-                            {notificationDetailImageError ? 'Image could not be loaded.' : 'Loading image…'}
-                          </p>
+                        {notificationDetailImageError && (
+                          <p className="p-4 text-sm text-slate-500 text-center">Image could not be loaded.</p>
                         )}
                       </div>
                     )}
@@ -1055,7 +1022,6 @@ export default function DashboardPage() {
                           if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
                           setNotificationDetailId(null);
                           setNotificationDetail(null);
-                          setNotificationDetailImageUrl(null);
                           setNotificationDetailImageError(false);
                         }}
                         className="w-full py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium hover:bg-blue-500/30"

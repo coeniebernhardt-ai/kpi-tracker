@@ -95,9 +95,14 @@ export async function GET(
       sender_name = senderProfile?.full_name ?? null;
     }
 
+    // Part 1: imageUrl = resolvable URL (proxy) so frontend can use it directly; avoids CORS/private storage
+    const imageUrl = (notification as { image_url?: string | null }).image_url
+      ? `/api/notifications/${id}/image`
+      : null;
     const fullPayload = {
       ...notification,
       sender_name: sender_name ?? (senderRole === 'admin' ? 'Admin' : null),
+      imageUrl,
     };
     return NextResponse.json(fullPayload);
   } catch (err: unknown) {
@@ -148,9 +153,10 @@ export async function PATCH(
       }
     }
 
+    const readAt = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
       .from('notifications')
-      .update({ read: true })
+      .update({ read: true, read_at: readAt })
       .eq('id', id)
       .select()
       .maybeSingle();

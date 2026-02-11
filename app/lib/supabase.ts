@@ -88,12 +88,18 @@ export interface Notification {
   triggering_user_id?: string | null;
   created_at: string;
   read: boolean;
+  /** Set when marked read; for analytics */
+  read_at?: string | null;
   /** FEATURE A: Optional for admin_broadcast */
   title?: string | null;
   message?: string | null;
   image_url?: string | null;
+  /** Groups notifications from one admin send */
+  broadcast_group_id?: string | null;
   /** Set by detail API from profiles (sender name) */
   sender_name?: string | null;
+  /** Resolvable image URL (proxy path) returned by detail API only */
+  imageUrl?: string | null;
 }
 
 // Auth helpers
@@ -835,7 +841,7 @@ export async function addTicketAdminComment(
 }
 
 /** FEATURE C: Internal helper to insert one notification (append-only). */
-/** FEATURE A: Supports admin_broadcast with optional ticket_id, title, message, image_url. */
+/** FEATURE A: Supports admin_broadcast with optional ticket_id, title, message, image_url, broadcast_group_id. */
 async function createNotification(notification: {
   user_id: string;
   type: NotificationType;
@@ -845,6 +851,7 @@ async function createNotification(notification: {
   title?: string | null;
   message?: string | null;
   image_url?: string | null;
+  broadcast_group_id?: string | null;
 }): Promise<void> {
   const row: Record<string, unknown> = {
     user_id: notification.user_id,
@@ -857,19 +864,21 @@ async function createNotification(notification: {
   if (notification.title != null) row.title = notification.title;
   if (notification.message != null) row.message = notification.message;
   if (notification.image_url != null) row.image_url = notification.image_url;
+  if (notification.broadcast_group_id != null) row.broadcast_group_id = notification.broadcast_group_id;
   await supabase.from('notifications').insert(row);
 }
 
 /**
  * FEATURE A: Send admin broadcast to selected recipients. One notification per recipient.
- * Admin does NOT receive their own notification. Duplicates per user per call are avoided by recipient list.
+ * broadcastGroupId groups all rows from this send for admin history and analytics.
  */
 export async function sendAdminBroadcast(
   adminUserId: string,
   payload: { title?: string; message: string; image_url?: string | null },
   recipientUserIds: string[]
-): Promise<{ sent: number; error: Error | null }> {
+): Promise<{ sent: number; broadcastGroupId: string | null; error: Error | null }> {
   const deduped = [...new Set(recipientUserIds)].filter((id) => id !== adminUserId);
+  const broadcastGroupId = deduped.length > 0 ? crypto.randomUUID() : null;
   for (const userId of deduped) {
     await createNotification({
       user_id: userId,
@@ -880,9 +889,10 @@ export async function sendAdminBroadcast(
       title: payload.title ?? null,
       message: payload.message,
       image_url: payload.image_url ?? null,
+      broadcast_group_id: broadcastGroupId,
     });
   }
-  return { sent: deduped.length, error: null };
+  return { sent: deduped.length, broadcastGroupId, error: null };
 }
 
 /** FEATURE C: Create one notification per newly assigned user (excludes actor). Call after updateTicket(assigned_to). */
@@ -917,7 +927,8 @@ export async function getNotificationsByUserId(userId: string): Promise<Notifica
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<{ error: Error | null }> {
-  const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('notifications').update({ read: true, read_at: now }).eq('id', notificationId);
   return { error: error as Error | null };
 }
 
