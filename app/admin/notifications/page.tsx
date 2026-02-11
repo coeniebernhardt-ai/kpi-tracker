@@ -442,15 +442,39 @@ export default function NotificationCentrePage() {
                           {broadcastDetail.attachments.map((att) => (
                             <li key={att.id} className="flex items-center justify-between gap-2 text-sm">
                               <span className="text-slate-300 truncate" title={att.fileName}>{att.fileName}</span>
-                              <a
-                                href={`/api/notifications/attachment/${att.id}`}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    const headers: HeadersInit = {};
+                                    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                                    const res = await fetch(`/api/notifications/attachment/${att.id}`, { credentials: 'include', headers });
+                                    if (!res.ok) {
+                                      const text = await res.text();
+                                      let msg = 'Download failed';
+                                      try {
+                                        const j = JSON.parse(text);
+                                        if (j?.error) msg = j.error;
+                                      } catch { /* use default */ }
+                                      alert(msg);
+                                      return;
+                                    }
+                                    const blob = await res.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = att.fileName;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                  } catch {
+                                    alert('Download failed. Please try again.');
+                                  }
+                                }}
                                 className="shrink-0 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 text-xs font-medium"
-                                download={att.fileName}
-                                target="_blank"
-                                rel="noopener noreferrer"
                               >
                                 Download
-                              </a>
+                              </button>
                             </li>
                           ))}
                         </ul>
