@@ -103,10 +103,24 @@ export async function GET(
           ? rawImageUrl
           : `/api/notifications/${id}/image`)
       : null;
+
+    // Attachments: secure download via /api/notifications/attachment/[id]; never expose storage URL
+    const { data: attachmentRows } = await supabaseAdmin
+      .from('notification_attachments')
+      .select('id, file_name, file_type, file_size')
+      .eq('notification_id', id);
+    const attachments = (attachmentRows ?? []).map((a: { id: string; file_name: string; file_type: string; file_size: number }) => ({
+      id: a.id,
+      fileName: a.file_name,
+      fileType: a.file_type,
+      fileSize: a.file_size,
+    }));
+
     const fullPayload = {
       ...notification,
       sender_name: sender_name ?? (senderRole === 'admin' ? 'Admin' : null),
       imageUrl,
+      attachments,
     };
     return NextResponse.json(fullPayload);
   } catch (err: unknown) {

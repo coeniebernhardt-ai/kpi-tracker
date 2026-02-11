@@ -100,6 +100,8 @@ export interface Notification {
   sender_name?: string | null;
   /** Resolvable image URL (proxy path) returned by detail API only */
   imageUrl?: string | null;
+  /** Attachments (secure download via /api/notifications/attachment/[id]); returned by detail API only */
+  attachments?: Array<{ id: string; fileName: string; fileType: string; fileSize: number }>;
 }
 
 // Auth helpers

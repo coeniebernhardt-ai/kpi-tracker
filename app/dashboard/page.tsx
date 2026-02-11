@@ -1030,6 +1030,28 @@ export default function DashboardPage() {
                         )}
                       </div>
                     )}
+                    {/* Attachments: secure download via API; never expose raw storage URL */}
+                    {notificationDetail.attachments?.length ? (
+                      <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3">
+                        <p className="text-xs text-slate-500 mb-2">Attachments</p>
+                        <ul className="space-y-2">
+                          {notificationDetail.attachments.map((att) => (
+                            <li key={att.id} className="flex items-center justify-between gap-2 text-sm">
+                              <span className="text-slate-300 truncate" title={att.fileName}>{att.fileName}</span>
+                              <a
+                                href={`/api/notifications/attachment/${att.id}`}
+                                className="shrink-0 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 text-xs font-medium"
+                                download={att.fileName}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Download
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                     {/* Compact reaction bar: emoji + count only; one reaction per user; toggle/replace via POST */}
                     {notificationDetail.type === 'admin_broadcast' && (
                       <div className="flex flex-wrap items-center gap-3 py-2">

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
-import { supabase, getAllProfiles, sendAdminBroadcast } from '../../lib/supabase';
+import { supabase, getAllProfiles } from '../../lib/supabase';
 import type { Profile } from '../../lib/supabase';
 
 type NotificationCentreTab = 'create' | 'sent';
@@ -18,8 +18,8 @@ export default function NotificationCentrePage() {
   // Create Notification tab state
   const [notificationTitle, setNotificationTitle] = useState('');
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationImageUrl, setNotificationImageUrl] = useState<string | null>(null);
-  const [notificationImageFile, setNotificationImageFile] = useState<File | null>(null);
+  const [notificationAttachmentFiles, setNotificationAttachmentFiles] = useState<File[]>([]);
+  const [notificationUploadProgress, setNotificationUploadProgress] = useState<'idle' | number>('idle');
   const [notificationRecipientMode, setNotificationRecipientMode] = useState<'all' | 'selected'>('all');
   const [notificationSelectedIds, setNotificationSelectedIds] = useState<Set<string>>(new Set());
   const [notificationConfirmSend, setNotificationConfirmSend] = useState(false);
@@ -153,24 +153,56 @@ export default function NotificationCentrePage() {
                 <textarea value={notificationMessage} onChange={(e) => setNotificationMessage(e.target.value)} rows={3} required className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white resize-none" placeholder="Notification message..." />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Image <span className="text-slate-500">(optional)</span></label>
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" id="notification-image-file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setNotificationImageFile(f); setNotificationImageUrl(null); } }} />
-                    <label htmlFor="notification-image-file" className="flex-1 min-w-[140px] px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-center cursor-pointer hover:bg-slate-700">Upload (jpg, png, webp)</label>
-                    <input type="url" value={notificationImageUrl ?? ''} onChange={(e) => { setNotificationImageUrl(e.target.value || null); setNotificationImageFile(null); }} placeholder="Or paste image URL" className="flex-1 min-w-[140px] px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm" />
-                  </div>
-                  {(notificationImageFile || notificationImageUrl) && (
-                    <div className="mt-2 rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50">
-                      <p className="text-xs text-slate-500 px-2 py-1">Preview</p>
-                      {notificationImageFile ? (
-                        <img src={URL.createObjectURL(notificationImageFile)} alt="Preview" className="w-full max-h-40 object-contain" />
-                      ) : notificationImageUrl ? (
-                        <img src={notificationImageUrl} alt="Preview" className="w-full max-h-40 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : null}
-                    </div>
-                  )}
+                <label className="block text-sm font-medium text-slate-300 mb-2">Attachments <span className="text-slate-500">(optional)</span></label>
+                <p className="text-xs text-slate-500 mb-2">Any file type, max 10MB per file. Multiple files allowed.</p>
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  id="notification-attachments"
+                  onChange={(e) => {
+                    const list = e.target.files ? Array.from(e.target.files) : [];
+                    setNotificationAttachmentFiles((prev) => {
+                      const combined = [...prev];
+                      const names = new Set(prev.map((f) => f.name + f.size));
+                      for (const f of list) if (!names.has(f.name + f.size)) { combined.push(f); names.add(f.name + f.size); }
+                      return combined;
+                    });
+                    e.target.value = '';
+                  }}
+                />
+                <div
+                  className="rounded-xl border border-dashed border-slate-600 bg-slate-800/50 p-4 mb-2 min-h-[80px] flex flex-col justify-center"
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-amber-500/50', 'bg-slate-800'); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-amber-500/50', 'bg-slate-800'); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('border-amber-500/50', 'bg-slate-800');
+                    const list = Array.from(e.dataTransfer.files);
+                    setNotificationAttachmentFiles((prev) => {
+                      const combined = [...prev];
+                      const names = new Set(prev.map((f) => f.name + f.size));
+                      for (const f of list) if (!names.has(f.name + f.size)) { combined.push(f); names.add(f.name + f.size); }
+                      return combined;
+                    });
+                  }}
+                >
+                  <label htmlFor="notification-attachments" className="cursor-pointer text-slate-300 hover:text-amber-400 text-sm">Click to select files or drag and drop</label>
                 </div>
+                {notificationAttachmentFiles.length > 0 && (
+                  <ul className="space-y-2 rounded-xl bg-slate-800/50 border border-slate-700 p-2">
+                    {notificationAttachmentFiles.map((f, i) => (
+                      <li key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between gap-2 text-sm text-slate-200">
+                        <span className="truncate" title={f.name}>{f.name}</span>
+                        <span className="text-slate-500 shrink-0">{(f.size / 1024).toFixed(1)} KB</span>
+                        <button type="button" onClick={() => setNotificationAttachmentFiles((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 shrink-0">Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {notificationUploadProgress !== 'idle' && (
+                  <p className="mt-2 text-sm text-slate-400">Uploading… {typeof notificationUploadProgress === 'number' ? `${notificationUploadProgress}%` : ''}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Recipients</label>
@@ -212,26 +244,37 @@ export default function NotificationCentrePage() {
                       onClick={async () => {
                         if (!user?.id || !notificationMessage.trim()) return;
                         setNotificationSending(true);
+                        setNotificationUploadProgress(0);
                         try {
-                          let imageUrl: string | null = notificationImageUrl || null;
-                          if (notificationImageFile) {
-                            const form = new FormData();
-                            form.append('file', notificationImageFile);
-                            form.append('userId', user.id);
-                            const res = await fetch('/api/admin/upload-notification-image', { method: 'POST', body: form });
-                            if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Upload failed'); }
-                            const j = await res.json(); imageUrl = j.url ?? null;
-                          }
                           const recipientIds = notificationRecipientMode === 'all' ? profiles.filter((p) => !p.is_admin).map((p) => p.id) : Array.from(notificationSelectedIds);
-                          const { sent } = await sendAdminBroadcast(user.id, { title: notificationTitle.trim() || undefined, message: notificationMessage.trim(), image_url: imageUrl }, recipientIds);
-                          alert(`Notification sent to ${sent} member(s).`);
-                          setNotificationTitle(''); setNotificationMessage(''); setNotificationImageUrl(null); setNotificationImageFile(null); setNotificationConfirmSend(false); setNotificationSelectedIds(new Set());
+                          const form = new FormData();
+                          form.append('title', notificationTitle.trim());
+                          form.append('message', notificationMessage.trim());
+                          form.append('recipientIds', JSON.stringify(recipientIds));
+                          for (const f of notificationAttachmentFiles) form.append('files', f);
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const headers: HeadersInit = {};
+                          if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                          const res = await fetch('/api/admin/notifications/send', { method: 'POST', body: form, credentials: 'include', headers });
+                          setNotificationUploadProgress(100);
+                          if (!res.ok) {
+                            const j = await res.json().catch(() => ({}));
+                            throw new Error(j.error || res.statusText || 'Send failed');
+                          }
+                          const j = await res.json();
+                          alert(`Notification sent to ${j.sent ?? 0} member(s).`);
+                          setNotificationTitle('');
+                          setNotificationMessage('');
+                          setNotificationAttachmentFiles([]);
+                          setNotificationConfirmSend(false);
+                          setNotificationSelectedIds(new Set());
                           loadBroadcasts();
                           setActiveTab('sent');
                         } catch (err: unknown) {
                           alert(err instanceof Error ? err.message : 'Failed to send');
                         } finally {
                           setNotificationSending(false);
+                          setNotificationUploadProgress('idle');
                         }
                       }}
                       disabled={notificationSending}
