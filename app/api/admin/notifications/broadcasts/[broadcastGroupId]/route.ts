@@ -50,15 +50,16 @@ export async function GET(
 
     const first = rows[0] as { title?: string | null; message?: string | null; image_url?: string | null; created_at: string };
     const recipientIds = [...new Set(rows.map((r: { user_id: string }) => r.user_id))];
-    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', recipientIds);
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, role').in('id', recipientIds);
 
     const profileMap = new Map((profiles || []).map((p: { id: string }) => [p.id, p]));
     const recipients = rows.map((r: { user_id: string; read?: boolean; read_at?: string | null }) => {
-      const p = profileMap.get(r.user_id) as { full_name?: string; email?: string } | undefined;
+      const p = profileMap.get(r.user_id) as { full_name?: string; email?: string; role?: string } | undefined;
       return {
         recipientId: r.user_id,
         name: p?.full_name ?? '',
         email: p?.email ?? '',
+        role: p?.role ?? '',
         read: !!r.read,
         readAt: r.read_at ?? null,
       };
@@ -66,6 +67,12 @@ export async function GET(
 
     const totalRead = recipients.filter((r) => r.read).length;
     const total = recipients.length;
+
+    // Read receipts: sort read first, then by readAt descending (most recent read first)
+    const sortedRecipients = recipients.sort((a, b) => {
+      if (a.read !== b.read) return a.read ? -1 : 1;
+      return (b.readAt ?? '').localeCompare(a.readAt ?? '');
+    });
 
     return NextResponse.json({
       broadcastGroupId,
@@ -77,7 +84,7 @@ export async function GET(
       totalRead,
       totalUnread: total - totalRead,
       readPercentage: total ? Math.round((totalRead / total) * 100) : 0,
-      recipients: recipients.sort((a, b) => (b.readAt ?? '').localeCompare(a.readAt ?? '')),
+      recipients: sortedRecipients,
     });
   } catch (err: unknown) {
     console.error('GET /api/admin/notifications/broadcasts/[id]:', err);

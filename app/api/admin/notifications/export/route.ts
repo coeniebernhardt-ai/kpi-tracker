@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     }
 
     const header = expanded
-      ? 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %,Recipient Name,Recipient Email,Read Status,Read Timestamp\n'
+      ? 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %,Recipient Name,Recipient Email,Recipient Role,Read Status,Read Timestamp\n'
       : 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %\n';
 
     const lines: string[] = [header];
@@ -89,11 +89,11 @@ export async function GET(request: NextRequest) {
       const base = [gid, g.title ?? '', g.message, g.image_url ?? '', g.createdAt, recType, total, totalRead, totalUnread, readPct];
 
       if (expanded) {
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', g.recipients.map((x) => x.userId));
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, role').in('id', g.recipients.map((x) => x.userId));
         const pm = new Map((profiles || []).map((p: { id: string }) => [p.id, p]));
         for (const rec of g.recipients) {
-          const p = pm.get(rec.userId) as { full_name?: string; email?: string } | undefined;
-          lines.push([...base, p?.full_name ?? '', p?.email ?? '', rec.read ? 'Yes' : 'No', rec.readAt ?? ''].map(escapeCsvCell).join(',') + '\n');
+          const p = pm.get(rec.userId) as { full_name?: string; email?: string; role?: string } | undefined;
+          lines.push([...base, p?.full_name ?? '', p?.email ?? '', p?.role ?? '', rec.read ? 'Yes' : 'No', rec.readAt ?? ''].map(escapeCsvCell).join(',') + '\n');
         }
       } else {
         lines.push(base.map(escapeCsvCell).join(',') + '\n');

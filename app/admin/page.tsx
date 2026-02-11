@@ -1,7 +1,7 @@
 'use client';
 // Admin dashboard page
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import { supabase, getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments, sendAdminBroadcast } from '../lib/supabase';
@@ -78,7 +78,7 @@ export default function AdminPage() {
   const [broadcastGroups, setBroadcastGroups] = useState<Array<{ broadcastGroupId: string; title: string | null; messagePreview: string; hasImage: boolean; createdAt: string; totalRecipients: number; totalRead: number; readPercentage: number; totalUnread: number }>>([]);
   const [broadcastHistoryLoading, setBroadcastHistoryLoading] = useState(false);
   const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
-  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; read: boolean; readAt: string | null }> } | null>(null);
+  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }> } | null>(null);
   const [broadcastDetailLoading, setBroadcastDetailLoading] = useState(false);
 
   // Redirect if not admin
@@ -119,6 +119,16 @@ export default function AdminPage() {
       .finally(() => setBroadcastHistoryLoading(false));
   }, [user?.id, isAdmin]);
 
+  const fetchBroadcastDetail = useCallback((broadcastId: string) => {
+    return supabase.auth.getSession().then(({ data: { session } }) => {
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      return fetch(`/api/admin/notifications/broadcasts/${encodeURIComponent(broadcastId)}`, { credentials: 'include', headers });
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setBroadcastDetail(data));
+  }, []);
+
   useEffect(() => {
     if (!selectedBroadcastId || !user?.id) {
       setBroadcastDetail(null);
@@ -126,15 +136,17 @@ export default function AdminPage() {
     }
     setBroadcastDetailLoading(true);
     setBroadcastDetail(null);
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      return fetch(`/api/admin/notifications/broadcasts/${encodeURIComponent(selectedBroadcastId)}`, { credentials: 'include', headers });
-    })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => setBroadcastDetail(data))
-      .finally(() => setBroadcastDetailLoading(false));
-  }, [selectedBroadcastId, user?.id]);
+    fetchBroadcastDetail(selectedBroadcastId).finally(() => setBroadcastDetailLoading(false));
+  }, [selectedBroadcastId, user?.id, fetchBroadcastDetail]);
+
+  // Poll read receipts while broadcast detail modal is open so admin sees updates when members open notifications
+  useEffect(() => {
+    if (!selectedBroadcastId || !user?.id) return;
+    const interval = setInterval(() => {
+      fetchBroadcastDetail(selectedBroadcastId);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedBroadcastId, user?.id, fetchBroadcastDetail]);
 
   const loadData = async () => {
     console.log('loadData: Starting...');
@@ -818,22 +830,42 @@ export default function AdminPage() {
                       {broadcastDetail.title && <h4 className="text-xl font-medium text-white">{broadcastDetail.title}</h4>}
                       <p className="text-slate-300 whitespace-pre-wrap">{broadcastDetail.message}</p>
                       <p className="text-xs text-slate-500">Sent: {new Date(broadcastDetail.createdAt).toLocaleString()}</p>
-                      <div className="flex gap-4 text-sm">
-                        <span>Total: {broadcastDetail.totalRecipients}</span>
-                        <span className="text-green-500">Read: {broadcastDetail.totalRead}</span>
-                        <span className="text-amber-500">Unread: {broadcastDetail.totalUnread}</span>
-                        <span>{broadcastDetail.readPercentage}% read</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-white mb-2">Recipients</p>
-                        <ul className="divide-y divide-slate-700/50 max-h-60 overflow-y-auto">
-                          {broadcastDetail.recipients.map((r) => (
-                            <li key={r.recipientId} className="py-2 flex items-center justify-between gap-2">
-                              <span className="text-slate-300">{r.name || r.email || r.recipientId}</span>
-                              <span className={r.read ? 'text-green-500 text-xs' : 'text-amber-500 text-xs'}>{r.read ? `Read ${r.readAt ? new Date(r.readAt).toLocaleString() : ''}` : 'Unread'}</span>
-                            </li>
-                          ))}
-                        </ul>
+
+                      {/* Read Receipts: counts and table */}
+                      <div className="border border-slate-700/50 rounded-lg overflow-hidden">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-800/50 text-sm">
+                          <span className="text-slate-300">Total Recipients: <strong>{broadcastDetail.totalRecipients}</strong></span>
+                          <span className="text-green-500">Total Read: <strong>{broadcastDetail.totalRead}</strong></span>
+                          <span className="text-amber-500">Total Unread: <strong>{broadcastDetail.totalUnread}</strong></span>
+                          <span className="text-slate-300">Read %: <strong>{broadcastDetail.readPercentage}%</strong></span>
+                        </div>
+                        <p className="text-sm font-medium text-white px-3 pt-2 pb-1">Read Receipts</p>
+                        <div className="overflow-x-auto max-h-60 overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-slate-800/90 text-slate-400 text-left">
+                              <tr>
+                                <th className="px-3 py-2 font-medium">Recipient</th>
+                                <th className="px-3 py-2 font-medium">Role</th>
+                                <th className="px-3 py-2 font-medium">Status</th>
+                                <th className="px-3 py-2 font-medium">Read At</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700/50">
+                              {broadcastDetail.recipients.map((r) => (
+                                <tr key={r.recipientId} className={r.read ? 'bg-slate-800/30' : 'bg-amber-500/5'}>
+                                  <td className="px-3 py-2 text-slate-200">{r.name || r.email || r.recipientId}</td>
+                                  <td className="px-3 py-2 text-slate-400">{r.role || '—'}</td>
+                                  <td className="px-3 py-2">
+                                    <span className={r.read ? 'text-green-500 font-medium' : 'text-amber-500 font-medium'}>
+                                      {r.read ? 'Read' : 'Unread'}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-400">{r.read && r.readAt ? new Date(r.readAt).toLocaleString() : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   ) : (
