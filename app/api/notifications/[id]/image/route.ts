@@ -43,15 +43,15 @@ export async function GET(
     const supabaseAdmin = getSupabaseAdmin();
     const { data: notification, error } = await supabaseAdmin
       .from('notifications')
-      .select('user_id, image_url')
+      .select('user_id, image_url, deleted_at')
       .eq('id', id)
       .maybeSingle();
 
     if (error || !notification) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-
-    const n = notification as { user_id: string; image_url?: string | null };
+    const n = notification as { user_id: string; image_url?: string | null; deleted_at?: string | null };
+    if (n.deleted_at) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (n.user_id !== currentUser.id) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')

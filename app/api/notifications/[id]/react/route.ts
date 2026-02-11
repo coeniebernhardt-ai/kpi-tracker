@@ -31,15 +31,16 @@ async function authorizeNotificationAccess(
   supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
   notificationId: string,
   currentUserId: string
-): Promise<boolean> {
+): Promise<{ allowed: boolean; deleted?: boolean }> {
   const { data: notification, error } = await supabaseAdmin
     .from('notifications')
-    .select('user_id')
+    .select('user_id, deleted_at')
     .eq('id', notificationId)
     .maybeSingle();
-  if (error || !notification) return false;
-  const recipientId = (notification as { user_id: string }).user_id;
-  return recipientId === currentUserId;
+  if (error || !notification) return { allowed: false };
+  const n = notification as { user_id: string; deleted_at?: string | null };
+  if (n.deleted_at) return { allowed: false, deleted: true };
+  return { allowed: n.user_id === currentUserId };
 }
 
 /**
@@ -72,8 +73,13 @@ export async function POST(
     const typedReaction = reactionType as typeof VALID_REACTION_TYPES[number];
 
     const supabaseAdmin = getSupabaseAdmin();
-    const allowed = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
-    if (!allowed) return NextResponse.json({ error: 'Forbidden: only the notification recipient may react' }, { status: 403 });
+    const auth = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
+    if (!auth.allowed) {
+      return NextResponse.json(
+        { error: auth.deleted ? 'Not found' : 'Forbidden: only the notification recipient may react' },
+        { status: auth.deleted ? 404 : 403 }
+      );
+    }
 
     const { data: existing } = await supabaseAdmin
       .from('notification_reactions')
@@ -137,8 +143,13 @@ export async function DELETE(
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabaseAdmin = getSupabaseAdmin();
-    const allowed = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
-    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const auth = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
+    if (!auth.allowed) {
+      return NextResponse.json(
+        { error: auth.deleted ? 'Not found' : 'Forbidden' },
+        { status: auth.deleted ? 404 : 403 }
+      );
+    }
 
     await supabaseAdmin
       .from('notification_reactions')

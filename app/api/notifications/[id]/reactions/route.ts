@@ -27,26 +27,27 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   return tokenUser ? { id: tokenUser.id } : null;
 }
 
-/** Record-level auth: member may only access reactions on notifications addressed to them; admin can view all. */
+/** Record-level auth: member may only access reactions on non-deleted notifications; admin can view all. Returns 404 for deleted. */
 async function authorizeNotificationAccess(
   supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
   notificationId: string,
   currentUserId: string
-): Promise<boolean> {
+): Promise<{ allowed: boolean; deleted?: boolean }> {
   const { data: notification, error } = await supabaseAdmin
     .from('notifications')
-    .select('user_id')
+    .select('user_id, deleted_at')
     .eq('id', notificationId)
     .maybeSingle();
-  if (error || !notification) return false;
-  const recipientId = (notification as { user_id: string }).user_id;
-  if (recipientId === currentUserId) return true;
+  if (error || !notification) return { allowed: false };
+  const n = notification as { user_id: string; deleted_at?: string | null };
+  if (n.deleted_at) return { allowed: false, deleted: true };
+  if (n.user_id === currentUserId) return { allowed: true };
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('is_admin')
     .eq('id', currentUserId)
     .single();
-  return profile?.is_admin === true;
+  return { allowed: profile?.is_admin === true };
 }
 
 /**
@@ -65,8 +66,13 @@ export async function GET(
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabaseAdmin = getSupabaseAdmin();
-    const allowed = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
-    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const auth = await authorizeNotificationAccess(supabaseAdmin, notificationId, currentUser.id);
+    if (!auth.allowed) {
+      return NextResponse.json(
+        { error: auth.deleted ? 'Not found' : 'Forbidden' },
+        { status: auth.deleted ? 404 : 403 }
+      );
+    }
 
     const { data: rows, error } = await supabaseAdmin
       .from('notification_reactions')

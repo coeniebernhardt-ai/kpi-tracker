@@ -155,11 +155,14 @@ export async function PATCH(
     const supabaseAdmin = getSupabaseAdmin();
     const { data: notification, error: fetchError } = await supabaseAdmin
       .from('notifications')
-      .select('user_id')
+      .select('user_id, deleted_at')
       .eq('id', id)
       .maybeSingle();
 
     if (fetchError || !notification) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    if ((notification as { deleted_at?: string | null }).deleted_at) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 

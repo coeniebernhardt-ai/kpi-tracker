@@ -24,8 +24,12 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
 }
 
 /**
- * Soft delete: set deleted_at so notifications are hidden from UI and export.
- * Admin only. Query: ?notificationId=uuid (single) or ?broadcastGroupId=uuid (entire group).
+ * SOFT DELETE: set deleted_at on notification rows so they are hidden from members and export.
+ * Admin only. All member queries filter deleted_at IS NULL; deleted notifications return 404.
+ *
+ * - broadcastGroupId: soft-delete ALL per-recipient notification rows with that broadcast_group_id.
+ * - notificationId: soft-delete that single notification (e.g. non-broadcast or manual).
+ * Reactions and attachments are left in place; access is blocked because notification is deleted.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -43,6 +47,7 @@ export async function DELETE(request: NextRequest) {
     const deletedAt = new Date().toISOString();
 
     if (broadcastGroupId) {
+      // Soft-delete ALL per-recipient rows for this broadcast so members never see them
       const { data: rows, error } = await supabase
         .from('notifications')
         .update({ deleted_at: deletedAt })
@@ -54,7 +59,8 @@ export async function DELETE(request: NextRequest) {
         console.error('DELETE broadcast group:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
-      return NextResponse.json({ deleted: (rows ?? []).length, broadcastGroupId });
+      const count = (rows ?? []).length;
+      return NextResponse.json({ deleted: count, broadcastGroupId });
     }
 
     if (notificationId) {

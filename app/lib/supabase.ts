@@ -920,6 +920,11 @@ export async function createNotificationsForNewAssignments(
   }
 }
 
+/**
+ * Member notification list: dropdown and polling both use this.
+ * MUST filter: user_id = recipient AND deleted_at IS NULL so deleted notifications never appear.
+ * RLS on notifications also enforces deleted_at IS NULL for SELECT (run FIX_RLS_HIDE_DELETED_NOTIFICATIONS.sql).
+ */
 export async function getNotificationsByUserId(userId: string): Promise<Notification[]> {
   const { data, error } = await supabase
     .from('notifications')
