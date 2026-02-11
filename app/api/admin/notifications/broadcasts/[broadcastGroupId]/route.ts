@@ -74,6 +74,27 @@ export async function GET(
       return (b.readAt ?? '').localeCompare(a.readAt ?? '');
     });
 
+    // Reactions: aggregate across all notification rows in this broadcast (each recipient has one notification)
+    const notificationIds = rows.map((r: { id: string }) => r.id);
+    const { data: reactionRows } = await supabase
+      .from('notification_reactions')
+      .select('notification_id, user_id, reaction_type')
+      .in('notification_id', notificationIds);
+
+    const reactionList = (reactionRows || []) as { notification_id: string; user_id: string; reaction_type: string }[];
+    const summary = { LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 };
+    const validTypes = ['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'];
+    for (const r of reactionList) {
+      if (validTypes.includes(r.reaction_type)) summary[r.reaction_type as keyof typeof summary]++;
+    }
+    const reactorIds = [...new Set(reactionList.map((r) => r.user_id))];
+    const { data: reactorProfiles } = await supabase.from('profiles').select('id, full_name').in('id', reactorIds);
+    const reactorNameMap = new Map((reactorProfiles || []).map((p: { id: string; full_name?: string }) => [p.id, p.full_name ?? '']));
+    const reactionsByUser = reactionList
+      .filter((r) => validTypes.includes(r.reaction_type))
+      .map((r) => ({ userName: reactorNameMap.get(r.user_id) || r.user_id, reactionType: r.reaction_type }))
+      .sort((a, b) => a.userName.localeCompare(b.userName));
+
     return NextResponse.json({
       broadcastGroupId,
       title: first.title ?? null,
@@ -85,6 +106,8 @@ export async function GET(
       totalUnread: total - totalRead,
       readPercentage: total ? Math.round((totalRead / total) * 100) : 0,
       recipients: sortedRecipients,
+      reactionsSummary: summary,
+      reactionsByUser,
     });
   } catch (err: unknown) {
     console.error('GET /api/admin/notifications/broadcasts/[id]:', err);

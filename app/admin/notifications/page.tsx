@@ -30,7 +30,7 @@ export default function NotificationCentrePage() {
   const [broadcastGroups, setBroadcastGroups] = useState<Array<{ broadcastGroupId: string; title: string | null; messagePreview: string; hasImage: boolean; createdAt: string; totalRecipients: number; totalRead: number; readPercentage: number; totalUnread: number }>>([]);
   const [broadcastHistoryLoading, setBroadcastHistoryLoading] = useState(false);
   const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
-  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }> } | null>(null);
+  const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }>; reactionsSummary?: { LIKE: number; MUSCLE: number; LAUGH: number; COPY_THAT: number }; reactionsByUser?: Array<{ userName: string; reactionType: string }> } | null>(null);
   const [broadcastDetailLoading, setBroadcastDetailLoading] = useState(false);
 
   useEffect(() => {
@@ -356,6 +356,45 @@ export default function NotificationCentrePage() {
                           </tbody>
                         </table>
                       </div>
+                    </div>
+                    {/* Reactions Summary + by User (admin analytics); polling keeps counts updated */}
+                    <div className="border border-slate-700/50 rounded-lg overflow-hidden space-y-3">
+                      <p className="text-sm font-medium text-white px-3 pt-3">Reactions Summary</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-3 pb-2 text-sm">
+                        <span className="text-slate-300">👍 Like: <strong>{broadcastDetail.reactionsSummary?.LIKE ?? 0}</strong></span>
+                        <span className="text-slate-300">💪 Strong Arm: <strong>{broadcastDetail.reactionsSummary?.MUSCLE ?? 0}</strong></span>
+                        <span className="text-slate-300">😂 Laugh: <strong>{broadcastDetail.reactionsSummary?.LAUGH ?? 0}</strong></span>
+                        <span className="text-slate-300">🫡 Copy That: <strong>{broadcastDetail.reactionsSummary?.COPY_THAT ?? 0}</strong></span>
+                      </div>
+                      {broadcastDetail.reactionsByUser && broadcastDetail.reactionsByUser.length > 0 && (
+                          <>
+                            <p className="text-sm font-medium text-white px-3 pt-2">Reactions by User</p>
+                            <div className="overflow-x-auto max-h-40 overflow-y-auto px-3 pb-3">
+                              <table className="w-full text-sm">
+                                <thead className="sticky top-0 bg-slate-800/90 text-slate-400 text-left">
+                                  <tr>
+                                    <th className="py-2 font-medium">User Name</th>
+                                    <th className="py-2 font-medium">Reaction</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                  {broadcastDetail.reactionsByUser.map((u, i) => (
+                                    <tr key={`${u.userName}-${i}`} className="text-slate-200">
+                                      <td className="py-1.5">{u.userName}</td>
+                                      <td className="py-1.5">
+                                        {u.reactionType === 'LIKE' && '👍'}
+                                        {u.reactionType === 'MUSCLE' && '💪'}
+                                        {u.reactionType === 'LAUGH' && '😂'}
+                                        {u.reactionType === 'COPY_THAT' && '🫡'}
+                                        {!['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'].includes(u.reactionType) && u.reactionType}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                      )}
                     </div>
                   </div>
                 ) : (

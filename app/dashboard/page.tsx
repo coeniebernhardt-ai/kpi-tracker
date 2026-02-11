@@ -66,6 +66,9 @@ export default function DashboardPage() {
   const [notificationDetail, setNotificationDetail] = useState<Notification | null>(null);
   const [notificationDetailLoading, setNotificationDetailLoading] = useState(false);
   const [notificationDetailImageError, setNotificationDetailImageError] = useState(false);
+  // Reaction state: summary counts and current user's reaction; optimistic updates then sync with backend
+  const [reactionSummary, setReactionSummary] = useState<{ LIKE: number; MUSCLE: number; LAUGH: number; COPY_THAT: number }>({ LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
+  const [userReaction, setUserReaction] = useState<string | null>(null);
   
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -203,6 +206,31 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!notificationDetailId) setNotificationDetailImageError(false);
   }, [notificationDetailId]);
+
+  // Fetch reactions when notification detail is open; poll for real-time updates without full re-render
+  useEffect(() => {
+    if (!notificationDetailId || !user?.id) {
+      setReactionSummary({ LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
+      setUserReaction(null);
+      return;
+    }
+    // Reset so we don't briefly show previous notification's counts
+    setReactionSummary({ LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
+    setUserReaction(null);
+    const fetchReactions = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch(`/api/notifications/${notificationDetailId}/reactions`, { credentials: 'include', headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      setReactionSummary(data.summary ?? { LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
+      setUserReaction(data.userReaction ?? null);
+    };
+    fetchReactions();
+    const interval = setInterval(fetchReactions, 15000);
+    return () => clearInterval(interval);
+  }, [notificationDetailId, user?.id]);
 
   const loadNotifications = async () => {
     if (!user?.id) return;
@@ -1000,6 +1028,56 @@ export default function DashboardPage() {
                         {notificationDetailImageError && (
                           <p className="p-4 text-sm text-slate-500 text-center">Image could not be loaded.</p>
                         )}
+                      </div>
+                    )}
+                    {/* Compact reaction bar: emoji + count only; one reaction per user; toggle/replace via POST */}
+                    {notificationDetail.type === 'admin_broadcast' && (
+                      <div className="flex flex-wrap items-center gap-3 py-2">
+                        {[
+                          { type: 'LIKE', emoji: '👍' },
+                          { type: 'MUSCLE', emoji: '💪' },
+                          { type: 'LAUGH', emoji: '😂' },
+                          { type: 'COPY_THAT', emoji: '🫡' },
+                        ].map(({ type, emoji }) => {
+                          const count = reactionSummary[type as keyof typeof reactionSummary] ?? 0;
+                          const isSelected = userReaction === type;
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={async () => {
+                                if (!notificationDetailId || !user?.id) return;
+                                const prevSummary = { ...reactionSummary };
+                                const prevUser = userReaction;
+                                if (isSelected) {
+                                  setUserReaction(null);
+                                  setReactionSummary((s) => ({ ...s, [type]: Math.max(0, (s[type as keyof typeof s] ?? 0) - 1) }));
+                                } else {
+                                  if (prevUser) setReactionSummary((s) => ({ ...s, [prevUser]: Math.max(0, (s[prevUser as keyof typeof s] ?? 0) - 1) }));
+                                  setUserReaction(type);
+                                  setReactionSummary((s) => ({ ...s, [type]: (s[type as keyof typeof s] ?? 0) + 1 }));
+                                }
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                                if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                                const res = await fetch(`/api/notifications/${notificationDetailId}/react`, {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                  headers,
+                                  body: JSON.stringify({ reactionType: type }),
+                                });
+                                if (!res.ok) {
+                                  setReactionSummary(prevSummary);
+                                  setUserReaction(prevUser);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm transition-all hover:bg-slate-700/50 ${isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' : 'border border-slate-600/50 text-slate-300'}`}
+                            >
+                              <span>{emoji}</span>
+                              <span>{count}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                     {/* Sender and timestamp – from API */}

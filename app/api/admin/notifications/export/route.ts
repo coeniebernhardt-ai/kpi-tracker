@@ -48,9 +48,9 @@ export async function GET(request: NextRequest) {
       .not('broadcast_group_id', 'is', null)
       .order('created_at', { ascending: false });
 
-    const byGroup = new Map<string, { title: string | null; message: string; image_url: string | null; createdAt: string; recipients: { userId: string; read: boolean; readAt: string | null }[] }>();
+    const byGroup = new Map<string, { title: string | null; message: string; image_url: string | null; createdAt: string; recipients: { userId: string; read: boolean; readAt: string | null; notificationId: string }[] }>();
     for (const r of rows || []) {
-      const n = r as { broadcast_group_id: string; title?: string | null; message?: string | null; image_url?: string | null; created_at: string; read?: boolean; read_at?: string | null; user_id: string };
+      const n = r as { id: string; broadcast_group_id: string; title?: string | null; message?: string | null; image_url?: string | null; created_at: string; read?: boolean; read_at?: string | null; user_id: string };
       const gid = n.broadcast_group_id;
       if (!byGroup.has(gid)) {
         byGroup.set(gid, {
@@ -61,8 +61,28 @@ export async function GET(request: NextRequest) {
           recipients: [],
         });
       }
-      byGroup.get(gid)!.recipients.push({ userId: n.user_id, read: !!n.read, readAt: n.read_at ?? null });
+      byGroup.get(gid)!.recipients.push({ userId: n.user_id, read: !!n.read, readAt: n.read_at ?? null, notificationId: n.id });
     }
+
+    const allNotificationIds = (rows || []).map((r: { id: string }) => r.id);
+    const { data: reactionRows } = await supabase
+      .from('notification_reactions')
+      .select('notification_id, user_id, reaction_type')
+      .in('notification_id', allNotificationIds);
+    const reactionList = (reactionRows || []) as { notification_id: string; user_id: string; reaction_type: string }[];
+    const reactionByNotification = new Map<string, string>();
+    for (const x of reactionList) {
+      reactionByNotification.set(x.notification_id, x.reaction_type);
+    }
+    const validReactionTypes = ['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'];
+    const sumReactions = (notificationIds: string[]) => {
+      const s = { LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 };
+      for (const nid of notificationIds) {
+        const t = reactionByNotification.get(nid);
+        if (t && validReactionTypes.includes(t)) s[t as keyof typeof s]++;
+      }
+      return s;
+    };
 
     const recipientType = (g: { recipients: { length: number } }, totalMembers: number) =>
       g.recipients.length >= totalMembers ? 'All Members' : 'Selected Members';
@@ -74,8 +94,8 @@ export async function GET(request: NextRequest) {
     }
 
     const header = expanded
-      ? 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %,Recipient Name,Recipient Email,Recipient Role,Read Status,Read Timestamp\n'
-      : 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %\n';
+      ? 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %,Total Like,Total StrongArm,Total Laugh,Total CopyThat,Recipient Name,Recipient Email,Recipient Role,Read Status,Read Timestamp,Reaction\n'
+      : 'Broadcast ID,Title,Message,Image URL,Date Sent,Recipient Type,Total Recipients,Total Read,Total Unread,Read %,Total Like,Total StrongArm,Total Laugh,Total CopyThat\n';
 
     const lines: string[] = [header];
 
@@ -85,15 +105,19 @@ export async function GET(request: NextRequest) {
       const totalUnread = total - totalRead;
       const readPct = total ? Math.round((totalRead / total) * 100) : 0;
       const recType = recipientType(g, totalMembers);
+      const notifIds = g.recipients.map((x) => x.notificationId);
+      const reactSum = sumReactions(notifIds);
 
-      const base = [gid, g.title ?? '', g.message, g.image_url ?? '', g.createdAt, recType, total, totalRead, totalUnread, readPct];
+      const base = [gid, g.title ?? '', g.message, g.image_url ?? '', g.createdAt, recType, total, totalRead, totalUnread, readPct, reactSum.LIKE, reactSum.MUSCLE, reactSum.LAUGH, reactSum.COPY_THAT];
 
       if (expanded) {
         const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, role').in('id', g.recipients.map((x) => x.userId));
         const pm = new Map((profiles || []).map((p: { id: string }) => [p.id, p]));
         for (const rec of g.recipients) {
           const p = pm.get(rec.userId) as { full_name?: string; email?: string; role?: string } | undefined;
-          lines.push([...base, p?.full_name ?? '', p?.email ?? '', p?.role ?? '', rec.read ? 'Yes' : 'No', rec.readAt ?? ''].map(escapeCsvCell).join(',') + '\n');
+          const reaction = reactionByNotification.get(rec.notificationId) ?? '';
+          const reactionLabel = reaction === 'LIKE' ? 'Like' : reaction === 'MUSCLE' ? 'Strong Arm' : reaction === 'LAUGH' ? 'Laugh' : reaction === 'COPY_THAT' ? 'Copy That' : reaction;
+          lines.push([...base, p?.full_name ?? '', p?.email ?? '', p?.role ?? '', rec.read ? 'Yes' : 'No', rec.readAt ?? '', reactionLabel].map(escapeCsvCell).join(',') + '\n');
         }
       } else {
         lines.push(base.map(escapeCsvCell).join(',') + '\n');
