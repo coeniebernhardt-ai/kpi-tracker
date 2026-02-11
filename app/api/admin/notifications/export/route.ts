@@ -23,7 +23,8 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   return tokenUser ? { id: tokenUser.id } : null;
 }
 
-function escapeCsvCell(s: string): string {
+function escapeCsvCell(value: string | number): string {
+  const s = String(value);
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
