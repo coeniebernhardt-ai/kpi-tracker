@@ -4,12 +4,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
+import { supabase, getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
 import AIInsightsPanel from '../components/AIInsightsPanel';
 import WorkspaceLoader from '../components/WorkspaceLoader';
+import ExportsPanel from '../components/ExportsPanel';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -20,12 +21,11 @@ export default function AdminPage() {
   const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showStatsExport, setShowStatsExport] = useState(false);
-  const [showTravelLogExport, setShowTravelLogExport] = useState(false);
+  const [showExportsPanel, setShowExportsPanel] = useState(false);
   const [showImageLinks, setShowImageLinks] = useState(false);
-  const [exportDateFrom, setExportDateFrom] = useState('');
-  const [exportDateTo, setExportDateTo] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [filterUser, setFilterUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
   const [filterIssueSearch, setFilterIssueSearch] = useState('');
@@ -41,11 +41,6 @@ export default function AdminPage() {
     estateOrBuilding: '',
     cmlLocation: ''
   });
-
-  // Stats export state
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [exportUser, setExportUser] = useState('all');
 
   // Profile picture upload state
   const [uploadingFor, setUploadingFor] = useState<Profile | null>(null);
@@ -313,135 +308,6 @@ export default function AdminPage() {
       : 0;
   const ticketsHandled = totalClosed;
 
-  // Export functions
-  const getFilteredTicketsForExport = () => {
-    let filtered = [...tickets];
-    
-    if (exportUser !== 'all') {
-      filtered = filtered.filter(t => t.user_id === exportUser);
-    }
-    
-    if (dateFrom) {
-      filtered = filtered.filter(t => new Date(t.created_at) >= new Date(dateFrom));
-    }
-    
-    if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(t => new Date(t.created_at) <= toDate);
-    }
-    
-    return filtered;
-  };
-
-  const exportToCSV = () => {
-    const exportTickets = getFilteredTicketsForExport();
-    // Headers and column order match dashboard form; every cell quoted + newlines stripped so one row per ticket (redeploy to apply)
-    const headers = [
-      'Ticket Number',
-      'Team Member',
-      'Client',
-      'Type',
-      'Estate or Building',
-      'Location (as per CML)',
-      'Task Location',
-      'ClickUp Ticket',
-      'Ticket Status',
-      'Issue Description',
-      'Resolution',
-      'Has Dependencies',
-      'Dependency',
-      'Ticket Updates',
-      'Total Time Tracked (Minutes)',
-      'Time Log Details',
-      'Response Time (Minutes)',
-      'Date Created',
-      'Date Closed'
-    ];
-    
-    const rows = exportTickets.map(t => {
-      const memberProfile = profiles.find(p => p.id === t.user_id);
-      
-      // Format updates as a single string with timestamps
-      const updatesFormatted = t.updates && t.updates.length > 0
-        ? t.updates.map((u: { text: string; timestamp: string }) => 
-            `[${new Date(u.timestamp).toLocaleString('en-ZA')}] ${u.text}`
-          ).join(' | ')
-        : '';
-      
-      // Format time logs as a single string
-      const timeLogsFormatted = t.time_logs && t.time_logs.length > 0
-        ? t.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }) => 
-            `[${new Date(log.timestamp).toLocaleString('en-ZA')}] ${log.minutes}min - ${log.description}${log.logged_by ? ` (${log.logged_by})` : ''}`
-          ).join(' | ')
-        : '';
-      
-      return [
-        t.ticket_number || '',
-        memberProfile?.full_name || 'Unknown',
-        t.client || '',
-        t.ticket_type || '',
-        t.estate_or_building || '',
-        t.cml_location || '',
-        t.location === 'on-site' ? 'On-Site' : t.location === 'remote' ? 'Remote' : '',
-        t.clickup_ticket || '',
-        t.status === 'open' ? 'Open' : t.status === 'closed' ? 'Closed' : '',
-        t.issue || '',
-        t.resolution || '',
-        t.has_dependencies ? 'Yes' : 'No',
-        t.dependency_name || '',
-        updatesFormatted,
-        t.total_time_minutes?.toString() || '',
-        timeLogsFormatted,
-        t.response_time_minutes?.toString() || '',
-        new Date(t.created_at).toLocaleString('en-ZA'),
-        t.closed_at ? new Date(t.closed_at).toLocaleString('en-ZA') : ''
-      ];
-    });
-    
-    // Strip ALL newline-like chars so one ticket = one line (Excel treats \n inside quotes as new row)
-    const stripNewlines = (s: string): string =>
-      s.replace(/\r\n|\r|\n|\u2028|\u2029/g, ' ').replace(/\s+/g, ' ').trim();
-
-    const escapeCSVCell = (cell: string | number | undefined): string => {
-      if (cell === undefined || cell === null) return '""';
-      let str = stripNewlines(String(cell));
-      return `"${str.replace(/"/g, '""')}"`;
-    };
-
-    const toCSVLine = (cells: (string | number | undefined)[]) =>
-      cells.map(escapeCSVCell).join(',');
-
-    const csv = [
-      toCSVLine(headers),
-      ...rows.map(r => toCSVLine(r))
-    ].join('\r\n');
-    // BOM helps Excel recognize UTF-8 and open with correct columns
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `kpi-report-${dateFrom}-to-${dateTo}.csv`;
-    link.click();
-  };
-
-  const getExportStats = () => {
-    const exportTickets = getFilteredTicketsForExport();
-    const closed = exportTickets.filter(t => t.status === 'closed');
-    const withResponseTime = closed.filter(t => t.response_time_minutes && t.response_time_minutes > 0);
-    const avgResponseTime = withResponseTime.length > 0
-      ? withResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / withResponseTime.length
-      : 0;
-    
-    return {
-      total: exportTickets.length,
-      closed: closed.length,
-      open: exportTickets.filter(t => t.status === 'open').length,
-      closedRate: exportTickets.length > 0 ? ((closed.length / exportTickets.length) * 100).toFixed(1) : '0',
-      avgResponseTime: avgResponseTime.toFixed(0)
-    };
-  };
-
   const getAvatarGradient = (name: string) => {
     const colors = ['from-blue-400 to-blue-600', 'from-blue-500 to-indigo-600', 'from-indigo-400 to-blue-500', 'from-blue-600 to-cyan-500', 'from-cyan-400 to-blue-500'];
     return colors[name.charCodeAt(0) % colors.length];
@@ -532,18 +398,33 @@ export default function AdminPage() {
               </svg>
               Manage Users
             </button>
-            <button onClick={() => setShowStatsExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export Stats
-            </button>
-            <button onClick={() => setShowTravelLogExport(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              Export Travel Logs
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowExportsPanel((v) => !v)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exports
+              </button>
+              {showExportsPanel && (
+                <>
+                  <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setShowExportsPanel(false)} />
+                  <ExportsPanel
+                    isAdmin={true}
+                    onClose={() => setShowExportsPanel(false)}
+                    getAuthHeaders={async () => {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const headers: HeadersInit = {};
+                      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                      return headers;
+                    }}
+                  />
+                </>
+              )}
+            </div>
             <button onClick={() => setShowImageLinks(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: '#1e3a5f', border: '1px solid rgba(30, 58, 95, 0.3)' }}>
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1381,215 +1262,6 @@ export default function AdminPage() {
                   <button type="button" onClick={() => setShowCreateForm(false)} className="px-5 py-3 rounded-xl bg-slate-700 text-slate-300">Cancel</button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stats Export Modal */}
-      {showStatsExport && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowStatsExport(false)} />
-          <div className="absolute inset-0 flex items-center justify-center p-6">
-            <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
-              <div className="p-6 border-b border-slate-700/50">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-white">Export Statistics</h2>
-                  <button onClick={() => setShowStatsExport(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-2">From Date</label>
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-2">To Date</label>
-                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-2">Team Member</label>
-                  <select value={exportUser} onChange={(e) => setExportUser(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white">
-                    <option value="all">All Members (Global Report)</option>
-                    {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                  </select>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">Preview</h3>
-                  {(() => {
-                    const stats = getExportStats();
-                    return (
-                      <div className="grid grid-cols-4 gap-4 text-center">
-                        <div><p className="text-2xl font-bold text-white">{stats.total}</p><p className="text-xs text-slate-500">Total</p></div>
-                        <div><p className="text-2xl font-bold text-blue-300">{stats.closed}</p><p className="text-xs text-slate-500">Closed ({stats.closedRate}%)</p></div>
-                        <div><p className="text-2xl font-bold text-amber-400">{stats.open}</p><p className="text-xs text-slate-500">Open</p></div>
-                        <div><p className="text-2xl font-bold text-cyan-400">{stats.avgResponseTime}</p><p className="text-xs text-slate-500">Avg Response (min)</p></div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <button onClick={exportToCSV} className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  Download CSV Report
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Travel Log Export Modal */}
-      {showTravelLogExport && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowTravelLogExport(false)} />
-          <div className="absolute inset-0 flex items-center justify-center p-6">
-            <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
-              <div className="p-6 border-b border-slate-700/50">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-white">Export Travel Logs</h2>
-                  <button onClick={() => setShowTravelLogExport(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-2">From Date</label>
-                    <input 
-                      type="date" 
-                      value={exportDateFrom} 
-                      onChange={(e) => setExportDateFrom(e.target.value)} 
-                      className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-2">To Date</label>
-                    <input 
-                      type="date" 
-                      value={exportDateTo} 
-                      onChange={(e) => setExportDateTo(e.target.value)} 
-                      className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-2">Team Member</label>
-                  <select value={exportUser} onChange={(e) => setExportUser(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white">
-                    <option value="all">All Members</option>
-                    {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                  </select>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">Preview</h3>
-                  {(() => {
-                    const filteredLogs = travelLogs.filter(log => {
-                      const logDate = new Date(log.created_at);
-                      const from = exportDateFrom ? new Date(exportDateFrom) : null;
-                      const to = exportDateTo ? new Date(exportDateTo) : null;
-                      
-                      const matchesDate = (!from || logDate >= from) && (!to || logDate <= to);
-                      const matchesUser = exportUser === 'all' || log.user_id === exportUser;
-                      
-                      return matchesDate && matchesUser;
-                    });
-                    return (
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-white">{filteredLogs.length}</p>
-                        <p className="text-xs text-slate-500">Total Travel Logs</p>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <button 
-                  onClick={() => {
-                    const filteredLogs = travelLogs.filter(log => {
-                      const logDate = new Date(log.created_at);
-                      const from = exportDateFrom ? new Date(exportDateFrom) : null;
-                      const to = exportDateTo ? new Date(exportDateTo) : null;
-                      
-                      const matchesDate = (!from || logDate >= from) && (!to || logDate <= to);
-                      const matchesUser = exportUser === 'all' || log.user_id === exportUser;
-                      
-                      return matchesDate && matchesUser;
-                    });
-                    
-                    // Create CSV with proper escaping
-                    const escapeCSVCell = (cell: string | number | undefined): string => {
-                      if (cell === undefined || cell === null) return '';
-                      const str = String(cell);
-                      // If cell contains comma, newline, or quote, wrap in quotes and escape quotes
-                      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-                        return `"${str.replace(/"/g, '""')}"`;
-                      }
-                      return str;
-                    };
-                    
-                    const headers = ['Date', 'Time', 'User', 'Reason', 'Start Address', 'End Address', 'Return Trip', 'Distance (km)', 'Comments', 'Attachments'];
-                    const rows = filteredLogs.map(log => {
-                      const logDate = new Date(log.created_at);
-                      const dateStr = logDate.toLocaleDateString('en-ZA', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                      });
-                      const timeStr = logDate.toLocaleTimeString('en-ZA', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                      });
-                      
-                      return [
-                        dateStr,
-                        timeStr,
-                        log.profile?.full_name || 'Unknown',
-                        log.reason || '',
-                        log.start_address || '',
-                        log.end_address || '',
-                        log.is_return_trip ? 'Yes' : 'No',
-                        log.distance_travelled?.toString() || '',
-                        log.comments || '',
-                        log.attachments && log.attachments.length > 0 
-                          ? log.attachments.map(a => a.name).join('; ') 
-                          : ''
-                      ];
-                    });
-                    
-                    const csvContent = [
-                      headers.map(h => escapeCSVCell(h)).join(','),
-                      ...rows.map(row => row.map(cell => escapeCSVCell(cell)).join(','))
-                    ].join('\n');
-                    
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', `travel-logs-${new Date().toISOString().split('T')[0]}.csv`);
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  className="w-full px-5 py-3 rounded-xl text-white font-medium flex items-center justify-center gap-2"
-                  style={{ backgroundColor: '#1e3a5f' }}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  Download CSV Report
-                </button>
-              </div>
             </div>
           </div>
         </div>
