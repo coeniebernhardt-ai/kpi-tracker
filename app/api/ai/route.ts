@@ -7,10 +7,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
 import OpenAI from 'openai';
+import { appendFileSync } from 'fs';
+import { join } from 'path';
 
 export const maxDuration = 30;
 
 const MAX_ROWS = 500;
+
+// #region agent log
+const DEBUG_LOG_PATH = join(process.cwd(), '.cursor', 'debug.log');
+function debugLog(location: string, message: string, data: Record<string, unknown>) {
+  const payload = { location, message, data, timestamp: Date.now() };
+  fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  try { appendFileSync(DEBUG_LOG_PATH, JSON.stringify(payload) + '\n'); } catch (_) {}
+}
+// #endregion
 const QUERY_TIMEOUT_MS = 5000;
 
 const DESTRUCTIVE_PATTERNS = [
@@ -124,10 +135,13 @@ export async function POST(request: NextRequest) {
   let pool: Pool | null = null;
 
   try {
-    console.log("=== AI ROUTE START ===");
-
+    // #region agent log
+    debugLog('app/api/ai/route.ts:POST:entry', 'AI route POST started', {});
+    // #endregion
     const currentUser = await getCurrentUser(request);
-
+    // #region agent log
+    debugLog('app/api/ai/route.ts:POST:afterAuth', 'After getCurrentUser', { hasUser: !!currentUser });
+    // #endregion
     if (!currentUser) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -166,7 +180,9 @@ export async function POST(request: NextRequest) {
         temperature: 0.1,
         max_tokens: 1024,
       });
-
+    // #region agent log
+    debugLog('app/api/ai/route.ts:POST:afterOpenAI', 'After OpenAI completion', { hasContent: !!completion.choices[0]?.message?.content });
+    // #endregion
     const rawSql =
       completion.choices[0]?.message?.content?.trim() ?? '';
 
@@ -193,15 +209,20 @@ export async function POST(request: NextRequest) {
     /* ===========================
        DATABASE QUERY
     ============================ */
-
+    // #region agent log
+    const sslConfig = { rejectUnauthorized: false };
+    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, ssl: sslConfig });
+    // #endregion
     pool = new Pool({
       connectionString: dbUrl,
       max: 1,
-      // Supabase (and many cloud Postgres poolers) use certs that trigger "self-signed certificate in certificate chain"
-      ssl: { rejectUnauthorized: false },
+      ssl: sslConfig,
     });
 
     const client = await pool.connect();
+    // #region agent log
+    debugLog('app/api/ai/route.ts:POST:afterConnect', 'pool.connect() succeeded', {});
+    // #endregion
 
     try {
       await client.query(
@@ -222,9 +243,9 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (err: any) {
-    console.error("=== AI ROUTE ERROR ===");
-    console.error(err);
-
+    // #region agent log
+    debugLog('app/api/ai/route.ts:POST:catch', 'Error caught', { message: err?.message ?? String(err), name: err?.name, isCertError: typeof err?.message === 'string' && (err.message.includes('certificate') || err.message.includes('cert')) });
+    // #endregion
     return NextResponse.json(
       {
         success: false,
