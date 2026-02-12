@@ -54,7 +54,32 @@ AI Insights is **disabled by default**. To enable it:
 
 If `ENABLE_AI_INSIGHTS` is not set or not `true`, the AI Insights API returns 503. Get a key at https://platform.openai.com/api-keys if needed.
 
-### 4. Verify Environment Variables
+### 4. AI Natural Language route (POST /api/ai) – optional
+
+The Admin AI Insights panel can run natural-language queries against your database. To enable it:
+
+1. **Get your Postgres connection string**
+   - Go to: https://supabase.com/dashboard → your project
+   - **Settings** → **Database**
+   - Under **Connection string**, choose **URI**
+   - Copy the URI (e.g. `postgresql://postgres.[ref]:[YOUR-PASSWORD]@aws-0-xx.pooler.supabase.com:6543/postgres`)
+   - Replace `[YOUR-PASSWORD]` with your database password (same as in Supabase Dashboard → Settings → Database if you’re not sure)
+
+2. **Add in Vercel**
+   - **Settings** → **Environment Variables** → **Add New**
+   - **Key**: `AI_DATABASE_URL`
+   - **Value**: the full Postgres URI from step 1
+   - **Environment**: Preview (and Production/Development if you use the feature there)
+   - Save
+
+3. **OpenAI**
+   - The route also needs `OPENAI_API_KEY` (same as in section 3). If you already set it for AI Insights, no change needed.
+
+4. **Redeploy** after adding `AI_DATABASE_URL` so the new variable is applied.
+
+If `AI_DATABASE_URL` or `OPENAI_API_KEY` is missing, the route returns 503 and the panel will show an error.
+
+### 5. Verify Environment Variables
 
 After redeploying, the following environment variables should be set in Vercel:
 
@@ -62,9 +87,10 @@ After redeploying, the following environment variables should be set in Vercel:
 - ✅ `NEXT_PUBLIC_SUPABASE_ANON_KEY` (should already be set)
 - ✅ `SUPABASE_SERVICE_ROLE_KEY` (for admin features)
 - ✅ `ENABLE_AI_INSIGHTS` (set to `true` to enable AI Insights; optional)
-- ✅ `OPENAI_API_KEY` (required when AI Insights is enabled; optional otherwise)
+- ✅ `OPENAI_API_KEY` (required when AI Insights is enabled; required for /api/ai)
+- ✅ `AI_DATABASE_URL` (required for /api/ai natural-language queries; optional otherwise)
 
-### 5. Test Ticket Deletion
+### 6. Test Ticket Deletion
 
 After redeploying with the new environment variable:
 1. Go to the admin dashboard
