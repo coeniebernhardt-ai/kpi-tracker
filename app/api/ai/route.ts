@@ -197,6 +197,8 @@ export async function POST(request: NextRequest) {
     pool = new Pool({
       connectionString: dbUrl,
       max: 1,
+      // Supabase (and many cloud Postgres poolers) use certs that trigger "self-signed certificate in certificate chain"
+      ssl: { rejectUnauthorized: false },
     });
 
     const client = await pool.connect();
