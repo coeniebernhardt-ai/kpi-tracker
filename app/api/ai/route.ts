@@ -28,7 +28,28 @@ const DESTRUCTIVE_PATTERNS = [
 ];
 
 const SELECT_ONLY_PATTERN =
-  /^\s*WITH\s+.+\s+SELECT\s+|^\s*SELECT\s+/i;
+  /^\s*(WITH\s+.+\s+SELECT|SELECT)\s+/i;
+
+/** Extract a single SELECT or WITH...SELECT from model output (may include explanation text). */
+function extractSql(raw: string): string {
+  let s = raw
+    .replace(/^```\w*\n?|```\s*$/g, '')
+    .trim();
+  // If it already starts with SELECT or WITH, use as-is (after trim).
+  if (SELECT_ONLY_PATTERN.test(s)) return s;
+  // Otherwise find the first SELECT or WITH and take from there to end (or to next ;).
+  const selectIdx = s.search(/\bSELECT\b/i);
+  const withIdx = s.search(/\bWITH\s+\w+/i);
+  let start = -1;
+  if (withIdx >= 0 && (selectIdx < 0 || withIdx < selectIdx)) start = withIdx;
+  else if (selectIdx >= 0) start = selectIdx;
+  if (start >= 0) {
+    s = s.slice(start).trim();
+    const semicolon = s.indexOf(';');
+    if (semicolon > 0) s = s.slice(0, semicolon).trim();
+  }
+  return s;
+}
 
 /* ===========================
    AUTH – BEARER TOKEN METHOD
@@ -121,20 +142,27 @@ export async function POST(request: NextRequest) {
     if (!openaiKey) throw new Error("OPENAI_API_KEY missing");
 
     const body = await request.json().catch(() => ({}));
-    const messages = Array.isArray(body.messages)
+    const messages: { role: string; content: string }[] = Array.isArray(body.messages)
       ? body.messages
       : [];
 
-    /* ===========================
-       OPENAI CALL
-    ============================ */
-
     const openai = new OpenAI({ apiKey: openaiKey });
+
+    const systemPrompt =
+      'You are a SQL expert for PostgreSQL. Reply with ONLY a single SELECT or WITH...SELECT statement. No explanation, no markdown, no code fence. Tables: profiles, tickets, travel_logs, notifications.';
+
+    const chatMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map((m) => ({
+        role: (m.role === 'system' ? 'user' : m.role) as 'user' | 'assistant',
+        content: m.content,
+      })),
+    ];
 
     const completion =
       await openai.chat.completions.create({
         model: 'gpt-4.1-mini',
-        messages,
+        messages: chatMessages,
         temperature: 0.1,
         max_tokens: 1024,
       });
@@ -142,9 +170,7 @@ export async function POST(request: NextRequest) {
     const rawSql =
       completion.choices[0]?.message?.content?.trim() ?? '';
 
-    const sql = rawSql
-      .replace(/^```\w*\n?|```\s*$/g, '')
-      .trim();
+    const sql = extractSql(rawSql);
 
     if (!sql) {
       return NextResponse.json(
@@ -182,11 +208,12 @@ export async function POST(request: NextRequest) {
 
       const result = await client.query(safeSql);
 
+      const rows = result.rows ?? [];
       return NextResponse.json({
         success: true,
         sql: safeSql,
-        rows: result.rows,
-        rowCount: result.rowCount,
+        rows,
+        rowCount: result.rowCount ?? rows.length,
       });
     } finally {
       client.release();
