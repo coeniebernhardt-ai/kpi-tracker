@@ -6,9 +6,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
+import { parse as parsePgUrl } from 'pg-connection-string';
 import OpenAI from 'openai';
 import { appendFileSync } from 'fs';
 import { join } from 'path';
+
+/** Supabase pooler requires username in form user.PROJECT_REF. Get ref from project URL. */
+function getProjectRef(supabaseUrl: string | undefined): string | null {
+  if (!supabaseUrl) return null;
+  try {
+    const u = new URL(supabaseUrl);
+    const host = u.hostname || '';
+    const m = host.match(/^([a-z0-9-]+)\.supabase\.co$/i);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
 
 export const maxDuration = 30;
 
@@ -212,16 +226,37 @@ export async function POST(request: NextRequest) {
     /* ===========================
        DATABASE QUERY
     ============================ */
-    // Strip URL SSL params then force no-verify so pg-connection-string sets ssl: { rejectUnauthorized: false }
-    // (avoids "self-signed certificate in certificate chain" with Supabase on Vercel)
-    let normalizedUrl = dbUrl.replace(/\?(.*)$/, (_, q) => {
-      const params = q.split('&').filter((p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p));
-      return params.length ? '?' + params.join('&') : '';
-    });
-    const sep = normalizedUrl.includes('?') ? '&' : '?';
-    normalizedUrl = `${normalizedUrl}${sep}sslmode=no-verify`;
+    const parsed = parsePgUrl(dbUrl);
+    const sslParamStrip = (p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p);
+    let user = parsed.user ?? '';
+    const password = parsed.password ?? '';
+    const host = parsed.host ?? '';
+    const port = String(parsed.port ?? 5432);
+    const database = parsed.database ?? 'postgres';
+    // Supabase pooler requires username as "user.PROJECT_REF" or returns "Tenant or user not found"
+    const projectRef = getProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    const isPooler = /pooler\.supabase\.com/i.test(host) || port === '6543';
+    if (projectRef && isPooler && user && !user.includes('.')) {
+      user = `${user}.${projectRef}`;
+    }
+    const queryFromUrl = dbUrl.includes('?') ? dbUrl.replace(/^[^?]*\?/, '') : '';
+    const safeParams = queryFromUrl.split('&').filter(sslParamStrip);
+    safeParams.push('sslmode=no-verify');
+    const queryString = safeParams.length ? '?' + safeParams.join('&') : '';
+    const normalizedUrl =
+      'postgresql://' +
+      encodeURIComponent(user) +
+      ':' +
+      encodeURIComponent(password) +
+      '@' +
+      host +
+      ':' +
+      port +
+      '/' +
+      (database || '') +
+      queryString;
     // #region agent log
-    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl });
+    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler, userHasDot: user.includes('.') });
     // #endregion
     phase = 'db_connect';
     pool = new Pool({
