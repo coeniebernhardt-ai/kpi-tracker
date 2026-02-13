@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
+import { parse as parsePgUrl } from 'pg-connection-string';
 import OpenAI from 'openai';
 import { appendFileSync } from 'fs';
 import { join } from 'path';
@@ -224,27 +225,31 @@ export async function POST(request: NextRequest) {
     console.log("Generated SQL:", safeSql);
 
     /* ===========================
-       DATABASE QUERY
+       DATABASE QUERY – explicit config so password (e.g. with @) is never mangled by URL encoding
     ============================ */
-    // Minimal URL edits so password is never re-encoded (avoids auth failures when env has %40 etc.)
-    const sslParamStrip = (p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p);
-    const [base, queryPart] = dbUrl.includes('?') ? dbUrl.split('?') : [dbUrl, ''];
-    const safeParams = queryPart.split('&').filter(Boolean).filter(sslParamStrip);
-    safeParams.push('sslmode=no-verify');
-    let normalizedUrl = base + '?' + safeParams.join('&');
-    // Supabase pooler requires username "postgres.PROJECT_REF" (inject without parsing so password is untouched)
+    const parsed = parsePgUrl(dbUrl);
+    let user = (parsed.user ?? '').trim();
+    const password = (parsed.password ?? '').trim();
+    const host = (parsed.host ?? '').trim();
+    const port = Number(parsed.port) || 5432;
+    const database = (parsed.database ?? 'postgres').trim();
     const projectRef = getProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
-    const isPooler = /pooler\.supabase\.com/i.test(normalizedUrl);
-    if (projectRef && isPooler && /^postgresql:\/\/postgres([:@])/i.test(normalizedUrl)) {
-      normalizedUrl = normalizedUrl.replace(/^postgresql:\/\/postgres([:@])/i, `postgresql://postgres.${projectRef}$1`);
+    const isPooler = /pooler\.supabase\.com/i.test(host);
+    if (projectRef && isPooler && user && !user.includes('.')) {
+      user = `${user}.${projectRef}`;
     }
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler });
     // #endregion
     phase = 'db_connect';
     pool = new Pool({
-      connectionString: normalizedUrl,
+      host,
+      port,
+      user,
+      password,
+      database,
       max: 1,
+      ssl: { rejectUnauthorized: false },
     });
 
     const client = await pool.connect();
