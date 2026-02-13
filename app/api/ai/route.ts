@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
       user = `${user}.${projectRef}`;
     }
     const connectionString =
-      `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}?sslmode=no-verify`;
+      `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}?sslmode=no-verify&pgbouncer=true`;
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler });
     // #endregion
@@ -274,10 +274,9 @@ export async function POST(request: NextRequest) {
     // #endregion
 
     try {
-      await client.query(
-        `SET statement_timeout = ${QUERY_TIMEOUT_MS}`
-      );
-
+      if (!isPooler) {
+        await client.query(`SET statement_timeout = ${QUERY_TIMEOUT_MS}`);
+      }
       const result = await client.query(safeSql);
 
       const rows = result.rows ?? [];
