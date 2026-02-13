@@ -1,5 +1,5 @@
 /**
- * AI Insights – prompt template. Isolated so we can change behaviour without touching API or UI.
+ * Think-Q – prompt template. Isolated so we can change behaviour without touching API or UI.
  * The AI receives ONLY the universal analytics snapshot (read-only). It may derive percentages/ratios from the snapshot.
  */
 

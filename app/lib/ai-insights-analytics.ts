@@ -1,5 +1,5 @@
 /**
- * AI Insights – compute universal analytics snapshot from live data (read-only).
+ * Think-Q – compute universal analytics snapshot from live data (read-only).
  * Single source of truth for AI and CSV export. No mutations.
  */
 

@@ -1,5 +1,5 @@
 /**
- * AI Insights – issue nature classification (READ-ONLY, derived from ticket text).
+ * Think-Q – issue nature classification (READ-ONLY, derived from ticket text).
  * Converts unstructured issue/resolution text into a single structured dimension.
  * Deterministic, keyword-based; explainable and auditable. Source tickets are never modified.
  */

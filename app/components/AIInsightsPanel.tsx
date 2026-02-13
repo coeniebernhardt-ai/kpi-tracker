@@ -210,49 +210,61 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
   return (
     <div className="space-y-4">
       <header className="flex items-center gap-2">
-        <span className="text-white font-medium">Ask</span>
-        <span className="inline-block w-2 shrink-0" aria-hidden />
-        <Logo variant="team" className="h-6 w-auto" width={80} height={20} />
+        <span className="text-white font-medium text-[1.25rem] leading-none h-5 flex items-center">Ask</span>
+        <Logo variant="team" className="h-5 w-auto" width={80} height={20} />
       </header>
 
+      {(messages.length > 0 || loading) && (
       <div className="space-y-3 max-h-[400px] overflow-y-auto rounded-xl bg-slate-800/30 border border-slate-700/50 p-3">
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
-              m.role === 'user'
-                ? 'ml-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border border-blue-500/50 shadow-blue-500/20'
-                : 'mr-8 bg-slate-700/90 text-slate-100 border-l-[3px] border-cyan-400/70'
-            }`}
+            className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
           >
-            <div className="flex items-center gap-2 mb-1.5">
-              {m.role === 'user' ? (
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/90 text-white ring-1 ring-blue-400/50">
-                  <User className="w-4 h-4" />
-                </span>
-              ) : (
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-600/90 text-cyan-300 ring-1 ring-cyan-400/50">
-                  <Bot className="w-4 h-4" />
-                </span>
-              )}
-              <span className="font-medium text-slate-200">{m.role === 'user' ? 'You' : 'Think-Q'}</span>
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm max-w-[85%] ${
+                m.role === 'user'
+                  ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/25'
+                  : 'bg-slate-800 text-gray-200 border-l-[3px] border-cyan-400'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                {m.role === 'user' ? (
+                  <>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                      <User className="w-4 h-4" />
+                    </span>
+                    <span className="font-medium text-white">You</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 border-2 border-cyan-400/80 text-cyan-300">
+                      <Bot className="w-4 h-4" />
+                    </span>
+                    <span className="font-medium text-gray-200">Think-Q</span>
+                  </>
+                )}
+              </div>
+              <div className="whitespace-pre-wrap pl-9">{m.content}</div>
             </div>
-            <div className="whitespace-pre-wrap pl-9">{m.content}</div>
           </div>
         ))}
         {loading && (
-          <div className="rounded-2xl px-4 py-3 text-sm mr-8 bg-slate-700/90 text-slate-400 border-l-[3px] border-cyan-400/70 shadow-sm">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-600/90 text-cyan-300 ring-1 ring-cyan-400/50">
-                <Bot className="w-4 h-4" />
-              </span>
-              <span className="font-medium text-slate-400">Think-Q</span>
+          <div className="flex justify-start">
+            <div className="rounded-2xl px-4 py-3 text-sm max-w-[85%] bg-slate-800 text-gray-200 border-l-[3px] border-cyan-400 shadow-sm">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 border-2 border-cyan-400/80 text-cyan-300">
+                  <Bot className="w-4 h-4" />
+                </span>
+                <span className="font-medium text-gray-200">Think-Q</span>
+              </div>
+              <div className="pl-9 text-gray-400">Looking that up…</div>
             </div>
-            <div className="pl-9">Looking that up…</div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
+      )}
 
       {lastResult && lastResult.rows.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50">

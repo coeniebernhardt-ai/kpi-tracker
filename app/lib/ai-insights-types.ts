@@ -1,5 +1,5 @@
 /**
- * AI Insights – shared types for metrics and API.
+ * Think-Q – shared types for metrics and API.
  * Universal snapshot is the single source for AI and CSV export.
  */
 

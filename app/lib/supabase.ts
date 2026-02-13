@@ -1073,7 +1073,7 @@ export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise
     .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('[AI Insights] getAllTicketsForAnalytics:', error.message);
+    console.error('[Think-Q] getAllTicketsForAnalytics:', error.message);
     return [];
   }
   return (data ?? []) as TicketRowForAnalytics[];
@@ -1095,7 +1095,7 @@ export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Prom
     .select('created_at, user_id, end_address, start_address, distance_travelled, reason, is_return_trip')
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('[AI Insights] getAllTravelLogsForAnalytics:', error.message);
+    console.error('[Think-Q] getAllTravelLogsForAnalytics:', error.message);
     return [];
   }
   return (data ?? []) as TravelRowForAnalytics[];
@@ -1116,7 +1116,7 @@ export async function getProfilesForAnalytics(client: SupabaseClient): Promise<P
     .select('id, full_name, role, is_admin, is_active, created_at')
     .order('full_name');
   if (error) {
-    console.error('[AI Insights] getProfilesForAnalytics:', error.message);
+    console.error('[Think-Q] getProfilesForAnalytics:', error.message);
     return [];
   }
   return (data ?? []) as ProfileRowForAnalytics[];

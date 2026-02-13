@@ -1,5 +1,5 @@
 /**
- * AI Insights – download as CSV or PDF. Client-side only.
+ * Think-Q – download as CSV or PDF. Client-side only.
  * Full snapshot CSV = exactly what the AI sees, flattened for Excel/pivot/audit.
  */
 
@@ -115,7 +115,7 @@ export function buildFullSnapshotCsv(
   options?: { question?: string; answer?: string }
 ): string {
   const lines: string[] = [];
-  lines.push(toCsvLine(['AI Insights – Full Analytics Snapshot (read-only)']));
+  lines.push(toCsvLine(['Think-Q – Full Analytics Snapshot (read-only)']));
   lines.push(toCsvLine(['Generated at', snapshot.generatedAt]));
   lines.push(toCsvLine(['Filters', JSON.stringify(snapshot.filters)]));
   lines.push('');
@@ -272,7 +272,7 @@ export function downloadFullSnapshotCsv(response: AIInsightsResponse): void {
 export function buildInsightCsv(response: AIInsightsResponse): string {
   const m = response.metrics;
   const rows: string[][] = [
-    ['AI Insights Export'],
+    ['Think-Q Export'],
     ['Generated at', response.generatedAt],
     ['Question', response.question],
     [],
@@ -323,7 +323,7 @@ function buildInsightHtml(response: AIInsightsResponse): string {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>AI Insights Report</title>
+  <title>Think-Q Report</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #1e293b; }
     h1 { font-size: 1.25rem; margin-bottom: 8px; }
@@ -336,7 +336,7 @@ function buildInsightHtml(response: AIInsightsResponse): string {
   </style>
 </head>
 <body>
-  <h1>AI Insights Report</h1>
+  <h1>Think-Q Report</h1>
   <div class="meta">Generated: ${response.generatedAt} · Filters: ${filtersStr}</div>
   <div class="section">
     <h2>Question</h2>
