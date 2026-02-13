@@ -209,12 +209,17 @@ export async function POST(request: NextRequest) {
     /* ===========================
        DATABASE QUERY
     ============================ */
-    // #region agent log
+    // Remove sslmode/ssl params from URL so Pool ssl config is not overridden (avoids "self-signed certificate" on Supabase)
+    let normalizedUrl = dbUrl.replace(/\?(.*)$/, (_, q) => {
+      const params = q.split('&').filter((p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p));
+      return params.length ? '?' + params.join('&') : '';
+    });
     const sslConfig = { rejectUnauthorized: false };
+    // #region agent log
     debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, ssl: sslConfig });
     // #endregion
     pool = new Pool({
-      connectionString: dbUrl,
+      connectionString: normalizedUrl,
       max: 1,
       ssl: sslConfig,
     });
