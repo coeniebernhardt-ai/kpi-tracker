@@ -57,7 +57,7 @@ function toConversationalSummary(rowCount: number, question: string): string {
   }
   if (/\bopen\b.*\bticket|ticket.*\bopen\b/.test(q)) return `You have ${rowCount} open ticket${rowCount !== 1 ? 's' : ''} at the moment.`;
   if (/\bclosed\b.*\bticket|ticket.*\bclosed\b/.test(q)) return `${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the backlog.`;
-  return `I’ve pulled that for you—see the summary below.`;
+  return `I’ve what I found—see the summary below.`;
 }
 
 export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) {
@@ -128,11 +128,10 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
           const rows = data.rows ?? [];
           const rowCount = data.rowCount ?? rows.length;
           setLastResult({ rows, rowCount });
-          const summary = toConversationalSummary(rowCount, q);
-          const followUp = rowCount > 0
-            ? '\n\nWould you like this broken down by team member or sorted by most recent activity?'
-            : '';
-          setMessages((prev) => [...prev, { role: 'assistant', content: summary + followUp }]);
+          const content = typeof data.message === 'string' && data.message.trim()
+            ? data.message
+            : toConversationalSummary(rowCount, q);
+          setMessages((prev) => [...prev, { role: 'assistant', content }]);
         } else {
           setMessages((prev) => [...prev, { role: 'assistant', content: data.error ?? "I wasn’t able to answer that. Try rephrasing or a different question." }]);
         }
@@ -168,14 +167,25 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
         setError(data.error ?? 'Download failed.');
         return;
       }
+      const contentType = res.headers.get('Content-Type') ?? '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.message ?? 'There’s no data to export for that question.' }]);
+        setDownloadOpen(false);
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       const ext = format === 'xlsx' ? 'xlsx' : 'csv';
-      a.download = `AI-Export-${new Date().toISOString().slice(0, 10)}.${ext}`;
+      a.download = `Think-Q-Export-${new Date().toISOString().slice(0, 10)}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
+      const fileMessage = res.headers.get('X-Think-Q-Message');
+      if (fileMessage) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: fileMessage }]);
+      }
       setDownloadOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed');
