@@ -1,6 +1,7 @@
 /**
  * POST /api/ai
  * Natural language to SQL over Postgres. Role-based scoping. SELECT only.
+ * Connection: AI_DATABASE_URL (trimmed, sslmode=no-verify, pooler user postgres.PROJECT_REF if needed).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
