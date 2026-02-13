@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
-import { Download } from 'lucide-react';
+import { Download, User, Bot } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -48,13 +48,15 @@ function friendlyColumnName(key: string): string {
 
 function toConversationalSummary(rowCount: number, question: string): string {
   const q = question.toLowerCase();
-  if (rowCount === 0) return "Nothing came up for that. Try asking in a different way or broadening the question—happy to try again.";
+  if (rowCount === 0) return "Nothing came up for that. Rephrase or broaden the question and I’ll try again.";
   if (/\bhow many\b/.test(q) || /\bcount\b/.test(q)) {
-    return `That’s ${rowCount} ${rowCount === 1 ? 'result' : 'results'} in total.`;
+    if (/\bopen\b.*\bticket|ticket.*\bopen\b/.test(q)) return `You have ${rowCount} open ticket${rowCount !== 1 ? 's' : ''} right now.`;
+    if (/\bclosed\b.*\bticket|ticket.*\bclosed\b/.test(q)) return `There ${rowCount === 1 ? 'is' : 'are'} ${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the backlog.`;
+    return `That comes to ${rowCount} in total.`;
   }
-  if (/\bopen\b.*\bticket/.test(q)) return `Right now there ${rowCount === 1 ? 'is' : 'are'} ${rowCount} open ticket${rowCount !== 1 ? 's' : ''}.`;
-  if (/\bclosed\b.*\bticket/.test(q)) return `There ${rowCount === 1 ? 'is' : 'are'} ${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the data.`;
-  return `Here are ${rowCount} ${rowCount === 1 ? 'result' : 'results'} that match.`;
+  if (/\bopen\b.*\bticket|ticket.*\bopen\b/.test(q)) return `You have ${rowCount} open ticket${rowCount !== 1 ? 's' : ''} at the moment.`;
+  if (/\bclosed\b.*\bticket|ticket.*\bclosed\b/.test(q)) return `${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the backlog.`;
+  return `I’ve pulled that for you—see the summary below. Would you like to dig into any part of it?`;
 }
 
 export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) {
@@ -127,7 +129,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
           setLastResult({ rows, rowCount });
           const summary = toConversationalSummary(rowCount, q);
           const followUp = rowCount > 0
-            ? '\n\nIf it helps, you can ask to break it down by team member or to see the most recent ones.'
+            ? '\n\nYou can ask to break it down by team member or to see the most recent items.'
             : '';
           setMessages((prev) => [...prev, { role: 'assistant', content: summary + followUp }]);
         } else {
@@ -200,17 +202,30 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`rounded-lg px-3 py-2 text-sm ${
-              m.role === 'user' ? 'bg-blue-500/10 text-blue-100 ml-4' : 'bg-slate-700/50 text-slate-200 mr-4'
+            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+              m.role === 'user'
+                ? 'ml-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border border-blue-500/50 shadow-blue-500/10'
+                : 'mr-8 bg-slate-700/80 text-slate-100 border-l-[3px] border-cyan-500/60'
             }`}
           >
-            <span className="font-medium text-slate-400">{m.role === 'user' ? 'You' : 'Think-Q'}: </span>
-            <span className="whitespace-pre-wrap">{m.content}</span>
+            <div className="flex items-center gap-2 mb-1.5">
+              {m.role === 'user' ? (
+                <User className="w-4 h-4 text-white/90 shrink-0" />
+              ) : (
+                <Bot className="w-4 h-4 text-slate-300 shrink-0" />
+              )}
+              <span className="font-medium text-slate-300">{m.role === 'user' ? 'You' : 'Think-Q'}</span>
+            </div>
+            <div className="whitespace-pre-wrap pl-6">{m.content}</div>
           </div>
         ))}
         {loading && (
-          <div className="rounded-lg px-3 py-2 text-sm bg-slate-700/50 text-slate-400">
-            Looking that up…
+          <div className="rounded-2xl px-4 py-3 text-sm mr-8 bg-slate-700/80 text-slate-400 border-l-[3px] border-cyan-500/60 shadow-sm">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Bot className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="font-medium text-slate-400">Think-Q</span>
+            </div>
+            <div className="pl-6">Looking that up…</div>
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -254,15 +269,15 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder=""
+          placeholder="Type here"
           className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 outline-none focus:border-blue-500"
           disabled={loading}
-          aria-label="Ask a question"
+          aria-label="Message"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Send
         </button>
