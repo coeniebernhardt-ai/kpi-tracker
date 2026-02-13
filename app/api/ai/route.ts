@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
-import { parse as parsePgUrl } from 'pg-connection-string';
 import OpenAI from 'openai';
 import { appendFileSync } from 'fs';
 import { join } from 'path';
@@ -165,7 +164,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dbUrl = process.env.AI_DATABASE_URL;
+    const dbUrl = (process.env.AI_DATABASE_URL ?? '').trim();
     const openaiKey = process.env.OPENAI_API_KEY;
 
     if (!dbUrl) throw new Error("AI_DATABASE_URL missing");
@@ -226,37 +225,20 @@ export async function POST(request: NextRequest) {
     /* ===========================
        DATABASE QUERY
     ============================ */
-    const parsed = parsePgUrl(dbUrl);
+    // Minimal URL edits so password is never re-encoded (avoids auth failures when env has %40 etc.)
     const sslParamStrip = (p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p);
-    let user = (parsed.user ?? '').trim();
-    const password = (parsed.password ?? '').trim();
-    const host = parsed.host ?? '';
-    const port = String(parsed.port ?? 5432);
-    const database = parsed.database ?? 'postgres';
-    // Supabase pooler requires username as "user.PROJECT_REF" or returns "Tenant or user not found"
-    const projectRef = getProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
-    const isPooler = /pooler\.supabase\.com/i.test(host) || port === '6543';
-    if (projectRef && isPooler && user && !user.includes('.')) {
-      user = `${user}.${projectRef}`;
-    }
-    const queryFromUrl = dbUrl.includes('?') ? dbUrl.replace(/^[^?]*\?/, '') : '';
-    const safeParams = queryFromUrl.split('&').filter(sslParamStrip);
+    const [base, queryPart] = dbUrl.includes('?') ? dbUrl.split('?') : [dbUrl, ''];
+    const safeParams = queryPart.split('&').filter(Boolean).filter(sslParamStrip);
     safeParams.push('sslmode=no-verify');
-    const queryString = safeParams.length ? '?' + safeParams.join('&') : '';
-    const normalizedUrl =
-      'postgresql://' +
-      encodeURIComponent(user) +
-      ':' +
-      encodeURIComponent(password) +
-      '@' +
-      host +
-      ':' +
-      port +
-      '/' +
-      (database || '') +
-      queryString;
+    let normalizedUrl = base + '?' + safeParams.join('&');
+    // Supabase pooler requires username "postgres.PROJECT_REF" (inject without parsing so password is untouched)
+    const projectRef = getProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    const isPooler = /pooler\.supabase\.com/i.test(normalizedUrl);
+    if (projectRef && isPooler && /^postgresql:\/\/postgres([:@])/i.test(normalizedUrl)) {
+      normalizedUrl = normalizedUrl.replace(/^postgresql:\/\/postgres([:@])/i, `postgresql://postgres.${projectRef}$1`);
+    }
     // #region agent log
-    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler, userHasDot: user.includes('.') });
+    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler });
     // #endregion
     phase = 'db_connect';
     pool = new Pool({
