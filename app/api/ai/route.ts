@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
     console.log("Generated SQL:", safeSql);
 
     /* ===========================
-       DATABASE QUERY – explicit config so password (e.g. with @) is never mangled by URL encoding
+       DATABASE QUERY – parse once (decodes %40 etc.), then build URL so password is encoded correctly
     ============================ */
     const parsed = parsePgUrl(dbUrl);
     let user = (parsed.user ?? '').trim();
@@ -238,18 +238,16 @@ export async function POST(request: NextRequest) {
     if (projectRef && isPooler && user && !user.includes('.')) {
       user = `${user}.${projectRef}`;
     }
+    const connectionString =
+      `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}?sslmode=no-verify`;
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, isPooler });
     // #endregion
     phase = 'db_connect';
     pool = new Pool({
-      host,
-      port,
-      user,
-      password,
-      database,
+      connectionString,
       max: 1,
-      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 15000,
     });
 
     const client = await pool.connect();
