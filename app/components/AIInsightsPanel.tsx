@@ -64,7 +64,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
       if (contentType.includes('application/json')) {
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error ?? `Error ${res.status}`);
+          setError([data.error ?? `Error ${res.status}`, data.phase ? `(phase: ${data.phase})` : ''].filter(Boolean).join(' '));
           setMessages((prev) => prev.slice(0, -1));
           return;
         }

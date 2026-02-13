@@ -133,11 +133,13 @@ function applyLimit(sql: string): string {
 
 export async function POST(request: NextRequest) {
   let pool: Pool | null = null;
+  let phase = 'start';
 
   try {
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:entry', 'AI route POST started', {});
     // #endregion
+    phase = 'auth';
     const currentUser = await getCurrentUser(request);
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:afterAuth', 'After getCurrentUser', { hasUser: !!currentUser });
@@ -161,6 +163,7 @@ export async function POST(request: NextRequest) {
       : [];
 
     const openai = new OpenAI({ apiKey: openaiKey });
+    phase = 'openai';
 
     const systemPrompt =
       'You are a SQL expert for PostgreSQL. Reply with ONLY a single SELECT or WITH...SELECT statement. No explanation, no markdown, no code fence. Tables: profiles, tickets, travel_logs, notifications.';
@@ -218,6 +221,7 @@ export async function POST(request: NextRequest) {
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, ssl: sslConfig });
     // #endregion
+    phase = 'db_connect';
     pool = new Pool({
       connectionString: normalizedUrl,
       max: 1,
@@ -225,6 +229,7 @@ export async function POST(request: NextRequest) {
     });
 
     const client = await pool.connect();
+    phase = 'db_query';
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:afterConnect', 'pool.connect() succeeded', {});
     // #endregion
@@ -255,6 +260,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: err?.message || "Server error",
+        phase,
       },
       { status: 500 }
     );
