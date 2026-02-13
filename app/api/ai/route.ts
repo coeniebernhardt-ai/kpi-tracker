@@ -212,20 +212,21 @@ export async function POST(request: NextRequest) {
     /* ===========================
        DATABASE QUERY
     ============================ */
-    // Remove sslmode/ssl params from URL so Pool ssl config is not overridden (avoids "self-signed certificate" on Supabase)
+    // Strip URL SSL params then force no-verify so pg-connection-string sets ssl: { rejectUnauthorized: false }
+    // (avoids "self-signed certificate in certificate chain" with Supabase on Vercel)
     let normalizedUrl = dbUrl.replace(/\?(.*)$/, (_, q) => {
       const params = q.split('&').filter((p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p));
       return params.length ? '?' + params.join('&') : '';
     });
-    const sslConfig = { rejectUnauthorized: false };
+    const sep = normalizedUrl.includes('?') ? '&' : '?';
+    normalizedUrl = `${normalizedUrl}${sep}sslmode=no-verify`;
     // #region agent log
-    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl, ssl: sslConfig });
+    debugLog('app/api/ai/route.ts:POST:beforePool', 'About to create Pool', { hasDbUrl: !!dbUrl });
     // #endregion
     phase = 'db_connect';
     pool = new Pool({
       connectionString: normalizedUrl,
       max: 1,
-      ssl: sslConfig,
     });
 
     const client = await pool.connect();
