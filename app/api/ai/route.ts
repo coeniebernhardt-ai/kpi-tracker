@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
 import { parse as parsePgUrl } from 'pg-connection-string';
 import OpenAI from 'openai';
+import * as XLSX from 'xlsx';
 import { appendFileSync } from 'fs';
 import { join } from 'path';
 
@@ -286,11 +287,28 @@ Join tickets to profiles on tickets.user_id = profiles.id. Join travel_logs to p
       const result = await client.query(safeSql);
 
       const rows = result.rows ?? [];
+      const rowCount = result.rowCount ?? rows.length;
+
+      if (body.responseFormat === 'xlsx') {
+        const wb = XLSX.utils.book_new();
+        const sheetData = rows.length > 0 ? rows : [{}];
+        const sheet = XLSX.utils.json_to_sheet(sheetData);
+        XLSX.utils.book_append_sheet(wb, sheet, 'Results');
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        const filename = `AI-Export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        return new Response(buffer, {
+          headers: {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          },
+        });
+      }
+
       return NextResponse.json({
         success: true,
         sql: safeSql,
         rows,
-        rowCount: result.rowCount ?? rows.length,
+        rowCount,
       });
     } finally {
       client.release();

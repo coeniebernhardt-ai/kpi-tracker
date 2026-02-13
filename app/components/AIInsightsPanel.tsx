@@ -158,6 +158,32 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
 
       {lastResult && (
         <div className="space-y-2">
+          {lastResult.rows.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    {Object.keys(lastResult.rows[0]).map((key) => (
+                      <th key={key} className="px-3 py-2 font-medium text-slate-300 whitespace-nowrap">
+                        {key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lastResult.rows.map((row, ri) => (
+                    <tr key={ri} className="border-b border-slate-700/50 last:border-0">
+                      {Object.keys(lastResult.rows[0]).map((key) => (
+                        <td key={key} className="px-3 py-2 text-slate-200">
+                          {row[key] != null ? String(row[key]) : ''}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setSqlOpen((o) => !o)}
