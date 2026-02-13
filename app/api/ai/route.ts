@@ -228,8 +228,8 @@ export async function POST(request: NextRequest) {
     ============================ */
     const parsed = parsePgUrl(dbUrl);
     const sslParamStrip = (p: string) => !/^sslmode=|^ssl=|^sslcert=|^sslkey=|^sslrootcert=/i.test(p);
-    let user = parsed.user ?? '';
-    const password = parsed.password ?? '';
+    let user = (parsed.user ?? '').trim();
+    const password = (parsed.password ?? '').trim();
     const host = parsed.host ?? '';
     const port = String(parsed.port ?? 5432);
     const database = parsed.database ?? 'postgres';
