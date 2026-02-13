@@ -250,7 +250,24 @@ export async function POST(request: NextRequest) {
       connectionTimeoutMillis: 15000,
     });
 
-    const client = await pool.connect();
+    let client;
+    try {
+      client = await pool.connect();
+    } catch (connectErr: unknown) {
+      const msg = (connectErr as Error)?.message ?? String(connectErr);
+      const retryable = /terminated unexpectedly|ECONNRESET|not available|Connection to database/i.test(msg);
+      if (retryable) {
+        await pool.end().catch(() => {});
+        pool = new Pool({
+          connectionString,
+          max: 1,
+          connectionTimeoutMillis: 15000,
+        });
+        client = await pool.connect();
+      } else {
+        throw connectErr;
+      }
+    }
     phase = 'db_query';
     // #region agent log
     debugLog('app/api/ai/route.ts:POST:afterConnect', 'pool.connect() succeeded', {});
