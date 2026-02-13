@@ -10,6 +10,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { Download, User, Bot } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import Logo from './Logo';
 
 export interface AIInsightsPanelProps {
   filters?: Record<string, unknown>;
@@ -56,7 +57,7 @@ function toConversationalSummary(rowCount: number, question: string): string {
   }
   if (/\bopen\b.*\bticket|ticket.*\bopen\b/.test(q)) return `You have ${rowCount} open ticket${rowCount !== 1 ? 's' : ''} at the moment.`;
   if (/\bclosed\b.*\bticket|ticket.*\bclosed\b/.test(q)) return `${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the backlog.`;
-  return `I’ve pulled that for you—see the summary below. Would you like to dig into any part of it?`;
+  return `I’ve pulled that for you—see the summary below.`;
 }
 
 export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) {
@@ -129,11 +130,11 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
           setLastResult({ rows, rowCount });
           const summary = toConversationalSummary(rowCount, q);
           const followUp = rowCount > 0
-            ? '\n\nYou can ask to break it down by team member or to see the most recent items.'
+            ? '\n\nWould you like this broken down by team member or sorted by most recent activity?'
             : '';
           setMessages((prev) => [...prev, { role: 'assistant', content: summary + followUp }]);
         } else {
-          setMessages((prev) => [...prev, { role: 'assistant', content: data.error ?? "I couldn’t get that one—mind rephrasing or asking something slightly different?" }]);
+          setMessages((prev) => [...prev, { role: 'assistant', content: data.error ?? "I wasn’t able to answer that. Try rephrasing or a different question." }]);
         }
       } else {
         setError("Something went wrong. Give it another try when you’re ready.");
@@ -198,34 +199,46 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
 
   return (
     <div className="space-y-4">
+      <header className="flex items-center gap-2">
+        <span className="text-white font-medium">Ask</span>
+        <span className="inline-block w-2 shrink-0" aria-hidden />
+        <Logo variant="team" className="h-6 w-auto" width={80} height={20} />
+      </header>
+
       <div className="space-y-3 max-h-[400px] overflow-y-auto rounded-xl bg-slate-800/30 border border-slate-700/50 p-3">
         {messages.map((m, i) => (
           <div
             key={i}
             className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
               m.role === 'user'
-                ? 'ml-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border border-blue-500/50 shadow-blue-500/10'
-                : 'mr-8 bg-slate-700/80 text-slate-100 border-l-[3px] border-cyan-500/60'
+                ? 'ml-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border border-blue-500/50 shadow-blue-500/20'
+                : 'mr-8 bg-slate-700/90 text-slate-100 border-l-[3px] border-cyan-400/70'
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5">
               {m.role === 'user' ? (
-                <User className="w-4 h-4 text-white/90 shrink-0" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/90 text-white ring-1 ring-blue-400/50">
+                  <User className="w-4 h-4" />
+                </span>
               ) : (
-                <Bot className="w-4 h-4 text-slate-300 shrink-0" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-600/90 text-cyan-300 ring-1 ring-cyan-400/50">
+                  <Bot className="w-4 h-4" />
+                </span>
               )}
-              <span className="font-medium text-slate-300">{m.role === 'user' ? 'You' : 'Think-Q'}</span>
+              <span className="font-medium text-slate-200">{m.role === 'user' ? 'You' : 'Think-Q'}</span>
             </div>
-            <div className="whitespace-pre-wrap pl-6">{m.content}</div>
+            <div className="whitespace-pre-wrap pl-9">{m.content}</div>
           </div>
         ))}
         {loading && (
-          <div className="rounded-2xl px-4 py-3 text-sm mr-8 bg-slate-700/80 text-slate-400 border-l-[3px] border-cyan-500/60 shadow-sm">
+          <div className="rounded-2xl px-4 py-3 text-sm mr-8 bg-slate-700/90 text-slate-400 border-l-[3px] border-cyan-400/70 shadow-sm">
             <div className="flex items-center gap-2 mb-1.5">
-              <Bot className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-600/90 text-cyan-300 ring-1 ring-cyan-400/50">
+                <Bot className="w-4 h-4" />
+              </span>
               <span className="font-medium text-slate-400">Think-Q</span>
             </div>
-            <div className="pl-6">Looking that up…</div>
+            <div className="pl-9">Looking that up…</div>
           </div>
         )}
         <div ref={messagesEndRef} />

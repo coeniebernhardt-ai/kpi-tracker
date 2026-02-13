@@ -586,19 +586,18 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setAdminTab('aiInsights')}
-              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                 adminTab === 'aiInsights' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              AI Insights
+              Ask<span className="inline-block w-2 shrink-0" aria-hidden /><Logo variant="team" className="h-5 w-auto" width={72} height={18} />
             </button>
           </div>
         </div>
 
-        {/* AI Insights Tab - read-only analytics */}
+        {/* Ask tab – premium intelligence assistant */}
         {adminTab === 'aiInsights' && (
           <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
-            <h2 className="text-lg font-semibold text-white mb-4">AI Insights</h2>
             <AIInsightsPanel
               filters={{
                 ...(dateFrom ? { dateFrom } : {}),
