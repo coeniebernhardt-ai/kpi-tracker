@@ -293,6 +293,26 @@ function buildPool(dbUrl: string): { pool: Pool; isPooler: boolean; connectionSt
   return { pool, isPooler, connectionString };
 }
 
+// --- Tabular request detection -------------------------------------------------
+
+const TABULAR_REQUEST_PATTERNS = [
+  /\bfull\s+list\b/i,
+  /\btable\s+format\b/i,
+  /\braw\s+data\b/i,
+  /\ball\s+records\b/i,
+  /\bfull\s+dataset\b/i,
+  /\bdisplay\s+(?:in\s+)?(?:a\s+)?table\b/i,
+  /\bshow\s+(?:me\s+)?(?:the\s+)?full\s+list\b/i,
+  /\bshow\s+all\s+records\b/i,
+  /\bexport\s+(?:the\s+)?full\s+dataset\b/i,
+];
+
+function userWantsStructuredTable(question: string): boolean {
+  const q = question.trim();
+  if (!q) return false;
+  return TABULAR_REQUEST_PATTERNS.some((re) => re.test(q));
+}
+
 // --- Layer 4: Conversational formatter -----------------------------------------
 
 async function formatResponse(
@@ -303,16 +323,16 @@ async function formatResponse(
   intent: Intent,
   exportRequested: boolean
 ): Promise<string> {
-  const systemPrompt = `You are Think-Q, the intelligent assistant for the Think Q system.
-You must:
-- Speak conversationally like ChatGPT. Be natural and human.
-- Never say "I've pulled that for you" or similar robotic phrases.
-- If a single clear result exists, respond in one natural sentence.
-- If multiple rows exist, summarize clearly before presenting structured data.
-- If no results, explain clearly and suggest next steps.
+  const systemPrompt = `You are Think-Q, the premium intelligence layer for the Think Q system. You are an executive assistant, not a support chatbot or SQL viewer.
+
+STRICT RULES:
+- Never say "Here are X results that match" or similar. Never display raw column labels (e.g. "count", "id"). Never mention SQL, database, queries, or mechanics.
+- Never use robotic phrasing like "I've pulled that for you" or "You can ask me to...". Never use "You can ask..." patterns.
+- For follow-ups, say: "Would you like this broken down by team member or sorted by most recent activity?" (or similar). Do not offer generic "ask anything" prompts.
+- Interpret raw rows into natural language summaries only. One clear sentence for a single result; a short executive summary for multiple. No key/value blocks, no table-style output in your text, no debug-style output.
+- Tone: professional, confident, executive, insight-driven, clear, business-focused. Not playful, not technical unless the user explicitly asks for detail.
 - Only mention downloadable files if the user explicitly asked for an export/download.
-- Maintain conversational continuity. You are an assistant, not a database.
-Return natural conversational text only. No code, no SQL, no raw IDs.`;
+- You are conversational intelligence only. Return natural conversational text. No code, no SQL, no raw IDs.`;
 
   const dataDesc =
     rowCount === 0
@@ -465,11 +485,14 @@ export async function POST(request: NextRequest) {
       intent === 'export'
     );
 
+    const showStructuredTable = userWantsStructuredTable(userQuestion) && rows.length > 0;
+
     return NextResponse.json({
       success: true,
       message: conversationalMessage,
       rows,
       rowCount,
+      showStructuredTable,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Server error';

@@ -559,40 +559,38 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* Admin Tabs - Tickets and Travel Logs */}
-        <div className="mb-6">
-          <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
-            <button
-              onClick={() => {
-                setAdminTab('tickets');
-                setExpandedTickets(new Set()); // Collapse all tickets when switching to tickets tab
-              }}
-              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
-                adminTab === 'tickets' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Tickets
-            </button>
-            <button
-              onClick={() => {
-                setAdminTab('travelLogs');
-                setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
-              }}
-              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
-                adminTab === 'travelLogs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Travel Logs
-            </button>
-            <button
-              onClick={() => setAdminTab('aiInsights')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all ${
-                adminTab === 'aiInsights' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Ask<span className="inline-block w-2 shrink-0" aria-hidden /><Logo variant="team" className="h-5 w-auto" width={72} height={18} />
-            </button>
-          </div>
+        {/* Admin Tabs – Tickets, Travel Logs, Ask (separate buttons) */}
+        <div className="mb-6 flex gap-x-3 flex-wrap">
+          <button
+            onClick={() => {
+              setAdminTab('tickets');
+              setExpandedTickets(new Set());
+            }}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              adminTab === 'tickets' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+            }`}
+          >
+            Tickets
+          </button>
+          <button
+            onClick={() => {
+              setAdminTab('travelLogs');
+              setExpandedTickets(new Set());
+            }}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              adminTab === 'travelLogs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+            }`}
+          >
+            Travel Logs
+          </button>
+          <button
+            onClick={() => setAdminTab('aiInsights')}
+            className={`flex items-center gap-[5px] px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              adminTab === 'aiInsights' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+            }`}
+          >
+            Ask<span className="inline-block w-[5px] shrink-0" aria-hidden /><Logo variant="team" className="h-[18px] w-auto" width={72} height={18} />
+          </button>
         </div>
 
         {/* Ask tab – premium intelligence assistant */}

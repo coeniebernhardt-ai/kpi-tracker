@@ -17,7 +17,7 @@ export interface AIInsightsPanelProps {
 }
 
 type AIMessage = { role: 'user' | 'assistant'; content: string };
-type AIResult = { rows: Record<string, unknown>[]; rowCount: number };
+type AIResult = { rows: Record<string, unknown>[]; rowCount: number; showStructuredTable?: boolean };
 
 const INTERNAL_COLUMNS = new Set([
   'id', 'user_id', 'ticket_id', 'created_by', 'triggering_user_id', 'profile_id',
@@ -57,7 +57,7 @@ function toConversationalSummary(rowCount: number, question: string): string {
   }
   if (/\bopen\b.*\bticket|ticket.*\bopen\b/.test(q)) return `You have ${rowCount} open ticket${rowCount !== 1 ? 's' : ''} at the moment.`;
   if (/\bclosed\b.*\bticket|ticket.*\bclosed\b/.test(q)) return `${rowCount} closed ticket${rowCount !== 1 ? 's' : ''} in the backlog.`;
-  return `I’ve what I found—see the summary below.`;
+  return `I’ve what I found—the summary.`;
 }
 
 export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) {
@@ -127,7 +127,8 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
         if (data.success && data.rows !== undefined) {
           const rows = data.rows ?? [];
           const rowCount = data.rowCount ?? rows.length;
-          setLastResult({ rows, rowCount });
+          const showStructuredTable = data.showStructuredTable === true && rows.length > 0;
+          setLastResult({ rows, rowCount, showStructuredTable });
           const content = typeof data.message === 'string' && data.message.trim()
             ? data.message
             : toConversationalSummary(rowCount, q);
@@ -209,9 +210,9 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center gap-2">
-        <span className="text-white font-medium text-[1.25rem] leading-none h-5 flex items-center">Ask</span>
-        <Logo variant="team" className="h-5 w-auto" width={80} height={20} />
+      <header className="flex items-center gap-[5px]">
+        <span className="text-white font-medium text-[1.125rem] leading-none flex items-center h-[18px]">Ask</span>
+        <Logo variant="team" className="h-[18px] w-auto" width={72} height={18} />
       </header>
 
       {(messages.length > 0 || loading) && (
@@ -266,7 +267,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
       </div>
       )}
 
-      {lastResult && lastResult.rows.length > 0 && (
+      {lastResult && lastResult.showStructuredTable && lastResult.rows.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50">
           <table className="w-full text-sm text-left">
             <thead>
