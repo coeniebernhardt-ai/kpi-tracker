@@ -181,7 +181,13 @@ export async function POST(request: NextRequest) {
     phase = 'openai';
 
     const systemPrompt =
-      'You are a SQL expert for PostgreSQL. Reply with ONLY a single SELECT or WITH...SELECT statement. No explanation, no markdown, no code fence. Tables: profiles, tickets, travel_logs, notifications.';
+      `You are a SQL expert for PostgreSQL. Reply with ONLY a single SELECT or WITH...SELECT statement. No explanation, no markdown, no code fence.
+Schema (use these exact column names; there is no profile_id - use user_id to link to profiles.id):
+- profiles: id, email, full_name, role, avatar_url, is_admin, is_active, created_at, updated_at
+- tickets: id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, resolution, response_time_minutes, created_at, closed_at, created_by
+- travel_logs: id, user_id, reason, destination, start_address, end_address, comments, is_return_trip, created_at, updated_at
+- notifications: id, user_id, type, ticket_id, triggering_user_id, created_at, read
+Join tickets to profiles on tickets.user_id = profiles.id. Join travel_logs to profiles on travel_logs.user_id = profiles.id.`;
 
     const chatMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
       { role: 'system', content: systemPrompt },
