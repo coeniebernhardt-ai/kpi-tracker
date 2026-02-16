@@ -805,7 +805,7 @@ export default function AdminPage() {
                         ) : (() => {
                           const detail = expandedTicketDetails[ticket.id] ?? ticket;
                           const memberProfileDetail = profiles.find(p => p.id === detail.user_id);
-                          return (
+                          const expandedContent = (
                             <div className="flex items-start gap-4">
                           {memberProfileDetail?.avatar_url ? (
                             <Image src={memberProfileDetail?.avatar_url ?? ''} alt={memberProfileDetail?.full_name ?? 'User'} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
@@ -1164,6 +1164,7 @@ export default function AdminPage() {
                     </div>
                             </div>
                           );
+                          return expandedContent;
                         })()}
                       </div>
                     )}
