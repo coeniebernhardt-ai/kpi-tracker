@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAllProfiles, getLatestTickets, getNextTickets, getTicketById, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
+import { supabase, getAllProfiles, getLatestTickets, getNextTickets, getTicketById, getKpiMetrics, type KpiMetrics, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -60,6 +60,7 @@ export default function AdminPage() {
   const [loadingMoreTickets, setLoadingMoreTickets] = useState(false);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, Ticket | null>>({});
+  const [kpiMetrics, setKpiMetrics] = useState<KpiMetrics | null>(null);
   // FEATURE 3: Admin comment state (admin-only)
   const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
   const [adminCommentText, setAdminCommentText] = useState('');
@@ -107,12 +108,14 @@ export default function AdminPage() {
     setLoadingData(true);
     setExpandedTickets(new Set());
     try {
-      const [profilesData, travelLogsData] = await Promise.all([
+      const [profilesData, travelLogsData, kpiData] = await Promise.all([
         getAllProfiles(),
         getAllTravelLogs(),
+        getKpiMetrics(),
       ]);
       setProfiles(profilesData);
       setTravelLogs(travelLogsData);
+      setKpiMetrics(kpiData);
       await loadTickets();
     } catch (err) {
       console.error('loadData: Error:', err);
@@ -317,41 +320,16 @@ export default function AdminPage() {
     return true;
   });
 
-  // Stats
-  const totalOpen = tickets.filter(t => t.status === 'open').length;
-  const totalClosed = tickets.filter(t => t.status === 'closed').length;
-  const totalOnSite = tickets.filter(t => t.location === 'on-site').length;
-  const totalRemote = tickets.filter(t => t.location === 'remote').length;
+  // Global KPI (from dedicated query; not from ticket list). Stable across pagination and date filter.
+  const totalTicketsKpi = kpiMetrics?.total_tickets ?? 0;
+  const totalOpenKpi = kpiMetrics?.open_tickets ?? 0;
+  const totalClosedKpi = kpiMetrics?.closed_tickets ?? 0;
+  const overallAvgResponseTime = kpiMetrics?.avg_response_time_minutes ?? 0;
+  const avgResponseTimeNoDependencies = kpiMetrics?.avg_no_deps ?? 0;
+  const avgResponseTimeWithDependencies = kpiMetrics?.avg_with_deps ?? 0;
 
-  // FEATURE A – Admin analytics: dependency-aware response time (reuse existing response_time_minutes logic).
-  // "With dependencies" = has_dependencies AND dependency_name has content (length > 0).
   const hasDependencies = (t: Ticket) =>
     t.has_dependencies === true && (t.dependency_name?.trim()?.length ?? 0) > 0;
-  const closedWithResponse = tickets.filter(
-    (t) => t.status === 'closed' && t.response_time_minutes != null && t.response_time_minutes > 0
-  );
-  const closedNoDeps = closedWithResponse.filter((t) => !hasDependencies(t));
-  const closedWithDeps = closedWithResponse.filter(hasDependencies);
-  const avgResponseTimeNoDependencies =
-    closedNoDeps.length > 0
-      ? Math.round(
-          closedNoDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / closedNoDeps.length
-        )
-      : 0;
-  const avgResponseTimeWithDependencies =
-    closedWithDeps.length > 0
-      ? Math.round(
-          closedWithDeps.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) / closedWithDeps.length
-        )
-      : 0;
-  const overallAvgResponseTime =
-    closedWithResponse.length > 0
-      ? Math.round(
-          closedWithResponse.reduce((sum, t) => sum + (t.response_time_minutes ?? 0), 0) /
-            closedWithResponse.length
-        )
-      : 0;
-  const ticketsHandled = totalClosed;
 
   const getAvatarGradient = (name: string) => {
     const colors = ['from-blue-400 to-blue-600', 'from-blue-500 to-indigo-600', 'from-indigo-400 to-blue-500', 'from-blue-600 to-cyan-500', 'from-cyan-400 to-blue-500'];
@@ -501,30 +479,30 @@ export default function AdminPage() {
         <section className="mb-8 flex flex-row flex-nowrap gap-2 md:gap-4 w-full min-w-0">
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words">Total Tickets</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{tickets.length}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{totalTicketsKpi}</p>
           </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
             <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Open</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{totalOpen}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{totalOpenKpi}</p>
           </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
             <p className="text-[10px] sm:text-xs text-blue-300 mb-0.5 md:mb-1 break-words">Closed</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-300 leading-tight">{totalClosed}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-300 leading-tight">{totalClosedKpi}</p>
           </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
             <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Avg Response Time</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{overallAvgResponseTime}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{overallAvgResponseTime > 0 ? overallAvgResponseTime : '—'}</p>
             <p className="text-[10px] sm:text-xs text-blue-300 mt-0.5 md:mt-1 break-words">{overallAvgResponseTime > 0 ? 'minutes' : 'No data'}</p>
           </div>
           {/* FEATURE A: Dependency-aware response time (admin analytics only) */}
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words" title="Average Response Time (No Dependencies)">Avg (No Deps)</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeNoDependencies}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeNoDependencies > 0 ? avgResponseTimeNoDependencies : '—'}</p>
             <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 md:mt-1 break-words">{avgResponseTimeNoDependencies > 0 ? 'min' : 'No data'}</p>
           </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 md:mb-1 break-words" title="Average Response Time (With Dependencies)">Avg (With Deps)</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeWithDependencies}</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{avgResponseTimeWithDependencies > 0 ? avgResponseTimeWithDependencies : '—'}</p>
             <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 md:mt-1 break-words">{avgResponseTimeWithDependencies > 0 ? 'min' : 'No data'}</p>
           </div>
         </section>

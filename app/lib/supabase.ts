@@ -338,6 +338,49 @@ export async function uploadTicketAttachment(
 // Ticket helpers – list columns only (no updates, time_logs, attachments on list)
 const TICKET_LIST_COLUMNS = 'id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, created_at, estate_or_building, cml_location, ticket_type, has_dependencies, dependency_name, assigned_to_array, response_time_minutes, closed_at, resolution, created_by';
 
+/** Global KPI metrics (all tickets). Not affected by pagination or date range. Run CREATE_ADMIN_KPI_FUNCTION.sql in Supabase to enable. */
+export type KpiMetrics = {
+  total_tickets: number;
+  open_tickets: number;
+  closed_tickets: number;
+  avg_response_time_minutes: number | null;
+  avg_no_deps: number | null;
+  avg_with_deps: number | null;
+};
+
+export async function getKpiMetrics(): Promise<KpiMetrics> {
+  try {
+    const { data, error } = await supabase.rpc('get_ticket_kpis');
+    if (!error && data && typeof data === 'object') {
+      const o = data as Record<string, unknown>;
+      return {
+        total_tickets: Number(o.total_tickets) || 0,
+        open_tickets: Number(o.open_tickets) || 0,
+        closed_tickets: Number(o.closed_tickets) || 0,
+        avg_response_time_minutes: o.avg_response_time_minutes != null ? Number(o.avg_response_time_minutes) : null,
+        avg_no_deps: o.avg_no_deps != null ? Number(o.avg_no_deps) : null,
+        avg_with_deps: o.avg_with_deps != null ? Number(o.avg_with_deps) : null,
+      };
+    }
+  } catch (_) {
+    // RPC may not exist yet; fall back to count queries
+  }
+  // Fallback: 3 count queries (no RPC or RPC failed)
+  const [totalRes, openRes, closedRes] = await Promise.all([
+    supabase.from('tickets').select('*', { count: 'exact', head: true }),
+    supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+    supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'closed'),
+  ]);
+  return {
+    total_tickets: totalRes.count ?? 0,
+    open_tickets: openRes.count ?? 0,
+    closed_tickets: closedRes.count ?? 0,
+    avg_response_time_minutes: null,
+    avg_no_deps: null,
+    avg_with_deps: null,
+  };
+}
+
 /** Latest 30 tickets (cursor-ready). Optional date range. No select('*'). */
 export async function getLatestTickets(options?: { limit?: number; dateFrom?: string; dateTo?: string }): Promise<Ticket[]> {
   const limit = options?.limit ?? 30;
