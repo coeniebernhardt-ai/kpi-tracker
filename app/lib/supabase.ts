@@ -394,7 +394,7 @@ async function enrichTicketsWithAssignedProfiles(rows: any[]): Promise<Ticket[]>
   let assignedProfilesMap: Record<string, Profile> = {};
   if (allAssignedIds.size > 0) {
     const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url, avatar, role').in('id', [...allAssignedIds]);
-    (profiles || []).forEach((p: Profile) => { assignedProfilesMap[p.id] = p; });
+    (profiles || []).forEach((p) => { assignedProfilesMap[p.id] = p as Profile; });
   }
   return rows.map((t: any) => {
     const ids = t.assigned_to_array || (Array.isArray(t.assigned_to) ? t.assigned_to : t.assigned_to ? [t.assigned_to] : []);
