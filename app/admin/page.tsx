@@ -93,8 +93,8 @@ export default function AdminPage() {
     try {
       const data = await getLatestTickets({
         limit: 30,
-        dateFrom: from ?? dateFrom || undefined,
-        dateTo: to ?? dateTo || undefined,
+        dateFrom: (from ?? dateFrom) || undefined,
+        dateTo: (to ?? dateTo) || undefined,
       });
       setTickets(data);
     } catch (err) {
@@ -806,7 +806,7 @@ export default function AdminPage() {
                           const detail = expandedTicketDetails[ticket.id] ?? ticket;
                           const memberProfileDetail = profiles.find(p => p.id === detail.user_id);
                           return (
-                        <div className="flex items-start gap-4">
+                            <div className="flex items-start gap-4">
                           {memberProfileDetail?.avatar_url ? (
                             <Image src={memberProfileDetail?.avatar_url ?? ''} alt={memberProfileDetail?.full_name ?? 'User'} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
                           ) : (
@@ -1162,7 +1162,7 @@ export default function AdminPage() {
                         </svg>
                       </button>
                     </div>
-                        </div>
+                            </div>
                           );
                         })()}
                       </div>
