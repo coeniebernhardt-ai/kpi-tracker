@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAllProfiles, getAllTickets, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
+import { supabase, getAllProfiles, getLatestTickets, getNextTickets, getTicketById, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -56,6 +56,10 @@ export default function AdminPage() {
   // Assignment UI toggle state
   const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null);
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [loadingMoreTickets, setLoadingMoreTickets] = useState(false);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, Ticket | null>>({});
   // FEATURE 3: Admin comment state (admin-only)
   const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
   const [adminCommentText, setAdminCommentText] = useState('');
@@ -83,23 +87,65 @@ export default function AdminPage() {
     setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
   }, []);
 
-  // Performance: parallel fetch for tickets, team (profiles), travel logs; no blocking full-page spinner
+  // Load only profiles + travel logs in parallel; then load latest 30 tickets (no full dataset)
+  const loadTickets = async (from?: string, to?: string) => {
+    setLoadingTickets(true);
+    try {
+      const data = await getLatestTickets({
+        limit: 30,
+        dateFrom: from ?? dateFrom || undefined,
+        dateTo: to ?? dateTo || undefined,
+      });
+      setTickets(data);
+    } catch (err) {
+      console.error('loadTickets: Error:', err);
+    }
+    setLoadingTickets(false);
+  };
+
   const loadData = async () => {
     setLoadingData(true);
     setExpandedTickets(new Set());
     try {
-      const [profilesData, ticketsData, travelLogsData] = await Promise.all([
+      const [profilesData, travelLogsData] = await Promise.all([
         getAllProfiles(),
-        getAllTickets(),
         getAllTravelLogs(),
       ]);
       setProfiles(profilesData);
-      setTickets(ticketsData);
       setTravelLogs(travelLogsData);
+      await loadTickets();
     } catch (err) {
       console.error('loadData: Error:', err);
     }
     setLoadingData(false);
+  };
+
+  const loadMoreTickets = async () => {
+    if (tickets.length === 0) return;
+    setLoadingMoreTickets(true);
+    try {
+      const last = tickets[tickets.length - 1];
+      const next = await getNextTickets(last.created_at, {
+        limit: 30,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      });
+      setTickets((prev) => [...prev, ...next]);
+    } catch (err) {
+      console.error('loadMoreTickets: Error:', err);
+    }
+    setLoadingMoreTickets(false);
+  };
+
+  const fetchTicketDetail = async (id: string) => {
+    if (expandedTicketDetails[id] !== undefined) return;
+    setLoadingDetailId(id);
+    try {
+      const full = await getTicketById(id);
+      setExpandedTicketDetails((prev) => ({ ...prev, [id]: full ?? null }));
+    } finally {
+      setLoadingDetailId(null);
+    }
   };
 
   const handleCreateTicket = async (e: React.FormEvent) => {
@@ -120,7 +166,7 @@ export default function AdminPage() {
     });
 
     if (!error && data) {
-      await loadData();
+      await loadTickets();
       setNewTicketData({ issue: '', location: 'remote', client: '', clickupTicket: '', ticketType: '', severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT', estateOrBuilding: '', cmlLocation: '' });
       setSelectedUserId('');
       setShowCreateForm(false);
@@ -131,7 +177,7 @@ export default function AdminPage() {
     try {
       const { error } = await updateTicket(ticketId, { clickup_ticket: clickUpTicketValue.trim() || undefined });
       if (!error) {
-        await loadData();
+        await loadTickets();
         setEditingClickUpTicketId(null);
         setClickUpTicketValue('');
       } else {
@@ -150,7 +196,7 @@ export default function AdminPage() {
     try {
       const { error } = await addTicketAdminComment(ticketId, text, user.id);
       if (!error) {
-        await loadData();
+        await loadTickets();
         setAdminCommentTicketId(null);
         setAdminCommentText('');
       } else {
@@ -199,8 +245,7 @@ export default function AdminPage() {
       // Remove from local state immediately for UI feedback
       setTickets(tickets.filter(t => t.id !== ticketId));
       
-      // Reload tickets from database to ensure consistency
-      await loadData();
+      await loadTickets();
       
       console.log('Tickets reloaded after deletion');
     } catch (err: any) {
@@ -349,7 +394,7 @@ export default function AdminPage() {
   // Progressive loading: show main layout; branded loader overlay while data loads (no global block)
   return (
     <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient">
-      <WorkspaceLoader active={loadingData} />
+      <WorkspaceLoader active={loading} />
       {debugInfo}
       {/* FEATURE B: Header – logo + admin identity as one block; action buttons in row below */}
       <header className="sticky top-0 z-40 glass border-b border-slate-700/50">
@@ -626,6 +671,31 @@ export default function AdminPage() {
               <option value="closed">Closed Only</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">End Date</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => loadTickets()}
+            className="self-end px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 text-sm"
+          >
+            Apply date range
+          </button>
           <div className="min-w-[200px]">
             <label className="block text-xs text-slate-500 mb-1">Search issue description</label>
             <input
@@ -637,14 +707,29 @@ export default function AdminPage() {
             />
           </div>
           <div className="ml-auto text-sm text-slate-400">
-            Showing {filteredTickets.length} of {tickets.length} tickets
+            Showing {filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''}
           </div>
         </section>
 
         {/* Tickets List */}
         <section>
           <h2 className="text-lg font-semibold text-white mb-4">All Tickets</h2>
-          {filteredTickets.length === 0 ? (
+          {loadingTickets ? (
+            <div className="space-y-3">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="p-4 rounded-xl border border-slate-700/50 bg-slate-800/40 animate-pulse">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="h-5 w-24 rounded bg-slate-700" />
+                      <span className="h-5 w-20 rounded bg-slate-700" />
+                      <span className="h-5 w-28 rounded bg-slate-700" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-4 w-full max-w-md rounded bg-slate-700/70" />
+                </div>
+              ))}
+            </div>
+          ) : filteredTickets.length === 0 ? (
             <div className="text-center py-12 rounded-2xl bg-slate-800/30 border border-slate-700/30">
               <p className="text-slate-500">No tickets found.</p>
             </div>
@@ -664,6 +749,7 @@ export default function AdminPage() {
                           newExpanded.delete(ticket.id);
                         } else {
                           newExpanded.add(ticket.id);
+                          fetchTicketDetail(ticket.id);
                         }
                         setExpandedTickets(newExpanded);
                       }}
@@ -706,22 +792,33 @@ export default function AdminPage() {
                       </button>
                     </div>
 
-                    {/* Expanded Content - Only visible when expanded */}
+                    {/* Expanded Content - Only visible when expanded; lazy-load full details */}
                     {isExpanded && (
                       <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        {loadingDetailId === ticket.id ? (
+                          <div className="animate-pulse space-y-3">
+                            <div className="h-10 w-48 rounded bg-slate-700/70" />
+                            <div className="h-4 w-full max-w-md rounded bg-slate-700/50" />
+                            <div className="h-20 w-full rounded bg-slate-700/50" />
+                            <div className="h-16 w-full rounded bg-slate-700/50" />
+                          </div>
+                        ) : (() => {
+                          const detail = expandedTicketDetails[ticket.id] ?? ticket;
+                          const memberProfileDetail = profiles.find(p => p.id === detail.user_id);
+                          return (
                         <div className="flex items-start gap-4">
-                          {memberProfile?.avatar_url ? (
-                            <Image src={memberProfile.avatar_url} alt={memberProfile.full_name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
+                          {memberProfileDetail?.avatar_url ? (
+                            <Image src={memberProfileDetail?.avatar_url ?? ''} alt={memberProfileDetail?.full_name ?? 'User'} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
                           ) : (
-                            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(memberProfile?.full_name || 'U')} flex items-center justify-center text-white font-bold text-sm`}>
-                              {memberProfile?.avatar || 'U'}
+                            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(memberProfileDetail?.full_name || 'U')} flex items-center justify-center text-white font-bold text-sm`}>
+                              {memberProfileDetail?.avatar || 'U'}
                             </div>
                           )}
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center flex-wrap gap-2 mb-2">
-                              <span className="text-xs text-slate-500">{memberProfile?.full_name}</span>
-                          {editingClickUpTicketId === ticket.id ? (
+                              <span className="text-xs text-slate-500">{memberProfileDetail?.full_name}</span>
+                          {editingClickUpTicketId === detail.id ? (
                             <div className="flex items-center gap-2">
                               <input
                                 type="text"
@@ -891,7 +988,7 @@ export default function AdminPage() {
                                           if (!error) {
                                             // FEATURE C: Notify newly assigned members (excludes current admin)
                                             await createNotificationsForNewAssignments(ticket.id, currentAssigned, newAssigned, user?.id ?? '', 'admin');
-                                            await loadData();
+                                            await loadTickets();
                                             // Close assignment UI after successful assignment
                                             if (assigningTicketId === ticket.id) {
                                               setAssigningTicketId(null);
@@ -943,11 +1040,11 @@ export default function AdminPage() {
                         </div>
 
                         {/* Show Updates (member updates and FEATURE 3: admin comments) */}
-                        {ticket.updates && ticket.updates.length > 0 && (
-                          <div className="mt-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                            <p className="text-xs text-blue-400 mb-2">Updates ({ticket.updates.length}):</p>
-                            <div className="space-y-2 max-h-32 overflow-y-auto">
-                              {ticket.updates.map((update: any, idx: number) => (
+{detail.updates && detail.updates.length > 0 && (
+                            <div className="mt-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                              <p className="text-xs text-blue-400 mb-2">Updates ({detail.updates.length}):</p>
+                              <div className="space-y-2 max-h-32 overflow-y-auto">
+                                {detail.updates.map((update: any, idx: number) => (
                                 <div key={idx} className={`text-xs ${update.authorRole === 'admin' ? 'pl-2 border-l-2 border-amber-500/50' : ''}`}>
                                   {update.authorRole === 'admin' && <span className="text-amber-400 font-medium mr-1">Admin comment:</span>}
                                   <span className="text-blue-300">[{new Date(update.timestamp).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}]</span>
@@ -1017,7 +1114,7 @@ export default function AdminPage() {
                         </div>
 
                         {/* Show Time Tracked */}
-                        {(ticket.total_time_minutes || (ticket.time_logs && ticket.time_logs.length > 0)) && (
+                        {(detail.total_time_minutes || (detail.time_logs && detail.time_logs.length > 0)) && (
                           <div className="mt-2 p-2 rounded-lg bg-violet-500/10 border border-violet-500/20">
                             <div className="flex items-center justify-between mb-1">
                               <p className="text-xs text-violet-400">⏱️ Time Tracked</p>
@@ -1025,9 +1122,9 @@ export default function AdminPage() {
                                 {ticket.total_time_minutes ? `${Math.floor(ticket.total_time_minutes / 60)}h ${ticket.total_time_minutes % 60}m` : '0m'}
                               </span>
                             </div>
-                            {ticket.time_logs && ticket.time_logs.length > 0 && (
+                            {detail.time_logs && detail.time_logs.length > 0 && (
                               <div className="space-y-1 max-h-20 overflow-y-auto">
-                                {ticket.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }, idx: number) => (
+                                {detail.time_logs.map((log: { minutes: number; description: string; timestamp: string; logged_by?: string }, idx: number) => (
                                   <div key={idx} className="text-xs">
                                     <span className="text-violet-300">{log.minutes}m</span>
                                     <span className="text-slate-400 mx-1">-</span>
@@ -1049,8 +1146,8 @@ export default function AdminPage() {
                         
                         <p className="text-xs text-slate-600 mt-2">
                           Created: {new Date(ticket.created_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          {ticket.closed_at && <> • Closed: {new Date(ticket.closed_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>}
-                          {ticket.response_time_minutes && ticket.response_time_minutes > 0 && <> • Response: {ticket.response_time_minutes} min</>}
+                          {detail.closed_at && <> • Closed: {new Date(detail.closed_at).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>}
+                          {detail.response_time_minutes && detail.response_time_minutes > 0 && <> • Response: {detail.response_time_minutes} min</>}
                         </p>
                       </div>
 
@@ -1065,11 +1162,26 @@ export default function AdminPage() {
                         </svg>
                       </button>
                     </div>
+                        </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
                 );
               })}
+              {!loadingTickets && tickets.length > 0 && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreTickets}
+                    disabled={loadingMoreTickets}
+                    className="px-5 py-2.5 rounded-xl bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingMoreTickets ? 'Loading…' : 'Load Next 30'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

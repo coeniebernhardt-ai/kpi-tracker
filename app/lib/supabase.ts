@@ -335,7 +335,107 @@ export async function uploadTicketAttachment(
   };
 }
 
-// Ticket helpers
+// Ticket helpers – list columns only (no updates, time_logs, attachments on list)
+const TICKET_LIST_COLUMNS = 'id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, created_at, estate_or_building, cml_location, ticket_type, has_dependencies, dependency_name, assigned_to_array, response_time_minutes, closed_at, resolution, created_by';
+
+/** Latest 30 tickets (cursor-ready). Optional date range. No select('*'). */
+export async function getLatestTickets(options?: { limit?: number; dateFrom?: string; dateTo?: string }): Promise<Ticket[]> {
+  const limit = options?.limit ?? 30;
+  try {
+    let q = supabase
+      .from('tickets')
+      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(id, full_name, avatar_url, avatar)`)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (options?.dateFrom) q = q.gte('created_at', options.dateFrom + 'T00:00:00.000Z');
+    if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59.999Z');
+    const { data, error } = await q;
+    if (error) {
+      console.error('getLatestTickets:', error.message);
+      return [];
+    }
+    return await enrichTicketsWithAssignedProfiles(data ?? []);
+  } catch (err) {
+    console.error('getLatestTickets:', err);
+    return [];
+  }
+}
+
+/** Next 30 tickets after cursor (created_at < lastSeen). No OFFSET. */
+export async function getNextTickets(lastSeen: string, options?: { limit?: number; dateFrom?: string; dateTo?: string }): Promise<Ticket[]> {
+  const limit = options?.limit ?? 30;
+  try {
+    let q = supabase
+      .from('tickets')
+      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(id, full_name, avatar_url, avatar)`)
+      .lt('created_at', lastSeen)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (options?.dateFrom) q = q.gte('created_at', options.dateFrom + 'T00:00:00.000Z');
+    if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59.999Z');
+    const { data, error } = await q;
+    if (error) {
+      console.error('getNextTickets:', error.message);
+      return [];
+    }
+    return await enrichTicketsWithAssignedProfiles(data ?? []);
+  } catch (err) {
+    console.error('getNextTickets:', err);
+    return [];
+  }
+}
+
+async function enrichTicketsWithAssignedProfiles(rows: any[]): Promise<Ticket[]> {
+  const allAssignedIds = new Set<string>();
+  rows.forEach((t: any) => {
+    const ids = t.assigned_to_array || (Array.isArray(t.assigned_to) ? t.assigned_to : t.assigned_to ? [t.assigned_to] : []);
+    ids.forEach((id: string) => id && allAssignedIds.add(id));
+  });
+  let assignedProfilesMap: Record<string, Profile> = {};
+  if (allAssignedIds.size > 0) {
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url, avatar, role').in('id', [...allAssignedIds]);
+    (profiles || []).forEach((p: Profile) => { assignedProfilesMap[p.id] = p; });
+  }
+  return rows.map((t: any) => {
+    const ids = t.assigned_to_array || (Array.isArray(t.assigned_to) ? t.assigned_to : t.assigned_to ? [t.assigned_to] : []);
+    return {
+      ...t,
+      assigned_to: ids,
+      assigned_profiles: ids.map((id: string) => assignedProfilesMap[id]).filter(Boolean),
+      time_logs: [],
+      updates: [],
+      total_time_minutes: 0,
+    } as Ticket;
+  });
+}
+
+/** Full ticket for detail panel (lazy load). */
+export async function getTicketById(id: string): Promise<Ticket | null> {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*, profile:profiles!user_id(*)')
+      .eq('id', id)
+      .maybeSingle();
+    if (error || !data) return null;
+    const [enriched] = await enrichTicketsWithAssignedProfiles([data]);
+    const t = data as any;
+    return {
+      ...enriched,
+      time_logs: Array.isArray(t.time_logs) ? t.time_logs : [],
+      updates: Array.isArray(t.updates) ? t.updates : [],
+      total_time_minutes: t.total_time_minutes ?? 0,
+      attachments: t.attachments ?? [],
+      resolution: t.resolution,
+      closed_at: t.closed_at,
+      response_time_minutes: t.response_time_minutes,
+    } as Ticket;
+  } catch (err) {
+    console.error('getTicketById:', err);
+    return null;
+  }
+}
+
 export async function getAllTickets(): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
