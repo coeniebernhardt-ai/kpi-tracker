@@ -1,6 +1,8 @@
 /**
  * POST /api/ai
  * Think-Q AI pipeline: Intent → SQL (SELECT only) → Execute → Conversational response.
+ * Data source: always the full DB (tickets/travel_logs/profiles). No frontend pagination or
+ * admin ticket list state; date filtering only when user explicitly requests a date range.
  * Role-based scoping. Safe, structured, ChatGPT-like tone.
  */
 
@@ -39,7 +41,13 @@ const SCHEMA_CONTEXT = `Schema (use these exact column names; use user_id to lin
 - tickets: id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, resolution, response_time_minutes, created_at, closed_at, created_by
 - travel_logs: id, user_id, reason, destination, start_address, end_address, comments, is_return_trip, created_at, updated_at
 - notifications: id, user_id, type, ticket_id, triggering_user_id, created_at, read
-Join tickets to profiles on tickets.user_id = profiles.id. Join travel_logs to profiles on travel_logs.user_id = profiles.id.`;
+Join tickets to profiles on tickets.user_id = profiles.id. Join travel_logs to profiles on travel_logs.user_id = profiles.id.
+
+DATA SOURCE RULES (mandatory):
+- Always query the FULL tickets table (and full travel_logs / profiles as needed). Do NOT assume a subset, "current page", or "loaded tickets".
+- Do NOT apply any date filter (created_at, closed_at) UNLESS the user explicitly specifies a date range, e.g.: "last week", "this month", "between Feb 9 and 16", "from 2025-01-01 to 2025-01-31", "date range", "in January".
+- When listing tickets, default order: ORDER BY created_at DESC.
+- Add LIMIT only for safety (max ${MAX_ROWS}); the application will enforce a cap.`;
 
 // --- Types -------------------------------------------------------------------
 
@@ -221,7 +229,9 @@ async function generateSQL(
   const systemPrompt = `You are a SQL generator for Think-Q. Generate PostgreSQL SELECT-only queries.
 - Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, GRANT, REVOKE, EXECUTE.
 - Always respect role-based scoping (data is scoped to the user's context).
-- Limit results to ${MAX_ROWS} rows (add or enforce LIMIT ${MAX_ROWS}).
+- Query the full tickets table by default. Do not limit by date unless the user explicitly asks for a date range (e.g. "last week", "this month", "between X and Y").
+- Ignore frontend pagination or "30 tickets"—always query all relevant rows; the application enforces a safety LIMIT of ${MAX_ROWS}.
+- Add or enforce LIMIT ${MAX_ROWS} for safety. Default sort for ticket lists: ORDER BY created_at DESC.
 - Only return raw SQL. No explanation, no markdown, no code fence.
 ${SCHEMA_CONTEXT}`;
 
@@ -296,6 +306,16 @@ function buildPool(dbUrl: string): { pool: Pool; isPooler: boolean; connectionSt
 // --- Tabular request detection -------------------------------------------------
 
 const TABULAR_REQUEST_PATTERNS = [
+  /\btable\b/i,
+  /\btable\s+form\b/i,
+  /\bsheet\b/i,
+  /\bcolumns\b/i,
+  /\bspreadsheet\b/i,
+  /\banalysis\s+format\b/i,
+  /\bbreak\s+down\s+per\b/i,
+  /\bgrouped\s+by\b/i,
+  /\bshow\s+all\s+(?:open|closed)?\s*tickets?\b/i,
+  /\blist\s+(?:all\s+)?(?:open|closed)?\s*tickets?\b/i,
   /\bfull\s+list\b/i,
   /\btable\s+format\b/i,
   /\braw\s+data\b/i,
@@ -315,6 +335,17 @@ function userWantsStructuredTable(question: string): boolean {
 
 // --- Layer 4: Conversational formatter -----------------------------------------
 
+const TABLE_REQUEST_TRIGGERS = [
+  'table', 'table form', 'sheet', 'columns', 'spreadsheet', 'analysis format',
+  'break down per', 'grouped by', 'break down in columns', 'show as table',
+  'present as table', 'export format', 'export style format',
+];
+
+function userAskedForTable(question: string): boolean {
+  const q = question.trim().toLowerCase();
+  return TABLE_REQUEST_TRIGGERS.some((t) => q.includes(t));
+}
+
 async function formatResponse(
   openai: OpenAI,
   userQuestion: string,
@@ -323,23 +354,39 @@ async function formatResponse(
   intent: Intent,
   exportRequested: boolean
 ): Promise<string> {
-  const systemPrompt = `You are Think-Q, the premium intelligence layer for the Think Q system. You are an executive assistant, not a support chatbot or SQL viewer.
+  const systemPrompt = `You are Think-Q, an enterprise AI assistant for the Think Q system. You are an executive assistant: structured, analytical, clean. ChatGPT-level quality.
 
-STRICT RULES:
-- Never say "Here are X results that match" or similar. Never display raw column labels (e.g. "count", "id"). Never mention SQL, database, queries, or mechanics.
-- Never use robotic phrasing like "I've pulled that for you" or "You can ask me to...". Never use "You can ask..." patterns.
-- For follow-ups, say: "Would you like this broken down by team member or sorted by most recent activity?" (or similar). Do not offer generic "ask anything" prompts.
-- Interpret raw rows into natural language summaries only. One clear sentence for a single result; a short executive summary for multiple. No key/value blocks, no table-style output in your text, no debug-style output.
-- Tone: professional, confident, executive, insight-driven, clear, business-focused. Not playful, not technical unless the user explicitly asks for detail.
-- Only mention downloadable files if the user explicitly asked for an export/download.
-- You are conversational intelligence only. Return natural conversational text. No code, no SQL, no raw IDs.`;
+FORMATTING ENFORCEMENT (strict; you MUST follow):
+1. If the user includes any of: "table", "table form", "sheet", "columns", "spreadsheet", "analysis format", "break down per", "grouped by" → you MUST output a structured markdown table. Use proper column headers. Include a total row at the bottom when applicable. Do NOT return a paragraph summary. Do NOT paraphrase into narrative text. Do NOT ask for formatting clarification. Do NOT convert into prose.
+2. Table rules: clear column headers (friendly names, not raw DB columns like user_id); sorted logically (default: by date or relevance); clean spacing; include total row when showing counts or sums.
+3. "Show all open tickets" (or similar list request) → return a table with relevant fields (e.g. ID/Ticket #, Client, Assigned To, Severity, Created Date, Status). Include total count at bottom.
+4. "Break down by member" (or per-member request) → grouped table: one row per member, metrics per member, totals per member, and an overall total row. Do not mix with a long paragraph summary.
+5. "Summarize" (and user did NOT ask for table/sheet/columns) → use bullet points only. Never mix summary format with a table request.
+6. Never respond with a generic paragraph summary when the user explicitly requested structured/table/sheet/columns/breakdown output. Never ignore formatting instructions.
+
+RESPONSE STRUCTURE:
+- List requests (e.g. show all open tickets) → table with ID, Client, Assigned To, Severity, Created Date, Status + total count row.
+- Break down by member → table grouped by member with totals per member and overall total row.
+- Summarize (no table request) → bullet points only.
+- Do not output SQL unless the user explicitly asks for SQL. Never output raw database rows or internal IDs in a non-table format.
+
+TONE & SAFETY:
+- Professional, clear, structured, analytical. No robotic phrasing ("I've pulled that for you"). No mention of SQL, database, or queries.
+- Use friendly column names (e.g. Member, Count, Total, Date). Optional one-line intro before a table is fine; do not wrap tables in long paragraphs.
+- If results are very large, you may note that export is available; otherwise do not mention download unless user asked for export.
+- Return only the requested format: markdown table when table/sheet/columns/breakdown requested, bullets when summary requested, otherwise concise analytical response. No code, no raw IDs in narrative.
+- If the result set is large (e.g. many rows), you may add a single line that export to Excel/CSV is available; otherwise do not mention download unless the user asked for it.`;
 
   const dataDesc =
     rowCount === 0
       ? 'No rows returned.'
       : `Results (${rowCount} row(s)):\n${JSON.stringify(rows.slice(0, 100))}`;
 
-  const userContent = `User asked: ${userQuestion}\n\n${dataDesc}`;
+  const forceTable = userAskedForTable(userQuestion) && rows.length > 0;
+  const formatHint = forceTable
+    ? '\n\nIMPORTANT: The user explicitly asked for table/sheet/columns/breakdown format. You MUST respond with a markdown table only (clear headers, optional total row). Do NOT return a paragraph or narrative summary.'
+    : '';
+  const userContent = `User asked: ${userQuestion}${formatHint}\n\n${dataDesc}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
