@@ -14,7 +14,7 @@ import ExportsPanel from '../components/ExportsPanel';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, profile, loading, isAdmin, signOut } = useAuth();
+  const { user, profile, loading, isAdmin, signOut, session } = useAuth();
   
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -61,6 +61,8 @@ export default function AdminPage() {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, Ticket | null>>({});
   const [kpiMetrics, setKpiMetrics] = useState<KpiMetrics | null>(null);
+  /** Per-member stats from full tickets table (from /api/admin/metrics). */
+  const [memberStats, setMemberStats] = useState<{ user_id: string | null; open: number; closed: number; handled: number; avgResponseMinutes: number }[]>([]);
   // FEATURE 3: Admin comment state (admin-only)
   const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
   const [adminCommentText, setAdminCommentText] = useState('');
@@ -72,12 +74,12 @@ export default function AdminPage() {
     }
   }, [user, loading, isAdmin, router]);
 
-  // Load data
+  // Load data (include session so metrics API can use Bearer token when available)
   useEffect(() => {
     if (user && isAdmin) {
       loadData();
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, session?.access_token]);
 
   // Set default date range
   useEffect(() => {
@@ -108,14 +110,38 @@ export default function AdminPage() {
     setLoadingData(true);
     setExpandedTickets(new Set());
     try {
-      const [profilesData, travelLogsData, kpiData] = await Promise.all([
+      const [profilesData, travelLogsData, metricsRes] = await Promise.all([
         getAllProfiles(),
         getAllTravelLogs(),
-        getKpiMetrics(),
+        (async () => {
+          try {
+            const res = await fetch('/api/admin/metrics', {
+              headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+            });
+            if (!res.ok) return null;
+            return await res.json();
+          } catch {
+            return null;
+          }
+        })(),
       ]);
       setProfiles(profilesData);
       setTravelLogs(travelLogsData);
-      setKpiMetrics(kpiData);
+      if (metricsRes) {
+        setKpiMetrics({
+          total_tickets: metricsRes.totalTickets ?? 0,
+          open_tickets: metricsRes.totalOpen ?? 0,
+          closed_tickets: metricsRes.totalClosed ?? 0,
+          avg_response_time_minutes: metricsRes.overallAvgResponseTime ?? null,
+          avg_no_deps: metricsRes.avgResponseTimeNoDependencies ?? null,
+          avg_with_deps: metricsRes.avgResponseTimeWithDependencies ?? null,
+        });
+        setMemberStats(Array.isArray(metricsRes.memberStats) ? metricsRes.memberStats : []);
+      } else {
+        const kpiData = await getKpiMetrics();
+        setKpiMetrics(kpiData);
+        setMemberStats([]);
+      }
       await loadTickets();
     } catch (err) {
       console.error('loadData: Error:', err);
@@ -507,28 +533,16 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* Team Members */}
+        {/* Team Members — stats from full tickets table (memberStats from /api/admin/metrics) */}
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-white mb-4">Team Members</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {profiles.map(p => {
-              const memberTickets = tickets.filter(t => t.user_id === p.id);
-              const openCount = memberTickets.filter(t => t.status === 'open').length;
-              const closedCount = memberTickets.filter(t => t.status === 'closed').length;
-              
-              // Calculate per-member KPI metrics
-              const memberClosedTickets = memberTickets.filter(t => t.status === 'closed');
-              const memberTicketsWithResponseTime = memberClosedTickets.filter(t => 
-                t.response_time_minutes && t.response_time_minutes > 0
-              );
-              const memberAvgResponseTime = memberTicketsWithResponseTime.length > 0
-                ? Math.round(
-                    memberTicketsWithResponseTime.reduce((sum, t) => sum + (t.response_time_minutes || 0), 0) / 
-                    memberTicketsWithResponseTime.length
-                  )
-                : 0;
-              const memberTicketsHandled = closedCount;
-              
+              const stats = memberStats.find(s => s.user_id === p.id);
+              const openCount = stats?.open ?? 0;
+              const closedCount = stats?.closed ?? 0;
+              const memberTicketsHandled = stats?.handled ?? 0;
+              const memberAvgResponseTime = stats?.avgResponseMinutes ?? 0;
               return (
                 <div key={p.id} className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 group">
                   <div className="flex items-center gap-3 mb-3">

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     const { data: tickets } = await supabase
       .from('tickets')
-      .select('id, status, response_time_minutes, has_dependencies, dependency_name');
+      .select('id, user_id, status, response_time_minutes, has_dependencies, dependency_name');
 
     const list = tickets || [];
     const totalTickets = list.length;
@@ -73,6 +73,30 @@ export async function GET(request: NextRequest) {
           )
         : 0;
 
+    // Per-member stats from ALL tickets (not paginated)
+    type Row = { user_id?: string | null; status: string; response_time_minutes?: number | null };
+    const byUser = new Map<string, { open: number; closed: number; withResponse: number; sumResponse: number }>();
+    for (const t of list as Row[]) {
+      const uid = t.user_id ?? '__unassigned__';
+      if (!byUser.has(uid)) byUser.set(uid, { open: 0, closed: 0, withResponse: 0, sumResponse: 0 });
+      const rec = byUser.get(uid)!;
+      if (t.status === 'open') rec.open += 1;
+      if (t.status === 'closed') {
+        rec.closed += 1;
+        if (t.response_time_minutes != null && t.response_time_minutes > 0) {
+          rec.withResponse += 1;
+          rec.sumResponse += t.response_time_minutes;
+        }
+      }
+    }
+    const memberStats = Array.from(byUser.entries()).map(([user_id, r]) => ({
+      user_id: user_id === '__unassigned__' ? null : user_id,
+      open: r.open,
+      closed: r.closed,
+      handled: r.closed,
+      avgResponseMinutes: r.withResponse > 0 ? Math.round(r.sumResponse / r.withResponse) : 0,
+    }));
+
     const body = {
       totalTickets,
       totalOpen,
@@ -80,6 +104,7 @@ export async function GET(request: NextRequest) {
       overallAvgResponseTime: overallAvg,
       avgResponseTimeNoDependencies: avgNoDeps,
       avgResponseTimeWithDependencies: avgWithDeps,
+      memberStats,
     };
 
     return new NextResponse(JSON.stringify(body), {
