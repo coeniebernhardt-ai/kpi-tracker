@@ -27,19 +27,16 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   return tokenUser ? { id: tokenUser.id } : null;
 }
 
+/** Export always shows resolution duration in minutes (e.g. "85 min", "226 min"). */
 function formatResolutionDuration(createdAt: string, closedAt?: string | null, responseTimeMinutes?: number | null): string {
   if (responseTimeMinutes != null && responseTimeMinutes >= 0) {
-    if (responseTimeMinutes < 60) return `${responseTimeMinutes} min`;
-    const h = Math.floor(responseTimeMinutes / 60);
-    const m = responseTimeMinutes % 60;
-    return m ? `${h}h ${m}m` : `${h}h`;
+    return `${Math.round(responseTimeMinutes)} min`;
   }
   if (closedAt) {
     const a = new Date(createdAt).getTime();
     const b = new Date(closedAt).getTime();
-    const days = Math.round((b - a) / (24 * 60 * 60 * 1000));
-    if (days === 0) return '< 1 day';
-    return `${days} day${days !== 1 ? 's' : ''}`;
+    const minutes = Math.round((b - a) / (60 * 1000));
+    return `${minutes} min`;
   }
   return '';
 }
