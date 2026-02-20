@@ -27,16 +27,15 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   return tokenUser ? { id: tokenUser.id } : null;
 }
 
-/** Export always shows resolution duration in minutes (e.g. "85 min", "226 min"). */
-function formatResolutionDuration(createdAt: string, closedAt?: string | null, responseTimeMinutes?: number | null): string {
+/** Export resolution duration as numeric minutes only (for Excel conditional formatting). */
+function formatResolutionDuration(createdAt: string, closedAt?: string | null, responseTimeMinutes?: number | null): number | '' {
   if (responseTimeMinutes != null && responseTimeMinutes >= 0) {
-    return `${Math.round(responseTimeMinutes)} min`;
+    return Math.round(responseTimeMinutes);
   }
   if (closedAt) {
     const a = new Date(createdAt).getTime();
     const b = new Date(closedAt).getTime();
-    const minutes = Math.round((b - a) / (60 * 1000));
-    return `${minutes} min`;
+    return Math.round((b - a) / (60 * 1000));
   }
   return '';
 }
@@ -101,7 +100,7 @@ export async function GET(request: NextRequest) {
       status: string;
       issue: string;
       resolution: string;
-      resolution_duration: string;
+      resolution_duration: number | '';
       created_at: string;
       closed_at: string;
       location: string;
@@ -138,7 +137,7 @@ export async function GET(request: NextRequest) {
       'Created By': string;
       'Created At': string;
       'Closed At': string;
-      'Resolution Duration': string;
+      'Resolution Duration': number | '';
     };
 
     function buildNewSiteRows(rawTickets: Record<string, unknown>[], profileMap: Map<string, string>): NewSiteRow[] {
