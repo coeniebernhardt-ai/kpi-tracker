@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAllProfiles, getLatestTickets, getNextTickets, getTicketById, getKpiMetrics, type KpiMetrics, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, addTicketAdminComment, createNotificationsForNewAssignments } from '../lib/supabase';
+import { supabase, getAllProfiles, getLatestTickets, getNextTickets, getTicketById, getKpiMetrics, type KpiMetrics, createTicket, deleteTicket, uploadProfilePicture, Profile, Ticket, getAllTravelLogs, TravelLog, updateTicket, createNotificationsForNewAssignments } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
@@ -217,19 +217,26 @@ export default function AdminPage() {
     }
   };
 
-  /** FEATURE 3: Add admin comment (does not change ownership or status). */
+  /** FEATURE 3: Add admin comment (and send email to client if ticket has client_email/ticket_mailbox). */
   const handleAddAdminComment = async (ticketId: string) => {
     const text = adminCommentText.trim();
     if (!text || !user?.id) return;
     setAdminCommentSubmitting(true);
     try {
-      const { error } = await addTicketAdminComment(ticketId, text, user.id);
-      if (!error) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch('/api/admin/ticket-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ ticketId, text, userId: user.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         await loadTickets();
         setAdminCommentTicketId(null);
         setAdminCommentText('');
       } else {
-        alert('Error adding comment: ' + (error.message || 'Unknown error'));
+        alert(data?.error || 'Error adding comment');
       }
     } catch (err) {
       alert('Error: ' + ((err as Error)?.message || 'Unknown error'));

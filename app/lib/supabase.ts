@@ -64,12 +64,16 @@ export interface Ticket {
   target_date?: string;
   // Attachments for regular tickets
   attachments?: { url: string; name: string; type: string }[];
-  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[]; authorRole?: 'admin'; authorId?: string }[];
+  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[]; authorRole?: 'admin' | 'client'; authorId?: string; authorEmail?: string }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
   // Assignment (can have multiple assigned members)
   assigned_to?: string[] | null;
   assigned_profiles?: Profile[];
+  // Email-to-ticket (ticket_source=email)
+  ticket_source?: 'manual' | 'email';
+  ticket_mailbox?: string | null;
+  client_email?: string | null;
   // Joined data
   profile?: Profile;
 }
