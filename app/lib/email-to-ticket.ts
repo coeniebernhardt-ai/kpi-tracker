@@ -34,7 +34,7 @@ export type EmailLogEvent =
   | 'email_sent'
   | 'email_parse_error';
 
-function getSupabaseAdmin(): SupabaseClient {
+export function getSupabaseAdmin(): SupabaseClient {
   const u = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!u || !k) throw new Error('Missing SUPABASE env vars');
@@ -77,7 +77,7 @@ export async function logEmailEvent(
   });
 }
 
-/** Strip signatures, quoted reply blocks, and normalize whitespace. */
+/** Strip signatures, quoted reply blocks, and normalize whitespace. Used by webhook ingest. */
 export function parseEmailBody(parsed: ParsedMail): string {
   let text = '';
   if (parsed.text) text = parsed.text;
@@ -345,15 +345,80 @@ export async function addCommentFromEmail(
 }
 
 /** Find ticket by ref from subject: [Ticket #1234] (display_id) or [Ticket #CB-20260205-001] (ticket_number). */
-async function findTicketByRef(ref: string, supabase: SupabaseClient): Promise<string | null> {
+export async function findTicketByRef(ref: string, supabase?: SupabaseClient): Promise<string | null> {
+  const db = supabase ?? getSupabaseAdmin();
   const trimmed = ref.trim();
   const asNum = parseInt(trimmed, 10);
   if (!Number.isNaN(asNum) && String(asNum) === trimmed) {
-    const { data } = await supabase.from('tickets').select('id').eq('display_id', asNum).maybeSingle();
+    const { data } = await db.from('tickets').select('id').eq('display_id', asNum).maybeSingle();
     if (data) return (data as { id: string }).id;
   }
-  const { data } = await supabase.from('tickets').select('id').eq('ticket_number', trimmed).maybeSingle();
+  const { data } = await db.from('tickets').select('id').eq('ticket_number', trimmed).maybeSingle();
   return data ? (data as { id: string }).id : null;
+}
+
+/** Input for processing a single incoming email (webhook or after IMAP fetch). */
+export type IncomingEmailPayload = {
+  sender_email: string;
+  subject: string;
+  body: string;
+  message_id: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
+};
+
+/**
+ * Process a single incoming email: duplicate/loop check, then add comment or create ticket.
+ * Used by webhook (/api/email/ingest) and by IMAP polling. Returns whether the email was processed.
+ */
+export async function processIncomingEmail(
+  mailbox: SupportMailbox,
+  payload: IncomingEmailPayload,
+  supabase?: SupabaseClient
+): Promise<{ processed: boolean; error?: string }> {
+  const db = supabase ?? getSupabaseAdmin();
+  const { sender_email, subject, body, message_id, attachments = [] } = payload;
+
+  if (await isEmailProcessed(message_id, db)) {
+    return { processed: false, error: 'duplicate' };
+  }
+  if (shouldIgnoreSender(sender_email)) {
+    return { processed: false, error: 'ignored_sender' };
+  }
+
+  await logEmailEvent('email_received', {
+    mailbox_address: mailbox.mailbox_address,
+    message_id,
+    subject,
+    from: sender_email,
+  }, db);
+
+  const ticketRef = extractTicketRefFromSubject(subject);
+  if (ticketRef) {
+    const ticketId = await findTicketByRef(ticketRef, db);
+    if (ticketId) {
+      const ok = await addCommentFromEmail(ticketId, body, sender_email, attachments, message_id, db);
+      if (ok) {
+        await markEmailProcessed(message_id, db);
+        return { processed: true };
+      }
+      return { processed: false, error: 'comment_failed' };
+    }
+  }
+
+  const result = await createTicketFromEmail(
+    mailbox,
+    subject,
+    body,
+    sender_email,
+    attachments,
+    message_id,
+    db
+  );
+  if (result) {
+    await markEmailProcessed(message_id, db);
+    return { processed: true };
+  }
+  return { processed: false, error: 'create_failed' };
 }
 
 /** Process one mailbox: connect IMAP, fetch unread, create/update tickets, mark processed. */
@@ -388,9 +453,7 @@ export async function processOneMailbox(
           if (!raw) continue;
           const parsed = await simpleParser(raw);
           const messageId = (parsed.messageId || '').trim() || `uid-${uid}`;
-          if (await isEmailProcessed(messageId, db)) continue;
           const from = parsed.from?.text || '';
-          if (shouldIgnoreSender(from)) continue;
           const senderEmail = parsed.from?.value?.[0]?.address || from.split('<').pop()?.replace('>', '').trim() || '';
           const subject = parsed.subject || '(No subject)';
           const body = parseEmailBody(parsed);
@@ -399,33 +462,14 @@ export async function processOneMailbox(
             content: a.content,
             contentType: a.contentType,
           }));
-          await logEmailEvent('email_received', {
-            mailbox_address: mailbox.mailbox_address,
-            message_id: messageId,
-            subject,
-            from: senderEmail,
-          }, db);
-          const ticketRef = extractTicketRefFromSubject(subject);
-          if (ticketRef) {
-            const ticketId = await findTicketByRef(ticketRef, db);
-            if (ticketId) {
-              const ok = await addCommentFromEmail(ticketId, body, senderEmail, attachments, messageId, db);
-              if (ok) processed++;
-            }
-          } else {
-            const result = await createTicketFromEmail(
-              mailbox,
-              subject,
-              body,
-              senderEmail,
-              attachments,
-              messageId,
-              db
-            );
-            if (result) processed++;
-          }
-          await markEmailProcessed(messageId, db);
-          await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+          const result = await processIncomingEmail(
+            mailbox,
+            { sender_email: senderEmail, subject, body, message_id: messageId, attachments },
+            db
+          );
+          if (result.processed) processed++;
+          else if (result.error) errors.push(`UID ${uid}: ${result.error}`);
+          if (result.processed) await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           errors.push(`UID ${uid}: ${msg}`);
