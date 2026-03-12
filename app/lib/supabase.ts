@@ -74,6 +74,7 @@ export interface Ticket {
   ticket_source?: 'manual' | 'email';
   ticket_mailbox?: string | null;
   client_email?: string | null;
+  display_id?: number | null;
   // Joined data
   profile?: Profile;
 }

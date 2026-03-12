@@ -29,6 +29,8 @@ export type EmailLogEvent =
   | 'email_received'
   | 'ticket_created'
   | 'ticket_updated_from_email'
+  | 'ticket_auto_assigned'
+  | 'routing_rule_created'
   | 'email_sent'
   | 'email_parse_error';
 
@@ -105,10 +107,68 @@ function shouldIgnoreSender(from: string): boolean {
   return LOOP_SENDER_PATTERNS.some((re) => re.test(lower));
 }
 
-/** Extract ticket number from subject e.g. [Ticket #1234] or [Ticket #4832] Camera offline */
-function extractTicketNumberFromSubject(subject: string): string | null {
+/** Extract ticket ref from subject: [Ticket #1234] or [Ticket #CB-20260205-001] */
+function extractTicketRefFromSubject(subject: string): string | null {
   const m = subject.match(TICKET_REF_REGEX);
-  return m ? m[1] : null;
+  return m ? m[1].trim() : null;
+}
+
+function getSenderDomain(email: string): string {
+  const part = email.split('@')[1];
+  return part ? part.toLowerCase().trim() : '';
+}
+
+/** Step 1: estate (Balwin/Redefine) → agent. Step 2: routing_rules by email then domain. Step 3: default Cornett. */
+async function resolveAssignedAgent(
+  senderEmail: string,
+  senderDomain: string,
+  supabase: SupabaseClient
+): Promise<{ agentId: string; source: 'estate' | 'routing_rule' | 'default' } | null> {
+  const email = senderEmail.toLowerCase().trim();
+  const domain = senderDomain || getSenderDomain(senderEmail);
+
+  // Step 1: Known sender → estate → Balwin=Cornett, Redefine=Marcellus
+  const { data: estateRow } = await supabase
+    .from('sender_estate')
+    .select('estate_name')
+    .eq('email_address', email)
+    .maybeSingle();
+  if (estateRow) {
+    const estate = (estateRow as { estate_name: string }).estate_name;
+    const nameMatch = estate.toLowerCase().includes('balwin') ? '%Cornett%' : estate.toLowerCase().includes('redefine') ? '%Marcellus%' : null;
+    if (nameMatch) {
+      const { data: profile } = await supabase.from('profiles').select('id').ilike('full_name', nameMatch).limit(1).maybeSingle();
+      if (profile) return { agentId: (profile as { id: string }).id, source: 'estate' };
+    }
+  }
+
+  // Step 2a: Exact email in routing_rules
+  const { data: ruleByEmail } = await supabase
+    .from('routing_rules')
+    .select('assigned_agent_id')
+    .eq('email_address', email)
+    .not('email_address', 'is', null)
+    .limit(1)
+    .maybeSingle();
+  if (ruleByEmail) return { agentId: (ruleByEmail as { assigned_agent_id: string }).assigned_agent_id, source: 'routing_rule' };
+
+  // Step 2b: Domain in routing_rules
+  if (domain) {
+    const { data: ruleByDomain } = await supabase
+      .from('routing_rules')
+      .select('assigned_agent_id')
+      .eq('email_domain', domain)
+      .not('email_domain', 'is', null)
+      .limit(1)
+      .maybeSingle();
+    if (ruleByDomain) return { agentId: (ruleByDomain as { assigned_agent_id: string }).assigned_agent_id, source: 'routing_rule' };
+  }
+
+  // Step 3: Default = Cornett
+  const { data: defaultProfile } = await supabase.from('profiles').select('id').ilike('full_name', '%Cornett%').limit(1).maybeSingle();
+  if (defaultProfile) return { agentId: (defaultProfile as { id: string }).id, source: 'default' };
+
+  return null;
 }
 
 /** Generate ticket_number for email-created tickets: use EM-YYYYMMDD-XXX when default agent has no initials. */
@@ -135,7 +195,7 @@ async function generateEmailTicketNumber(
   return `${initials}-${dateStr}-${seq}`;
 }
 
-/** Create a new ticket from an incoming email. */
+/** Create a new ticket from an incoming email. Uses intelligent routing (estate → routing_rules → default Cornett). */
 export async function createTicketFromEmail(
   mailbox: SupportMailbox,
   subject: string,
@@ -144,9 +204,11 @@ export async function createTicketFromEmail(
   attachments: { filename: string; content: Buffer; contentType?: string }[],
   messageId: string,
   supabase?: SupabaseClient
-): Promise<{ ticketId: string; ticketNumber: string } | null> {
+): Promise<{ ticketId: string; ticketNumber: string; displayId?: number } | null> {
   const db = supabase ?? getSupabaseAdmin();
-  const agentId = mailbox.default_assigned_agent_id;
+  const senderDomain = getSenderDomain(senderEmail);
+  const resolved = await resolveAssignedAgent(senderEmail, senderDomain, db);
+  const agentId = resolved?.agentId ?? mailbox.default_assigned_agent_id;
   if (!agentId) {
     await logEmailEvent('email_parse_error', { mailbox_address: mailbox.mailbox_address, reason: 'no_default_agent', message_id: messageId }, db);
     return null;
@@ -160,7 +222,6 @@ export async function createTicketFromEmail(
     logged_by: 'System',
   };
   const attachmentUrls: { url: string; name: string; type: string }[] = [];
-  // Store attachments in Supabase storage and get public URLs (or use a dedicated bucket path)
   const bucket = 'tickets';
   for (const att of attachments) {
     const path = `email-attachments/${Date.now()}-${att.filename}`;
@@ -192,7 +253,7 @@ export async function createTicketFromEmail(
       total_time_minutes: 0,
       attachments: attachmentUrls,
     })
-    .select('id, ticket_number')
+    .select('id, ticket_number, display_id')
     .single();
   if (error) {
     await logEmailEvent('email_parse_error', { mailbox_address: mailbox.mailbox_address, message_id: messageId, error: error.message }, db);
@@ -203,8 +264,21 @@ export async function createTicketFromEmail(
     ticket_id: ticket.id,
     message_id: messageId,
     ticket_number: ticket.ticket_number,
+    display_id: (ticket as { display_id?: number }).display_id,
   }, db);
-  return { ticketId: ticket.id, ticketNumber: ticket.ticket_number };
+  if (resolved) {
+    await logEmailEvent('ticket_auto_assigned', {
+      ticket_id: ticket.id,
+      assigned_agent_id: agentId,
+      source: resolved.source,
+      sender_email: senderEmail,
+    }, db);
+  }
+  return {
+    ticketId: ticket.id,
+    ticketNumber: ticket.ticket_number,
+    displayId: (ticket as { display_id?: number }).display_id,
+  };
 }
 
 /** Add a comment to an existing ticket (from client reply). */
@@ -251,13 +325,15 @@ export async function addCommentFromEmail(
   return true;
 }
 
-/** Find ticket by ticket_number (from subject e.g. [Ticket #CB-20260205-001] or [Ticket #1234]). */
-async function findTicketByNumber(ticketNumber: string, supabase: SupabaseClient): Promise<string | null> {
-  const { data } = await supabase
-    .from('tickets')
-    .select('id')
-    .eq('ticket_number', ticketNumber.trim())
-    .maybeSingle();
+/** Find ticket by ref from subject: [Ticket #1234] (display_id) or [Ticket #CB-20260205-001] (ticket_number). */
+async function findTicketByRef(ref: string, supabase: SupabaseClient): Promise<string | null> {
+  const trimmed = ref.trim();
+  const asNum = parseInt(trimmed, 10);
+  if (!Number.isNaN(asNum) && String(asNum) === trimmed) {
+    const { data } = await supabase.from('tickets').select('id').eq('display_id', asNum).maybeSingle();
+    if (data) return (data as { id: string }).id;
+  }
+  const { data } = await supabase.from('tickets').select('id').eq('ticket_number', trimmed).maybeSingle();
   return data ? (data as { id: string }).id : null;
 }
 
@@ -310,9 +386,9 @@ export async function processOneMailbox(
             subject,
             from: senderEmail,
           }, db);
-          const ticketNum = extractTicketNumberFromSubject(subject);
-          if (ticketNum) {
-            const ticketId = await findTicketByNumber(ticketNum, db);
+          const ticketRef = extractTicketRefFromSubject(subject);
+          if (ticketRef) {
+            const ticketId = await findTicketByRef(ticketRef, db);
             if (ticketId) {
               const ok = await addCommentFromEmail(ticketId, body, senderEmail, attachments, messageId, db);
               if (ok) processed++;
@@ -360,7 +436,9 @@ export async function processAllMailboxes(supabase?: SupabaseClient): Promise<{ 
   return { processed: totalProcessed, errors: allErrors };
 }
 
-/** Send reply email to client when technician adds a comment. FROM ticket_mailbox, TO client_email, subject [Ticket #N] ... */
+const SUPPORT_MAILBOX = 'support@thinkdigital.co.za';
+
+/** Send reply email to client when technician adds a comment. Always FROM support@thinkdigital.co.za, subject [Ticket #display_id] or [Ticket #ticket_number]. */
 export async function sendTicketReplyEmail(
   ticketId: string,
   commentText: string,
@@ -369,26 +447,27 @@ export async function sendTicketReplyEmail(
   const db = supabase ?? getSupabaseAdmin();
   const { data: ticket, error: fetchErr } = await db
     .from('tickets')
-    .select('ticket_number, issue, ticket_mailbox, client_email')
+    .select('ticket_number, display_id, issue, client_email')
     .eq('id', ticketId)
     .single();
   if (fetchErr || !ticket) return { sent: false, error: 'Ticket not found' };
-  const mailboxAddr = (ticket as { ticket_mailbox?: string }).ticket_mailbox;
   const clientEmail = (ticket as { client_email?: string }).client_email;
-  if (!mailboxAddr || !clientEmail) return { sent: false, error: 'Ticket has no mailbox or client email' };
+  if (!clientEmail) return { sent: false, error: 'Ticket has no client email' };
   const { data: mailbox } = await db
     .from('support_mailboxes')
     .select('*')
-    .eq('mailbox_address', mailboxAddr)
+    .eq('mailbox_address', SUPPORT_MAILBOX)
     .eq('is_active', true)
     .single();
-  if (!mailbox) return { sent: false, error: 'Mailbox not configured or inactive' };
+  if (!mailbox) return { sent: false, error: 'Support mailbox not configured or inactive' };
   const mb = mailbox as SupportMailbox;
   const password = mb.password_encrypted || process.env[`MAILBOX_PASSWORD_${mb.id}`] || '';
-  if (!password) return { sent: false, error: 'No password for mailbox' };
+  if (!password) return { sent: false, error: 'No password for support mailbox' };
+  const displayId = (ticket as { display_id?: number }).display_id;
   const ticketNumber = (ticket as { ticket_number: string }).ticket_number;
-  const issue = (ticket as { issue?: string }).issue || '';
-  const subject = `[Ticket #${ticketNumber}] ${(issue || 'Support request').slice(0, 80)}${(issue || '').length > 80 ? '...' : ''}`;
+  const subjectRef = displayId != null ? String(displayId) : ticketNumber;
+  const issue = (ticket as { issue?: string }).issue || 'Support request';
+  const subject = `[Ticket #${subjectRef}] ${issue.slice(0, 80)}${issue.length > 80 ? '...' : ''}`;
   const transporter = nodemailer.createTransport({
     host: mb.smtp_server,
     port: mb.smtp_port,
@@ -403,14 +482,14 @@ export async function sendTicketReplyEmail(
       text: commentText,
     });
     await logEmailEvent('email_sent', {
-      mailbox_address: mailboxAddr,
+      mailbox_address: SUPPORT_MAILBOX,
       ticket_id: ticketId,
       to: clientEmail,
     }, db);
     return { sent: true };
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e);
-    await logEmailEvent('email_parse_error', { mailbox_address: mailboxAddr, ticket_id: ticketId, error: err }, db);
+    await logEmailEvent('email_parse_error', { mailbox_address: SUPPORT_MAILBOX, ticket_id: ticketId, error: err }, db);
     return { sent: false, error: err };
   }
 }

@@ -1,67 +1,57 @@
-# ThinkQ Email-to-Ticket Integration
+# ThinkQ/FinQ Email-to-Ticket (Single Mailbox + Intelligent Routing)
 
 ## Overview
 
-- **Inbound:** Emails to support mailboxes create tickets or add comments to existing tickets (when subject contains `[Ticket #<ticket_number>]`).
-- **Outbound:** When a technician adds a comment in ThinkQ, an email is sent to the client from the ticket’s mailbox (if `client_email` and `ticket_mailbox` are set).
+- **Single mailbox:** All support email is received at **support@thinkdigital.co.za**. Incoming messages create tickets or add comments; outbound replies are always sent **from** this address.
+- **Intelligent routing:** New tickets are auto-assigned using: (1) known sender → estate (Balwin → Cornett, Redefine → Marcellus), (2) learned routing rules (email or domain → agent), (3) default agent Cornett.
+- **Learning:** When a technician assigns or reassigns a ticket that has `client_email`, the system stores a routing rule (email + domain → agent). Future emails from that sender or domain are routed to that agent.
+- **Threading:** Outbound subject format is `[Ticket #display_id]` (or `[Ticket #ticket_number]` if no display_id). Incoming replies with that pattern are matched to the existing ticket and added as a comment.
 
-## 1. Database setup
+## 1. Database setup (order)
 
-Run **`EMAIL_TO_TICKET_SCHEMA.sql`** in the Supabase SQL Editor. This creates:
+1. Run **`EMAIL_TO_TICKET_SCHEMA.sql`** – tables `support_mailboxes`, `processed_emails`, `email_log`, and ticket columns.
+2. Run **`EMAIL_TO_TICKET_ROUTING_SCHEMA.sql`** – `ticket_display_id_seq`, `tickets.display_id`, `sender_estate`, `routing_rules`, trigger to set `display_id` on insert, trigger to learn routing on assignment change.
+3. Run **`EMAIL_TO_TICKET_MAILBOXES.sql`** – inserts the single mailbox **support@thinkdigital.co.za** with default agent Cornett.
+4. Set **password_encrypted** for that mailbox (Table Editor or `UPDATE support_mailboxes SET password_encrypted = '...' WHERE mailbox_address = 'support@thinkdigital.co.za'`).
 
-- `support_mailboxes` – mailbox config (IMAP/SMTP, default agent)
-- `processed_emails` – `message_id` for duplicate protection
-- `email_log` – events: `email_received`, `ticket_created`, `ticket_updated_from_email`, `email_sent`, `email_parse_error`
-- New columns on `tickets`: `ticket_source`, `ticket_mailbox`, `client_email`
+## 2. Sender → estate (Step 1 routing)
 
-## 2. Mailbox configuration and default agents
+Populate **`sender_estate`** from your system user/client data so that known senders map to an estate:
 
-**Monitored mailboxes and default assignment:**
+- **Balwin** → tickets are assigned to **Cornett**
+- **Redefine** → tickets are assigned to **Marcellus**
 
-| Mailbox | Default agent |
-|--------|----------------|
-| support@balwin.com | Cornett |
-| support@redefine.com | Marcellus |
-| support@gowaterfall.com | Coenie |
+Example:
 
-When a ticket is created from an email, it is **immediately assigned** to that mailbox’s default agent. Agents can still **reassign** tickets or **add additional team members** using the existing ThinkQ UI; the default only applies at automatic creation.
+```sql
+INSERT INTO sender_estate (email_address, estate_name)
+VALUES
+  ('client1@example.com', 'Balwin'),
+  ('client2@example.com', 'Redefine')
+ON CONFLICT (email_address) DO UPDATE SET estate_name = EXCLUDED.estate_name;
+```
 
-Run **`EMAIL_TO_TICKET_MAILBOXES.sql`** in the Supabase SQL Editor **after** `EMAIL_TO_TICKET_SCHEMA.sql`. It inserts the three mailboxes and links each to the correct agent by matching `profiles.full_name` (Cornett, Marcellus, Coenie). If your display names differ, edit the script’s `ILIKE` patterns or update `default_assigned_agent_id` in the table after running. Then set each mailbox’s app password in `password_encrypted` (see script comments).
+Use lowercase `email_address`. Estate names are matched case-insensitively for Balwin/Redefine.
 
-## 3. Cron (mail listener)
+## 3. Routing rules (Step 2) and default (Step 3)
 
-The app exposes **`POST /api/cron/process-email`**, which:
+- **Step 2:** Table **`routing_rules`** stores learned and manual rules: `email_address` and/or `email_domain` → `assigned_agent_id`. Priority: exact email first, then domain.
+- **Step 3:** If no rule matches, the **default agent** is Cornett (from the support mailbox config).
+- **Learning:** When a technician changes assignment on a ticket that has `client_email`, a trigger inserts/updates `routing_rules` and logs `routing_rule_created` in `email_log`. No change to the existing assignment UI.
 
-- Connects to each active mailbox via IMAP
-- Fetches unread messages, parses them, and either creates a ticket or adds a comment
-- Marks messages as processed and logs to `email_log`
+## 4. Cron (mail listener)
 
-**Vercel:** `vercel.json` is set so this route runs every minute. Set **`CRON_SECRET`** in Vercel env and ensure the cron job sends:
+- **`POST /api/cron/process-email`** – connects to support@thinkdigital.co.za via IMAP, fetches unread emails every run, creates tickets or adds comments, marks processed, logs to `email_log`.
+- Poll every **30–60 seconds** (e.g. Vercel Cron every minute). Secure with **`CRON_SECRET`** in env and `Authorization: Bearer <CRON_SECRET>`.
 
-`Authorization: Bearer <CRON_SECRET>`.
+## 5. Outbound when technician replies
 
-**External cron:** Call the URL every 30–60 seconds with the same header.
+- When an admin adds a comment in ThinkQ, **`POST /api/admin/ticket-comment`** adds the comment and, if the ticket has **client_email**, sends an email to the client **from support@thinkdigital.co.za** with subject **`[Ticket #display_id]`** (or ticket_number if no display_id).
 
-## 4. Outbound email when technician replies
+## 6. Log events
 
-When an admin adds a comment via the admin UI, the app calls **`POST /api/admin/ticket-comment`**, which:
+- `email_received`, `ticket_created`, `ticket_updated_from_email`, **`ticket_auto_assigned`**, **`routing_rule_created`**, `email_sent`, `email_parse_error`.
 
-1. Adds the comment to the ticket (same as before)
-2. If the ticket has `client_email` and `ticket_mailbox`, sends an email to the client from that mailbox with subject `[Ticket #<ticket_number>] <original subject>`.
+## 7. Assignment UI
 
-No change for tickets created manually; only email-originated tickets get automatic replies.
-
-## 5. Behaviour summary
-
-| Incoming email subject              | Action |
-|------------------------------------|--------|
-| No `[Ticket #...]`                 | Create new ticket; assign to mailbox default agent; set `ticket_source=email`, `ticket_mailbox`, `client_email` |
-| Contains `[Ticket #CB-20260205-001]` | Find ticket with that `ticket_number`, add comment (body + attachments), author = client email |
-
-- **Loop protection:** Messages from senders containing `no-reply`, `mailer-daemon`, `donotreply`, `auto-reply`, etc. are ignored.
-- **Duplicate protection:** Each processed `message_id` is stored in `processed_emails`; duplicates are skipped.
-- **Attachments:** Inbound attachments are uploaded to the `tickets` storage bucket and linked to the ticket or comment.
-
-## 6. Optional: Admin UI for mailboxes
-
-You can add an admin page or API to list/edit `support_mailboxes` (with masked passwords). For now, configure mailboxes via SQL or Supabase Dashboard.
+- Existing ThinkQ assignment and “add team member” behaviour is unchanged. Intelligent routing only sets the **initial** assignee when a ticket is created from email; technicians can still reassign and add members, and those changes are used to learn new routing rules.
