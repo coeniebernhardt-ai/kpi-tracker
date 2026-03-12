@@ -126,6 +126,13 @@ export default function DashboardPage() {
   // Search issue description (member)
   const [searchIssue, setSearchIssue] = useState('');
 
+  // Pending queue (email-ingested tickets)
+  const [pendingPanelOpen, setPendingPanelOpen] = useState(false);
+  const [pendingTickets, setPendingTickets] = useState<Ticket[]>([]);
+  const [pendingUnviewedCount, setPendingUnviewedCount] = useState(0);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [assigningPendingId, setAssigningPendingId] = useState<string | null>(null);
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) {
@@ -184,6 +191,60 @@ export default function DashboardPage() {
     }, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
+
+  // Pending tickets: fetch unviewed count when on tickets tab; poll for badge update
+  const fetchPendingSummary = async () => {
+    if (!user?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers });
+      if (res.ok) {
+        const data = await res.json();
+        setPendingUnviewedCount(typeof data.unviewedCount === 'number' ? data.unviewedCount : 0);
+      }
+    } catch {
+      // ignore
+    }
+  };
+  useEffect(() => {
+    if (!user?.id || mainTab !== 'tickets') return;
+    fetchPendingSummary();
+    const interval = setInterval(fetchPendingSummary, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, mainTab]);
+
+  // Open Pending panel: load list, mark as viewed, then show
+  const openPendingPanel = async () => {
+    setPendingPanelOpen(true);
+    setLoadingPending(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers });
+      if (!res.ok) {
+        setPendingTickets([]);
+        setLoadingPending(false);
+        return;
+      }
+      const data = await res.json();
+      const list = Array.isArray(data.tickets) ? data.tickets : [];
+      setPendingTickets(list);
+      if (list.length > 0) {
+        await fetch('/api/pending-tickets', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ ticketIds: list.map((t: Ticket) => t.id) }),
+        });
+        setPendingUnviewedCount(0);
+      }
+    } finally {
+      setLoadingPending(false);
+    }
+  };
 
   // FEATURE B: Fetch full notification detail (GET), then mark as read (PATCH). Idempotent.
   useEffect(() => {
@@ -1971,11 +2032,12 @@ export default function DashboardPage() {
             </div>
             {/* Tickets Tabs */}
             <div className="mb-6">
-              <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
+              <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit">
                 <button
                   onClick={() => {
                     setActiveTab('open');
                     setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
+                    setPendingPanelOpen(false);
                   }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === 'open' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400'
@@ -1987,6 +2049,7 @@ export default function DashboardPage() {
                   onClick={() => {
                     setActiveTab('closed');
                     setExpandedTickets(new Set()); // Collapse all tickets when switching tabs
+                    setPendingPanelOpen(false);
                   }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     activeTab === 'closed' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'
@@ -1994,8 +2057,132 @@ export default function DashboardPage() {
                 >
                   Closed Tickets ({filteredClosedTickets.length})
                 </button>
+                <button
+                  onClick={() => {
+                    if (pendingPanelOpen) {
+                      setPendingPanelOpen(false);
+                      return;
+                    }
+                    setPendingPanelOpen(true);
+                    openPendingPanel();
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+                    pendingPanelOpen ? 'bg-sky-500/20 text-sky-400' : 'text-slate-400'
+                  }`}
+                >
+                  Pending
+                  {pendingUnviewedCount > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-sky-500 text-white text-xs font-bold flex items-center justify-center">
+                      {pendingUnviewedCount > 99 ? '99+' : pendingUnviewedCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
+
+            {/* Pending Tickets Panel */}
+            {pendingPanelOpen && (
+              <div className="mb-6 rounded-2xl bg-slate-800/40 border border-sky-500/30 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Pending Tickets</h3>
+                  <button
+                    type="button"
+                    onClick={() => setPendingPanelOpen(false)}
+                    className="text-slate-400 hover:text-white text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+                {loadingPending ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : pendingTickets.length === 0 ? (
+                  <p className="text-slate-500 py-4">No pending tickets.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingTickets.map((ticket) => (
+                      <div
+                        key={ticket.id}
+                        className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-slate-800/60 border border-slate-700"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap gap-2 items-center mb-1">
+                            <span className="font-mono text-sm font-medium text-sky-400">
+                              #{ticket.display_id ?? ticket.ticket_number}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {ticket.ticket_mailbox ? `From ${ticket.ticket_mailbox}` : ''}
+                            </span>
+                          </div>
+                          <p className="text-white font-medium truncate" title={ticket.issue}>{ticket.issue}</p>
+                          <p className="text-sm text-slate-400 truncate">{ticket.client_email ?? ticket.client ?? '—'}</p>
+                          <p className="text-xs text-slate-500">
+                            {ticket.created_at ? new Date(ticket.created_at).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={assigningPendingId === ticket.id}
+                            onClick={async () => {
+                              if (!user?.id) return;
+                              setAssigningPendingId(ticket.id);
+                              try {
+                                const { error } = await updateTicket(ticket.id, {
+                                  user_id: user.id,
+                                  status: 'open',
+                                  assigned_to: [user.id],
+                                } as Partial<Ticket>);
+                                if (!error) {
+                                  setPendingTickets((prev) => prev.filter((t) => t.id !== ticket.id));
+                                  await loadTickets();
+                                  await fetchPendingSummary();
+                                }
+                              } finally {
+                                setAssigningPendingId(null);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-400 text-sm font-medium hover:bg-sky-500/30 disabled:opacity-50"
+                          >
+                            {assigningPendingId === ticket.id ? 'Assigning...' : 'Assign to me'}
+                          </button>
+                          <select
+                            className="rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm px-2 py-1.5 focus:border-sky-500 outline-none"
+                            defaultValue=""
+                            onChange={async (e) => {
+                              const assignId = e.target.value;
+                              e.target.value = '';
+                              if (!assignId) return;
+                              setAssigningPendingId(ticket.id);
+                              try {
+                                const { error } = await updateTicket(ticket.id, {
+                                  user_id: assignId,
+                                  status: 'open',
+                                  assigned_to: [assignId],
+                                } as Partial<Ticket>);
+                                if (!error) {
+                                  setPendingTickets((prev) => prev.filter((t) => t.id !== ticket.id));
+                                  await loadTickets();
+                                  await fetchPendingSummary();
+                                }
+                              } finally {
+                                setAssigningPendingId(null);
+                              }
+                            }}
+                          >
+                            <option value="">Assign to...</option>
+                            {profiles.filter((p) => p.id !== user?.id).map((p) => (
+                              <option key={p.id} value={p.id}>{p.full_name ?? p.email}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Tickets List */}
             <section>

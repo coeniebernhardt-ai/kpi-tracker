@@ -434,6 +434,7 @@ export async function processOneMailbox(
     errors.push(`No password for mailbox ${mailbox.mailbox_address}`);
     return { processed: 0, errors };
   }
+  // Never log mailbox.password_encrypted or password
   const client = new ImapFlow({
     host: mailbox.imap_server,
     port: mailbox.imap_port,
