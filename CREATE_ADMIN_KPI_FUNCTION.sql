@@ -15,6 +15,7 @@ AS $$
     'total_tickets', COUNT(*)::int,
     'open_tickets', COUNT(*) FILTER (WHERE status = 'open')::int,
     'closed_tickets', COUNT(*) FILTER (WHERE status = 'closed')::int,
+    'pending_tickets', COUNT(*) FILTER (WHERE status = 'pending')::int,
     'avg_response_time_minutes', ROUND(AVG(response_time_minutes) FILTER (WHERE status = 'closed' AND response_time_minutes IS NOT NULL AND response_time_minutes > 0))::int,
     'avg_no_deps', ROUND(AVG(response_time_minutes) FILTER (
       WHERE status = 'closed' AND response_time_minutes IS NOT NULL AND response_time_minutes > 0

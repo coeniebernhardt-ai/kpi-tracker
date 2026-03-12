@@ -39,11 +39,11 @@ export interface Profile {
 export interface Ticket {
   id: string;
   ticket_number: string;
-  user_id: string;
+  user_id: string | null;
   client: string;
   clickup_ticket?: string;
   location: 'on-site' | 'remote';
-  status: 'open' | 'closed';
+  status: 'pending' | 'open' | 'closed';
   severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   issue: string;
   resolution?: string;
@@ -348,6 +348,7 @@ export type KpiMetrics = {
   total_tickets: number;
   open_tickets: number;
   closed_tickets: number;
+  pending_tickets?: number;
   avg_response_time_minutes: number | null;
   avg_no_deps: number | null;
   avg_with_deps: number | null;
@@ -362,6 +363,7 @@ export async function getKpiMetrics(): Promise<KpiMetrics> {
         total_tickets: Number(o.total_tickets) || 0,
         open_tickets: Number(o.open_tickets) || 0,
         closed_tickets: Number(o.closed_tickets) || 0,
+        pending_tickets: o.pending_tickets != null ? Number(o.pending_tickets) : undefined,
         avg_response_time_minutes: o.avg_response_time_minutes != null ? Number(o.avg_response_time_minutes) : null,
         avg_no_deps: o.avg_no_deps != null ? Number(o.avg_no_deps) : null,
         avg_with_deps: o.avg_with_deps != null ? Number(o.avg_with_deps) : null,
@@ -370,16 +372,18 @@ export async function getKpiMetrics(): Promise<KpiMetrics> {
   } catch (_) {
     // RPC may not exist yet; fall back to count queries
   }
-  // Fallback: 3 count queries (no RPC or RPC failed)
-  const [totalRes, openRes, closedRes] = await Promise.all([
+  // Fallback: count queries (no RPC or RPC failed)
+  const [totalRes, openRes, closedRes, pendingRes] = await Promise.all([
     supabase.from('tickets').select('*', { count: 'exact', head: true }),
     supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'closed'),
+    supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ]);
   return {
     total_tickets: totalRes.count ?? 0,
     open_tickets: openRes.count ?? 0,
     closed_tickets: closedRes.count ?? 0,
+    pending_tickets: pendingRes.count ?? 0,
     avg_response_time_minutes: null,
     avg_no_deps: null,
     avg_with_deps: null,

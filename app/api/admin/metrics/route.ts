@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     const totalTickets = list.length;
     const totalOpen = list.filter((t: { status: string }) => t.status === 'open').length;
     const totalClosed = list.filter((t: { status: string }) => t.status === 'closed').length;
+    const totalPending = list.filter((t: { status: string }) => t.status === 'pending').length;
     const hasDeps = (t: { has_dependencies?: boolean; dependency_name?: string | null }) =>
       t.has_dependencies === true && (t.dependency_name?.trim?.()?.length ?? 0) > 0;
     const closedWithResponse = list.filter(
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
           )
         : 0;
 
-    // Per-member stats from ALL tickets (not paginated)
+    // Per-member stats from ALL tickets (not paginated); pending counts as unassigned
     type Row = { user_id?: string | null; status: string; response_time_minutes?: number | null };
     const byUser = new Map<string, { open: number; closed: number; withResponse: number; sumResponse: number }>();
     for (const t of list as Row[]) {
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
       if (!byUser.has(uid)) byUser.set(uid, { open: 0, closed: 0, withResponse: 0, sumResponse: 0 });
       const rec = byUser.get(uid)!;
       if (t.status === 'open') rec.open += 1;
+      if (t.status === 'pending') { /* pending stays in __unassigned__ */ }
       if (t.status === 'closed') {
         rec.closed += 1;
         if (t.response_time_minutes != null && t.response_time_minutes > 0) {
@@ -101,6 +103,7 @@ export async function GET(request: NextRequest) {
       totalTickets,
       totalOpen,
       totalClosed,
+      totalPending,
       overallAvgResponseTime: overallAvg,
       avgResponseTimeNoDependencies: avgNoDeps,
       avgResponseTimeWithDependencies: avgWithDeps,

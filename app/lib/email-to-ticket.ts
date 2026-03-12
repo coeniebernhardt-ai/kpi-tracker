@@ -118,16 +118,16 @@ function getSenderDomain(email: string): string {
   return part ? part.toLowerCase().trim() : '';
 }
 
-/** Step 1: estate (Balwin/Redefine) → agent. Step 2: routing_rules by email then domain. Step 3: default Cornett. */
+/** Routing memory only: routing_rules (email then domain). No default — no match → pending queue. */
 async function resolveAssignedAgent(
   senderEmail: string,
   senderDomain: string,
   supabase: SupabaseClient
-): Promise<{ agentId: string; source: 'estate' | 'routing_rule' | 'default' } | null> {
+): Promise<{ agentId: string; source: 'estate' | 'routing_rule' } | null> {
   const email = senderEmail.toLowerCase().trim();
   const domain = senderDomain || getSenderDomain(senderEmail);
 
-  // Step 1: Known sender → estate → Balwin=Cornett, Redefine=Marcellus
+  // Optional: known sender → estate (e.g. Balwin=Cornett, Redefine=Marcellus)
   const { data: estateRow } = await supabase
     .from('sender_estate')
     .select('estate_name')
@@ -142,7 +142,7 @@ async function resolveAssignedAgent(
     }
   }
 
-  // Step 2a: Exact email in routing_rules
+  // Step 1: Exact email in routing_rules
   const { data: ruleByEmail } = await supabase
     .from('routing_rules')
     .select('assigned_agent_id')
@@ -152,7 +152,7 @@ async function resolveAssignedAgent(
     .maybeSingle();
   if (ruleByEmail) return { agentId: (ruleByEmail as { assigned_agent_id: string }).assigned_agent_id, source: 'routing_rule' };
 
-  // Step 2b: Domain in routing_rules
+  // Step 2: Domain in routing_rules
   if (domain) {
     const { data: ruleByDomain } = await supabase
       .from('routing_rules')
@@ -164,22 +164,19 @@ async function resolveAssignedAgent(
     if (ruleByDomain) return { agentId: (ruleByDomain as { assigned_agent_id: string }).assigned_agent_id, source: 'routing_rule' };
   }
 
-  // Step 3: Default = Cornett
-  const { data: defaultProfile } = await supabase.from('profiles').select('id').ilike('full_name', '%Cornett%').limit(1).maybeSingle();
-  if (defaultProfile) return { agentId: (defaultProfile as { id: string }).id, source: 'default' };
-
+  // No match → ticket goes to Pending queue (return null)
   return null;
 }
 
-/** Generate ticket_number for email-created tickets: use EM-YYYYMMDD-XXX when default agent has no initials. */
+/** Generate ticket_number for assigned agent (open tickets from email). */
 async function generateEmailTicketNumber(
-  defaultAgentId: string,
+  agentId: string,
   supabase: SupabaseClient
 ): Promise<string> {
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name')
-    .eq('id', defaultAgentId)
+    .eq('id', agentId)
     .single();
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'EM'
@@ -189,13 +186,27 @@ async function generateEmailTicketNumber(
   const { count } = await supabase
     .from('tickets')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', defaultAgentId)
+    .eq('user_id', agentId)
     .gte('created_at', today.toISOString().slice(0, 10));
   const seq = String((count ?? 0) + 1).padStart(3, '0');
   return `${initials}-${dateStr}-${seq}`;
 }
 
-/** Create a new ticket from an incoming email. Uses intelligent routing (estate → routing_rules → default Cornett). */
+/** Generate ticket_number for pending (unassigned) email-created tickets: PEND-YYYYMMDD-XXX. */
+async function generatePendingTicketNumber(supabase: SupabaseClient): Promise<string> {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const dayStart = today.toISOString().slice(0, 10) + 'T00:00:00.000Z';
+  const { count } = await supabase
+    .from('tickets')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending')
+    .gte('created_at', dayStart);
+  const seq = String((count ?? 0) + 1).padStart(3, '0');
+  return `PEND-${dateStr}-${seq}`;
+}
+
+/** Create a new ticket from an incoming email. Routing match → open + assigned; no match → pending (unassigned). */
 export async function createTicketFromEmail(
   mailbox: SupportMailbox,
   subject: string,
@@ -208,16 +219,17 @@ export async function createTicketFromEmail(
   const db = supabase ?? getSupabaseAdmin();
   const senderDomain = getSenderDomain(senderEmail);
   const resolved = await resolveAssignedAgent(senderEmail, senderDomain, db);
-  const agentId = resolved?.agentId ?? mailbox.default_assigned_agent_id;
-  if (!agentId) {
-    await logEmailEvent('email_parse_error', { mailbox_address: mailbox.mailbox_address, reason: 'no_default_agent', message_id: messageId }, db);
-    return null;
-  }
-  const ticketNumber = await generateEmailTicketNumber(agentId, db);
+
+  const isAssigned = !!resolved?.agentId;
+  const agentId = resolved?.agentId ?? null;
+  const ticketNumber = isAssigned && agentId
+    ? await generateEmailTicketNumber(agentId, db)
+    : await generatePendingTicketNumber(db);
+
   const now = new Date();
   const initialTimeLog = {
     minutes: 0,
-    description: 'Ticket opened',
+    description: isAssigned ? 'Ticket opened' : 'Ticket created (pending assignment)',
     timestamp: now.toISOString(),
     logged_by: 'System',
   };
@@ -234,25 +246,28 @@ export async function createTicketFromEmail(
       attachmentUrls.push({ url: urlData.publicUrl, name: att.filename, type: att.contentType || 'application/octet-stream' });
     }
   }
+
+  const insertRow: Record<string, unknown> = {
+    ticket_number: ticketNumber,
+    user_id: agentId,
+    assigned_to_array: agentId ? [agentId] : [],
+    client: senderEmail,
+    issue: body,
+    status: isAssigned ? 'open' : 'pending',
+    severity: 'MEDIUM',
+    location: 'remote',
+    ticket_source: 'email',
+    ticket_mailbox: mailbox.mailbox_address,
+    client_email: senderEmail,
+    updates: [],
+    time_logs: [initialTimeLog],
+    total_time_minutes: 0,
+    attachments: attachmentUrls,
+  };
+
   const { data: ticket, error } = await db
     .from('tickets')
-    .insert({
-      ticket_number: ticketNumber,
-      user_id: agentId,
-      assigned_to_array: [agentId],
-      client: senderEmail,
-      issue: body,
-      status: 'open',
-      severity: 'MEDIUM',
-      location: 'remote',
-      ticket_source: 'email',
-      ticket_mailbox: mailbox.mailbox_address,
-      client_email: senderEmail,
-      updates: [],
-      time_logs: [initialTimeLog],
-      total_time_minutes: 0,
-      attachments: attachmentUrls,
-    })
+    .insert(insertRow)
     .select('id, ticket_number, display_id')
     .single();
   if (error) {
@@ -265,6 +280,7 @@ export async function createTicketFromEmail(
     message_id: messageId,
     ticket_number: ticket.ticket_number,
     display_id: (ticket as { display_id?: number }).display_id,
+    status: isAssigned ? 'open' : 'pending',
   }, db);
   if (resolved) {
     await logEmailEvent('ticket_auto_assigned', {
@@ -281,7 +297,7 @@ export async function createTicketFromEmail(
   };
 }
 
-/** Add a comment to an existing ticket (from client reply). */
+/** Add a comment to an existing ticket (from client reply). If ticket was closed, reopen (status = open). */
 export async function addCommentFromEmail(
   ticketId: string,
   body: string,
@@ -293,10 +309,11 @@ export async function addCommentFromEmail(
   const db = supabase ?? getSupabaseAdmin();
   const { data: ticket, error: fetchErr } = await db
     .from('tickets')
-    .select('updates')
+    .select('updates, status')
     .eq('id', ticketId)
     .single();
   if (fetchErr || !ticket) return false;
+  const wasClosed = (ticket as { status?: string }).status === 'closed';
   const attachmentUrls: { url: string; name: string; type: string }[] = [];
   const bucket = 'tickets';
   for (const att of attachments) {
@@ -319,9 +336,11 @@ export async function addCommentFromEmail(
   };
   const existingUpdates = Array.isArray((ticket as { updates?: unknown[] }).updates) ? (ticket as { updates: unknown[] }).updates : [];
   const updatedUpdates = [...existingUpdates, newEntry];
-  const { error: updateErr } = await db.from('tickets').update({ updates: updatedUpdates }).eq('id', ticketId);
+  const updatePayload: Record<string, unknown> = { updates: updatedUpdates };
+  if (wasClosed) updatePayload.status = 'open';
+  const { error: updateErr } = await db.from('tickets').update(updatePayload).eq('id', ticketId);
   if (updateErr) return false;
-  await logEmailEvent('ticket_updated_from_email', { ticket_id: ticketId, message_id: messageId }, db);
+  await logEmailEvent('ticket_updated_from_email', { ticket_id: ticketId, message_id: messageId, reopened: wasClosed }, db);
   return true;
 }
 
@@ -436,9 +455,7 @@ export async function processAllMailboxes(supabase?: SupabaseClient): Promise<{ 
   return { processed: totalProcessed, errors: allErrors };
 }
 
-const SUPPORT_MAILBOX = 'support@thinkdigital.co.za';
-
-/** Send reply email to client when technician adds a comment. Always FROM support@thinkdigital.co.za, subject [Ticket #display_id] or [Ticket #ticket_number]. */
+/** Send reply email to client when technician adds a comment. FROM the ticket's mailbox (ticket_mailbox), subject [Ticket #display_id] or [Ticket #ticket_number]. */
 export async function sendTicketReplyEmail(
   ticketId: string,
   commentText: string,
@@ -447,22 +464,24 @@ export async function sendTicketReplyEmail(
   const db = supabase ?? getSupabaseAdmin();
   const { data: ticket, error: fetchErr } = await db
     .from('tickets')
-    .select('ticket_number, display_id, issue, client_email')
+    .select('ticket_number, display_id, issue, client_email, ticket_mailbox')
     .eq('id', ticketId)
     .single();
   if (fetchErr || !ticket) return { sent: false, error: 'Ticket not found' };
   const clientEmail = (ticket as { client_email?: string }).client_email;
   if (!clientEmail) return { sent: false, error: 'Ticket has no client email' };
+  const mailboxAddress = (ticket as { ticket_mailbox?: string }).ticket_mailbox;
+  if (!mailboxAddress) return { sent: false, error: 'Ticket has no ticket_mailbox (cannot determine reply-from)' };
   const { data: mailbox } = await db
     .from('support_mailboxes')
     .select('*')
-    .eq('mailbox_address', SUPPORT_MAILBOX)
+    .eq('mailbox_address', mailboxAddress)
     .eq('is_active', true)
     .single();
-  if (!mailbox) return { sent: false, error: 'Support mailbox not configured or inactive' };
+  if (!mailbox) return { sent: false, error: `Mailbox ${mailboxAddress} not configured or inactive` };
   const mb = mailbox as SupportMailbox;
   const password = mb.password_encrypted || process.env[`MAILBOX_PASSWORD_${mb.id}`] || '';
-  if (!password) return { sent: false, error: 'No password for support mailbox' };
+  if (!password) return { sent: false, error: `No password for mailbox ${mailboxAddress}` };
   const displayId = (ticket as { display_id?: number }).display_id;
   const ticketNumber = (ticket as { ticket_number: string }).ticket_number;
   const subjectRef = displayId != null ? String(displayId) : ticketNumber;
@@ -482,14 +501,14 @@ export async function sendTicketReplyEmail(
       text: commentText,
     });
     await logEmailEvent('email_sent', {
-      mailbox_address: SUPPORT_MAILBOX,
+      mailbox_address: mb.mailbox_address,
       ticket_id: ticketId,
       to: clientEmail,
     }, db);
     return { sent: true };
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e);
-    await logEmailEvent('email_parse_error', { mailbox_address: SUPPORT_MAILBOX, ticket_id: ticketId, error: err }, db);
+    await logEmailEvent('email_parse_error', { mailbox_address: mb.mailbox_address, ticket_id: ticketId, error: err }, db);
     return { sent: false, error: err };
   }
 }

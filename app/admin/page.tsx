@@ -27,7 +27,7 @@ export default function AdminPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filterUser, setFilterUser] = useState('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'open' | 'closed'>('all');
   const [filterIssueSearch, setFilterIssueSearch] = useState('');
   const [adminTab, setAdminTab] = useState<'tickets' | 'travelLogs' | 'aiInsights'>('tickets');
   
@@ -132,6 +132,7 @@ export default function AdminPage() {
           total_tickets: metricsRes.totalTickets ?? 0,
           open_tickets: metricsRes.totalOpen ?? 0,
           closed_tickets: metricsRes.totalClosed ?? 0,
+          pending_tickets: metricsRes.totalPending ?? 0,
           avg_response_time_minutes: metricsRes.overallAvgResponseTime ?? null,
           avg_no_deps: metricsRes.avgResponseTimeNoDependencies ?? null,
           avg_with_deps: metricsRes.avgResponseTimeWithDependencies ?? null,
@@ -357,6 +358,7 @@ export default function AdminPage() {
   const totalTicketsKpi = kpiMetrics?.total_tickets ?? 0;
   const totalOpenKpi = kpiMetrics?.open_tickets ?? 0;
   const totalClosedKpi = kpiMetrics?.closed_tickets ?? 0;
+  const totalPendingKpi = kpiMetrics?.pending_tickets ?? 0;
   const overallAvgResponseTime = kpiMetrics?.avg_response_time_minutes ?? 0;
   const avgResponseTimeNoDependencies = kpiMetrics?.avg_no_deps ?? 0;
   const avgResponseTimeWithDependencies = kpiMetrics?.avg_with_deps ?? 0;
@@ -522,6 +524,10 @@ export default function AdminPage() {
             <p className="text-[10px] sm:text-xs text-blue-300 mb-0.5 md:mb-1 break-words">Closed</p>
             <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-300 leading-tight">{totalClosedKpi}</p>
           </div>
+          <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+            <p className="text-[10px] sm:text-xs text-amber-400 mb-0.5 md:mb-1 break-words">Pending</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-400 leading-tight">{totalPendingKpi}</p>
+          </div>
           <div className="flex-1 min-w-0 p-2 sm:p-3 md:p-4 lg:p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30">
             <p className="text-[10px] sm:text-xs text-blue-400 mb-0.5 md:mb-1 break-words">Avg Response Time</p>
             <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400 leading-tight">{overallAvgResponseTime > 0 ? overallAvgResponseTime : '—'}</p>
@@ -664,8 +670,9 @@ export default function AdminPage() {
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Filter by Status</label>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as 'all' | 'open' | 'closed')} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm">
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as 'all' | 'pending' | 'open' | 'closed')} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm">
               <option value="all">All Status</option>
+              <option value="pending">Pending Only</option>
               <option value="open">Open Only</option>
               <option value="closed">Closed Only</option>
             </select>
@@ -738,7 +745,7 @@ export default function AdminPage() {
                 const memberProfile = profiles.find(p => p.id === ticket.user_id);
                 const isExpanded = expandedTickets.has(ticket.id);
                 return (
-                  <div key={ticket.id} className={`p-4 rounded-xl border ${ticket.status === 'open' ? 'bg-slate-800/40 border-blue-500/30' : 'bg-slate-800/30 border-slate-700/50'}`}>
+                  <div key={ticket.id} className={`p-4 rounded-xl border ${ticket.status === 'pending' ? 'bg-amber-900/20 border-amber-500/30' : ticket.status === 'open' ? 'bg-slate-800/40 border-blue-500/30' : 'bg-slate-800/30 border-slate-700/50'}`}>
                     {/* Collapsed Header - Always Visible */}
                     <div 
                       className="flex items-center justify-between cursor-pointer"
@@ -754,7 +761,7 @@ export default function AdminPage() {
                       }}
                     >
                       <div className="flex items-center flex-wrap gap-2 flex-1">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-300'}`}>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-300'}`}>
                           {ticket.ticket_number}
                         </span>
                         {ticket.client && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{ticket.client}</span>}
@@ -803,20 +810,20 @@ export default function AdminPage() {
                           </div>
                         ) : (() => {
                           const detail = expandedTicketDetails[ticket.id] ?? ticket;
-                          const memberProfileDetail = profiles.find(p => p.id === detail.user_id);
+                          const memberProfileDetail = detail.user_id ? profiles.find(p => p.id === detail.user_id) : null;
                           const expandedContent = (
                             <div className="flex items-start gap-4">
                           {memberProfileDetail?.avatar_url ? (
                             <Image src={memberProfileDetail?.avatar_url ?? ''} alt={memberProfileDetail?.full_name ?? 'User'} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
                           ) : (
                             <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAvatarGradient(memberProfileDetail?.full_name || 'U')} flex items-center justify-center text-white font-bold text-sm`}>
-                              {memberProfileDetail?.avatar || 'U'}
+                              {memberProfileDetail?.avatar || (detail.status === 'pending' ? '…' : 'U')}
                             </div>
                           )}
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center flex-wrap gap-2 mb-2">
-                              <span className="text-xs text-slate-500">{memberProfileDetail?.full_name}</span>
+                              <span className="text-xs text-slate-500">{memberProfileDetail?.full_name ?? (detail.status === 'pending' ? 'Unassigned (pending)' : '—')}</span>
                           {editingClickUpTicketId === detail.id ? (
                             <div className="flex items-center gap-2">
                               <input
@@ -907,8 +914,8 @@ export default function AdminPage() {
                               👤 No members assigned
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
-                            {ticket.status === 'open' ? 'Open' : 'Closed'}
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : ticket.status === 'open' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/20 text-blue-300'}`}>
+                            {ticket.status === 'pending' ? 'Pending' : ticket.status === 'open' ? 'Open' : 'Closed'}
                           </span>
                           {(() => {
                             const assignedArray = Array.isArray((ticket as any).assigned_to) ? (ticket as any).assigned_to : ((ticket as any).assigned_to ? [(ticket as any).assigned_to] : []);
@@ -983,7 +990,13 @@ export default function AdminPage() {
                                           } else {
                                             newAssigned = currentAssigned.filter((id: string) => id !== p.id);
                                           }
-                                          const { error } = await updateTicket(ticket.id, { assigned_to: newAssigned });
+                                          const isPendingAndAssigning = ticket.status === 'pending' && newAssigned.length > 0;
+                                          const updatePayload: { assigned_to: string[]; user_id?: string; status?: string } = { assigned_to: newAssigned };
+                                          if (isPendingAndAssigning) {
+                                            updatePayload.user_id = newAssigned[0];
+                                            updatePayload.status = 'open';
+                                          }
+                                          const { error } = await updateTicket(ticket.id, updatePayload);
                                           if (!error) {
                                             // FEATURE C: Notify newly assigned members (excludes current admin)
                                             await createNotificationsForNewAssignments(ticket.id, currentAssigned, newAssigned, user?.id ?? '', 'admin');
