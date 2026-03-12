@@ -991,7 +991,7 @@ export default function AdminPage() {
                                             newAssigned = currentAssigned.filter((id: string) => id !== p.id);
                                           }
                                           const isPendingAndAssigning = ticket.status === 'pending' && newAssigned.length > 0;
-                                          const updatePayload: { assigned_to: string[]; user_id?: string; status?: string } = { assigned_to: newAssigned };
+                                          const updatePayload: Partial<Ticket> = { assigned_to: newAssigned };
                                           if (isPendingAndAssigning) {
                                             updatePayload.user_id = newAssigned[0];
                                             updatePayload.status = 'open';
