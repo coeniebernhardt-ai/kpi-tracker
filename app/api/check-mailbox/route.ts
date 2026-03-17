@@ -1,7 +1,7 @@
 /**
- * POST /api/check-mailbox
+ * GET/POST /api/check-mailbox
  * Mailbox polling: connect via IMAP, read unread messages, create/update tickets.
- * Called by Vercel Cron every 5 minutes (production only). Use GET to verify setup.
+ * Vercel Cron calls GET (not POST), so we process mail on GET when from cron or when authorized.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,9 +9,26 @@ import { processAllMailboxes, getActiveMailboxes } from '@/app/lib/email-to-tick
 
 export const maxDuration = 60;
 
-/** GET: verify route and mailbox config (no credentials exposed). */
-export async function GET() {
+function isCronOrAuthorized(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get('authorization');
+  if (secret && authHeader === `Bearer ${secret}`) return true;
+  const ua = request.headers.get('user-agent') ?? '';
+  if (/vercel-cron/i.test(ua)) return true;
+  return false;
+}
+
+/** GET: if from Vercel Cron or Authorization: Bearer CRON_SECRET, process mailboxes; else return health info. */
+export async function GET(request: NextRequest) {
   try {
+    if (isCronOrAuthorized(request)) {
+      const result = await processAllMailboxes();
+      return NextResponse.json({
+        success: true,
+        processed: result.processed,
+        errors: result.errors.length ? result.errors : undefined,
+      });
+    }
     const mailboxes = await getActiveMailboxes();
     const withPassword = mailboxes.filter((m) => !!m.password_encrypted).length;
     return NextResponse.json({
@@ -23,10 +40,11 @@ export async function GET() {
         ? 'Add rows to support_mailboxes (is_active = true) in Supabase.'
         : withPassword < mailboxes.length
           ? 'Set password_encrypted for each mailbox (Office 365 App Password).'
-          : 'POST with Authorization: Bearer CRON_SECRET to process now. Cron runs every 5 min on production.',
+          : 'Cron runs every 1 min (GET). Use Authorization: Bearer CRON_SECRET to process now.',
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error('check-mailbox error:', message);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
