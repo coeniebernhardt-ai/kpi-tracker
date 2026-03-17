@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/check-mailbox",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }
