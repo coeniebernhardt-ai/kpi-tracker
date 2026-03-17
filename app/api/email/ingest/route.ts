@@ -15,7 +15,7 @@ import {
   type IncomingEmailPayload,
 } from '@/app/lib/email-to-ticket';
 
-const ALLOWED_MAILBOXES = ['support@thinkdigital.co.za', 'support@gowaterfall.co.za'];
+const ALLOWED_MAILBOXES = ['support@thinkdigital.co.za', 'support@gowaterfall.co.za', 'supportq@thinkdigital.co.za'];
 
 /** Provider JSON body (flexible field names). */
 type ProviderPayload = {
@@ -135,7 +135,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Invalid payload: need sender_email/from, subject, body/text, message_id, and mailbox_address (or X-Mailbox). mailbox_address must be support@thinkdigital.co.za or support@gowaterfall.co.za.',
+          error: 'Invalid payload: need sender_email/from, subject, body/text, message_id, and mailbox_address (or X-Mailbox). mailbox_address must be one of the configured support mailboxes.',
         },
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );

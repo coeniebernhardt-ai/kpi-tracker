@@ -15,7 +15,7 @@ Your email provider (e.g. SendGrid Inbound Parse, Mailgun, Postmark, or a custom
 | `subject` | string | Email subject. Used for threading: if it contains `[Ticket #123]`, the body is added as a comment to that ticket. |
 | `body` or `text` | string | Plain-text body of the email. HTML-only emails: send HTML and we strip tags. |
 | `message_id` | string | Unique id for deduplication (e.g. SMTP Message-ID or provider id). Duplicates are ignored. |
-| `mailbox_address` | string | Which support mailbox received this. Must be `support@thinkdigital.co.za` or `support@gowaterfall.co.za`. Can be sent in the JSON body or in the `X-Mailbox` request header. |
+| `mailbox_address` | string | Which support mailbox received this. One of: `support@thinkdigital.co.za`, `support@gowaterfall.co.za`, `supportq@thinkdigital.co.za`. Can be sent in the JSON body or in the `X-Mailbox` request header. |
 
 ---
 
@@ -69,7 +69,7 @@ You can POST the **raw RFC 822 email** instead of JSON:
 
 - **Content-Type:** `text/plain`, `message/rfc822`, or `multipart/*`
 - **Body:** Raw email bytes (e.g. as received from SMTP)
-- **Header:** Set `X-Mailbox: support@thinkdigital.co.za` or `support@gowaterfall.co.za` so we know which mailbox received it.
+- **Header:** Set `X-Mailbox` to the receiving mailbox (e.g. `support@thinkdigital.co.za`, `supportq@thinkdigital.co.za`, `support@gowaterfall.co.za`) so we know which mailbox received it.
 
 We parse it with `mailparser` and then run the same logic (dedupe, thread detection, create ticket or add comment).
 
@@ -91,5 +91,6 @@ Only these addresses are accepted for `mailbox_address` (or `X-Mailbox`):
 
 - `support@thinkdigital.co.za`
 - `support@gowaterfall.co.za`
+- `supportq@thinkdigital.co.za`
 
 Each must exist in the `support_mailboxes` table in Supabase.
