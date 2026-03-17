@@ -208,12 +208,13 @@ export default function DashboardPage() {
       // ignore
     }
   };
+  // Poll pending count whenever user is logged in so nav badge is always up to date
   useEffect(() => {
-    if (!user?.id || mainTab !== 'tickets') return;
+    if (!user?.id) return;
     fetchPendingSummary();
     const interval = setInterval(fetchPendingSummary, 30000);
     return () => clearInterval(interval);
-  }, [user?.id, mainTab]);
+  }, [user?.id]);
 
   // Open Pending panel: load list, mark as viewed, then show
   const openPendingPanel = async () => {
@@ -978,6 +979,29 @@ export default function DashboardPage() {
               <p className="text-sm text-slate-400">{profile.role}</p>
             </div>
 
+            {/* Pending (incoming mailbox tickets not yet assigned) — admin and members */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setMainTab('tickets');
+                  setPendingPanelOpen(true);
+                  openPendingPanel();
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-colors relative"
+                title="Pending tickets (from mailbox, unassigned)"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="hidden sm:inline text-sm font-medium">Pending</span>
+                {pendingUnviewedCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-sky-500 text-white text-xs font-bold flex items-center justify-center">
+                    {pendingUnviewedCount > 99 ? '99+' : pendingUnviewedCount}
+                  </span>
+                )}
+              </button>
+            </div>
             {/* Exports (member: my data only) */}
             <div className="relative">
               <button

@@ -206,6 +206,9 @@ async function generatePendingTicketNumber(supabase: SupabaseClient): Promise<st
   return `PEND-${dateStr}-${seq}`;
 }
 
+/** Mailboxes that always create pending tickets (no auto-assign); any team member can assign. */
+const ALWAYS_PENDING_MAILBOXES = ['supportq@thinkdigital.co.za'];
+
 /** Create a new ticket from an incoming email. Routing match → open + assigned; no match → pending (unassigned). */
 export async function createTicketFromEmail(
   mailbox: SupportMailbox,
@@ -218,7 +221,8 @@ export async function createTicketFromEmail(
 ): Promise<{ ticketId: string; ticketNumber: string; displayId?: number } | null> {
   const db = supabase ?? getSupabaseAdmin();
   const senderDomain = getSenderDomain(senderEmail);
-  const resolved = await resolveAssignedAgent(senderEmail, senderDomain, db);
+  const forcePending = ALWAYS_PENDING_MAILBOXES.includes(mailbox.mailbox_address.toLowerCase().trim());
+  const resolved = forcePending ? null : await resolveAssignedAgent(senderEmail, senderDomain, db);
 
   const isAssigned = !!resolved?.agentId;
   const agentId = resolved?.agentId ?? null;

@@ -456,6 +456,29 @@ export default function AdminPage() {
               </svg>
               Manage Users
             </button>
+            {/* Pending (incoming mailbox tickets not yet assigned) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setFilterStatus('pending')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all relative ${
+                  filterStatus === 'pending'
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                    : 'bg-slate-800/80 border-slate-700/50 text-slate-300 hover:text-amber-400 hover:border-amber-500/30'
+                }`}
+                title="Pending tickets (from mailbox, unassigned)"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Pending
+                {totalPendingKpi > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center">
+                    {totalPendingKpi > 99 ? '99+' : totalPendingKpi}
+                  </span>
+                )}
+              </button>
+            </div>
             <div className="relative">
               <button
                 type="button"
