@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import nodemailer from 'nodemailer';
+import { getMicrosoftImapAccessToken } from '@/app/lib/microsoft-oauth';
 
 const TICKET_REF_REGEX = /\[Ticket\s*#([^\]]+)\]/i;
 const LOOP_SENDER_PATTERNS = [/no-reply/i, /mailer-daemon/i, /donotreply/i, /auto-reply/i, /autoreply/i, /noreply/i];
@@ -434,16 +435,33 @@ export async function processOneMailbox(
   const errors: string[] = [];
   let processed = 0;
   const password = mailbox.password_encrypted || process.env[`MAILBOX_PASSWORD_${mailbox.id}`] || '';
-  if (!password) {
-    errors.push(`No password for mailbox ${mailbox.mailbox_address}`);
+  const useOAuth = process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && process.env.AZURE_TENANT_ID && process.env.IMAP_USER;
+  if (!password && !useOAuth) {
+    errors.push(`No password for mailbox ${mailbox.mailbox_address} and OAuth not configured`);
     return { processed: 0, errors };
   }
-  // Never log mailbox.password_encrypted or password
+
+  // Never log mailbox.password_encrypted or password or OAuth access tokens
+  const auth: { user: string; pass?: string; accessToken?: string } = { user: mailbox.username };
+  if (password) {
+    auth.pass = password;
+  } else if (useOAuth) {
+    try {
+      const token = await getMicrosoftImapAccessToken(db);
+      auth.user = process.env.IMAP_USER!.toLowerCase().trim();
+      auth.accessToken = token.accessToken;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`OAuth token error for mailbox ${mailbox.mailbox_address}: ${msg}`);
+      return { processed: 0, errors };
+    }
+  }
+
   const client = new ImapFlow({
     host: mailbox.imap_server,
     port: mailbox.imap_port,
     secure: mailbox.imap_port === 993,
-    auth: { user: mailbox.username, pass: password },
+    auth,
   });
   try {
     await client.connect();
