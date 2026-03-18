@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server';
 const ALLOWED_ORIGINS = [
   'https://kpi-tracker-six.vercel.app',
   'https://kpi-tracker.vercel.app',
+  'https://thinkq.thinkdigital.co.za',
   'http://localhost:3000',
   'http://localhost:3001',
 ];
@@ -88,6 +89,11 @@ function validateOrigin(request: NextRequest): boolean {
 }
 
 function validateRequest(request: NextRequest): boolean {
+  // Only validate API requests. Browsers/navigation requests can legitimately lack Origin
+  // and may be preloaded/prefetched in ways that don't match our heuristics.
+  const pathname = request.nextUrl.pathname;
+  if (!pathname.startsWith('/api')) return true;
+
   // Check for suspicious headers
   const userAgent = request.headers.get('user-agent');
   if (!userAgent || userAgent.length < 10) {
