@@ -67,6 +67,7 @@ export default function AdminPage() {
   const [adminCommentTicketId, setAdminCommentTicketId] = useState<string | null>(null);
   const [adminCommentText, setAdminCommentText] = useState('');
   const [adminCommentSubmitting, setAdminCommentSubmitting] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   // Redirect if not admin
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
@@ -525,7 +526,7 @@ export default function AdminPage() {
               </svg>
               Notification Centre
             </Link>
-            <button onClick={handleSignOut} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors">
+            <button onClick={() => setShowSignOutConfirm(true)} className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors">
               Sign Out
             </button>
           </div>
@@ -1286,6 +1287,39 @@ export default function AdminPage() {
           </section>
         )}
       </main>
+
+      {showSignOutConfirm && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSignOutConfirm(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="w-full max-w-md bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
+              <div className="p-6">
+                <h2 className="text-xl font-bold text-white">Sign out?</h2>
+                <p className="mt-2 text-slate-400">Are you sure you want to sign out? 👋</p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSignOutConfirm(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowSignOutConfirm(false);
+                      await handleSignOut();
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-500 text-white hover:bg-blue-600"
+                  >
+                    Yes, Sign Out
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Ticket Modal */}
       {showCreateForm && (

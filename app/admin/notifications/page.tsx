@@ -33,6 +33,8 @@ export default function NotificationCentrePage() {
   const [broadcastGroups, setBroadcastGroups] = useState<Array<{ broadcastGroupId: string; title: string | null; messagePreview: string; hasImage: boolean; createdAt: string; totalRecipients: number; totalRead: number; readPercentage: number; totalUnread: number }>>([]);
   const [broadcastHistoryLoading, setBroadcastHistoryLoading] = useState(false);
   const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
+  const [sentStartDate, setSentStartDate] = useState('');
+  const [sentEndDate, setSentEndDate] = useState('');
   const [broadcastDetail, setBroadcastDetail] = useState<{ broadcastGroupId: string; title: string | null; message: string; imageUrl: string | null; createdAt: string; totalRecipients: number; totalRead: number; totalUnread: number; readPercentage: number; recipients: Array<{ recipientId: string; name: string; email: string; role: string; read: boolean; readAt: string | null }>; reactionsSummary?: { LIKE: number; MUSCLE: number; LAUGH: number; COPY_THAT: number }; reactionsByUser?: Array<{ userName: string; reactionType: string }>; attachments?: Array<{ id: string; fileName: string; fileType: string; fileSize: number }> } | null>(null);
   const [broadcastDetailLoading, setBroadcastDetailLoading] = useState(false);
 
@@ -104,6 +106,19 @@ export default function NotificationCentrePage() {
       .finally(() => setBroadcastHistoryLoading(false));
   }, [user?.id, isAdmin]);
 
+  const filteredBroadcastGroups = broadcastGroups.filter((g) => {
+    const createdAt = new Date(g.createdAt);
+    if (sentStartDate) {
+      const start = new Date(`${sentStartDate}T00:00:00`);
+      if (createdAt < start) return false;
+    }
+    if (sentEndDate) {
+      const end = new Date(`${sentEndDate}T23:59:59`);
+      if (createdAt > end) return false;
+    }
+    return true;
+  });
+
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -126,20 +141,28 @@ export default function NotificationCentrePage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
-        <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit mb-6">
+        <div className="mb-6 flex gap-2 flex-wrap border-b border-slate-800/80 pb-2">
           <button
             type="button"
             onClick={() => setActiveTab('create')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'create' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-slate-300'}`}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'create'
+                ? 'bg-blue-500/20 text-blue-400'
+                : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+            }`}
           >
-            Create Notification
+            Create
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('sent')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'sent' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-slate-300'}`}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'sent'
+                ? 'bg-blue-500/20 text-blue-400'
+                : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+            }`}
           >
-            Sent Notifications
+            Sent
           </button>
         </div>
 
@@ -361,206 +384,212 @@ export default function NotificationCentrePage() {
                 </button>
               </div>
             </div>
+            <section className="mb-4 flex flex-wrap items-end gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={sentStartDate}
+                  onChange={(e) => setSentStartDate(e.target.value)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={sentEndDate}
+                  onChange={(e) => setSentEndDate(e.target.value)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+            </section>
             {broadcastHistoryLoading ? (
               <p className="text-slate-500 text-sm">Loading…</p>
-            ) : broadcastGroups.length === 0 ? (
+            ) : filteredBroadcastGroups.length === 0 ? (
               <p className="text-slate-500 text-sm">No broadcast notifications yet.</p>
             ) : (
               <div className="space-y-2">
-                {broadcastGroups.map((g) => (
-                  <div
-                    key={g.broadcastGroupId}
-                    className="flex items-stretch gap-2 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-slate-600 overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedBroadcastId(g.broadcastGroupId)}
-                      className="flex-1 text-left p-4 min-w-0"
+                {filteredBroadcastGroups.map((g) => {
+                  const isExpanded = selectedBroadcastId === g.broadcastGroupId;
+                  return (
+                    <div
+                      key={g.broadcastGroupId}
+                      className="rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-slate-600 overflow-hidden transition-all duration-200"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium text-white">{g.title || 'Announcement'}</span>
-                        <span className="text-xs text-slate-500">{new Date(g.createdAt).toLocaleString()}</span>
+                      <div className="flex items-stretch gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isExpanded) {
+                              setSelectedBroadcastId(null);
+                              setBroadcastDetail(null);
+                            } else {
+                              setSelectedBroadcastId(g.broadcastGroupId);
+                            }
+                          }}
+                          className="flex-1 text-left p-4 min-w-0"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-medium text-white truncate">{g.title || 'Announcement'}</span>
+                              <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                            <span className="text-xs text-slate-500">{new Date(g.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-1 line-clamp-1">{g.messagePreview}</p>
+                          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                            <span className="text-slate-500">Creator: Admin</span>
+                            <span className="text-slate-500">{g.hasImage ? 'Image: Yes' : 'Image: No'}</span>
+                            <span className="text-slate-500">Recipients: {g.totalRecipients}</span>
+                            <span className="text-green-500">Read: {g.totalRead}</span>
+                            <span className="text-amber-500">Unread: {g.totalUnread}</span>
+                            <span className="text-blue-400">{g.readPercentage}% read</span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!confirm('Delete this entire broadcast? It will be hidden from the list and export.')) return;
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const headers: HeadersInit = {};
+                            if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                            const res = await fetch(`/api/admin/notifications/delete?broadcastGroupId=${encodeURIComponent(g.broadcastGroupId)}`, { method: 'DELETE', credentials: 'include', headers });
+                            if (res.ok) {
+                              if (selectedBroadcastId === g.broadcastGroupId) { setSelectedBroadcastId(null); setBroadcastDetail(null); }
+                              loadBroadcasts();
+                            } else alert('Failed to delete');
+                          }}
+                          className="p-3 text-slate-400 hover:text-red-400 hover:bg-slate-700/50"
+                          title="Delete broadcast"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
                       </div>
-                      <p className="text-sm text-slate-400 mt-1 line-clamp-1">{g.messagePreview}</p>
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-                        <span className="text-slate-500">{g.hasImage ? 'Image: Yes' : 'Image: No'}</span>
-                        <span className="text-slate-500">Recipients: {g.totalRecipients}</span>
-                        <span className="text-green-500">Read: {g.totalRead}</span>
-                        <span className="text-amber-500">Unread: {g.totalUnread}</span>
-                        <span className="text-blue-400">{g.readPercentage}% read</span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm('Delete this entire broadcast? It will be hidden from the list and export.')) return;
-                        const { data: { session } } = await supabase.auth.getSession();
-                        const headers: HeadersInit = {};
-                        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-                        const res = await fetch(`/api/admin/notifications/delete?broadcastGroupId=${encodeURIComponent(g.broadcastGroupId)}`, { method: 'DELETE', credentials: 'include', headers });
-                        if (res.ok) {
-                          if (selectedBroadcastId === g.broadcastGroupId) { setSelectedBroadcastId(null); setBroadcastDetail(null); }
-                          loadBroadcasts();
-                        } else alert('Failed to delete');
-                      }}
-                      className="p-3 text-slate-400 hover:text-red-400 hover:bg-slate-700/50"
-                      title="Delete broadcast"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                ))}
+                      {isExpanded && (
+                        <div className="border-t border-slate-700/50 p-4 space-y-4">
+                          {broadcastDetailLoading ? (
+                            <p className="text-slate-500">Loading…</p>
+                          ) : broadcastDetail ? (
+                            <>
+                              {broadcastDetail.title && <h4 className="text-lg font-medium text-white">{broadcastDetail.title}</h4>}
+                              <p className="text-slate-300 whitespace-pre-wrap">{broadcastDetail.message}</p>
+                              <p className="text-xs text-slate-500">Sent: {new Date(broadcastDetail.createdAt).toLocaleString()}</p>
+                              {broadcastDetail.imageUrl && (
+                                <a href={broadcastDetail.imageUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                  <img src={broadcastDetail.imageUrl} alt={broadcastDetail.title || 'Notification image'} className="w-24 h-24 object-cover rounded-lg border border-slate-700/50" />
+                                </a>
+                              )}
+                              {broadcastDetail.attachments && broadcastDetail.attachments.length > 0 && (
+                                <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3">
+                                  <p className="text-xs text-slate-500 mb-2">Attachments</p>
+                                  <ul className="space-y-2">
+                                    {broadcastDetail.attachments.map((att) => {
+                                      const attachmentHref = `/api/notifications/attachment/${att.id}`;
+                                      const isImage = att.fileType?.startsWith('image/');
+                                      return (
+                                        <li key={att.id} className="flex items-center justify-between gap-3 text-sm">
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            {isImage ? (
+                                              <a href={attachmentHref} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                                <img src={attachmentHref} alt={att.fileName} className="w-14 h-14 rounded-lg object-cover border border-slate-700/50" />
+                                              </a>
+                                            ) : (
+                                              <span className="shrink-0 text-slate-400">📎</span>
+                                            )}
+                                            <a href={attachmentHref} target="_blank" rel="noopener noreferrer" className="text-slate-300 truncate hover:text-white" title={att.fileName}>
+                                              {att.fileName}
+                                            </a>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={async () => {
+                                              try {
+                                                const { data: { session } } = await supabase.auth.getSession();
+                                                const headers: HeadersInit = {};
+                                                if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+                                                const res = await fetch(attachmentHref, { credentials: 'include', headers });
+                                                if (!res.ok) {
+                                                  const text = await res.text();
+                                                  let msg = 'Download failed';
+                                                  try {
+                                                    const j = JSON.parse(text);
+                                                    if (j?.error) msg = j.error;
+                                                  } catch {}
+                                                  alert(msg);
+                                                  return;
+                                                }
+                                                const blob = await res.blob();
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = att.fileName;
+                                                a.click();
+                                                URL.revokeObjectURL(url);
+                                              } catch {
+                                                alert('Download failed. Please try again.');
+                                              }
+                                            }}
+                                            className="shrink-0 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 text-xs font-medium"
+                                          >
+                                            Download
+                                          </button>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+                              )}
+                              <div className="border border-slate-700/50 rounded-lg overflow-hidden">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-800/50 text-sm">
+                                  <span className="text-slate-300">Total Recipients: <strong>{broadcastDetail.totalRecipients}</strong></span>
+                                  <span className="text-green-500">Total Read: <strong>{broadcastDetail.totalRead}</strong></span>
+                                  <span className="text-amber-500">Total Unread: <strong>{broadcastDetail.totalUnread}</strong></span>
+                                  <span className="text-slate-300">Read %: <strong>{broadcastDetail.readPercentage}%</strong></span>
+                                </div>
+                                <p className="text-sm font-medium text-white px-3 pt-2 pb-1">Recipients</p>
+                                <div className="overflow-x-auto max-h-60 overflow-y-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="sticky top-0 bg-slate-800/90 text-slate-400 text-left">
+                                      <tr>
+                                        <th className="px-3 py-2 font-medium">Recipient</th>
+                                        <th className="px-3 py-2 font-medium">Role</th>
+                                        <th className="px-3 py-2 font-medium">Status</th>
+                                        <th className="px-3 py-2 font-medium">Read At</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700/50">
+                                      {broadcastDetail.recipients.map((r) => (
+                                        <tr key={r.recipientId} className={r.read ? 'bg-slate-800/30' : 'bg-amber-500/5'}>
+                                          <td className="px-3 py-2 text-slate-200">{r.name || r.email || r.recipientId}</td>
+                                          <td className="px-3 py-2 text-slate-400">{r.role || '—'}</td>
+                                          <td className="px-3 py-2">
+                                            <span className={r.read ? 'text-green-500 font-medium' : 'text-amber-500 font-medium'}>{r.read ? 'Read' : 'Unread'}</span>
+                                          </td>
+                                          <td className="px-3 py-2 text-slate-400">{r.read && r.readAt ? new Date(r.readAt).toLocaleString() : '—'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-slate-500">Could not load broadcast.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
         )}
       </main>
-
-      {/* Broadcast detail modal – full content + Read Receipts */}
-      {selectedBroadcastId && (
-        <div className="fixed inset-0 z-50 overflow-auto">
-          <div className="absolute inset-0 bg-black/70" onClick={() => { setSelectedBroadcastId(null); setBroadcastDetail(null); }} aria-hidden="true" />
-          <div className="relative flex min-h-full items-center justify-center p-4">
-            <div className="w-full max-w-2xl rounded-2xl border border-slate-700/50 bg-slate-900 shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
-                <h3 className="text-lg font-semibold text-white">Broadcast detail</h3>
-                <button type="button" onClick={() => { setSelectedBroadcastId(null); setBroadcastDetail(null); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
-              </div>
-              <div className="p-4 overflow-y-auto flex-1">
-                {broadcastDetailLoading ? (
-                  <p className="text-slate-500">Loading…</p>
-                ) : broadcastDetail ? (
-                  <div className="space-y-4">
-                    {broadcastDetail.title && <h4 className="text-xl font-medium text-white">{broadcastDetail.title}</h4>}
-                    <p className="text-slate-300 whitespace-pre-wrap">{broadcastDetail.message}</p>
-                    <p className="text-xs text-slate-500">Sent: {new Date(broadcastDetail.createdAt).toLocaleString()}</p>
-                    {broadcastDetail.attachments && broadcastDetail.attachments.length > 0 && (
-                      <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3">
-                        <p className="text-xs text-slate-500 mb-2">Attachments</p>
-                        <ul className="space-y-2">
-                          {broadcastDetail.attachments.map((att) => (
-                            <li key={att.id} className="flex items-center justify-between gap-2 text-sm">
-                              <span className="text-slate-300 truncate" title={att.fileName}>{att.fileName}</span>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    const { data: { session } } = await supabase.auth.getSession();
-                                    const headers: HeadersInit = {};
-                                    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-                                    const res = await fetch(`/api/notifications/attachment/${att.id}`, { credentials: 'include', headers });
-                                    if (!res.ok) {
-                                      const text = await res.text();
-                                      let msg = 'Download failed';
-                                      try {
-                                        const j = JSON.parse(text);
-                                        if (j?.error) msg = j.error;
-                                      } catch { /* use default */ }
-                                      alert(msg);
-                                      return;
-                                    }
-                                    const blob = await res.blob();
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = att.fileName;
-                                    a.click();
-                                    URL.revokeObjectURL(url);
-                                  } catch {
-                                    alert('Download failed. Please try again.');
-                                  }
-                                }}
-                                className="shrink-0 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 text-xs font-medium"
-                              >
-                                Download
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <div className="border border-slate-700/50 rounded-lg overflow-hidden">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-800/50 text-sm">
-                        <span className="text-slate-300">Total Recipients: <strong>{broadcastDetail.totalRecipients}</strong></span>
-                        <span className="text-green-500">Total Read: <strong>{broadcastDetail.totalRead}</strong></span>
-                        <span className="text-amber-500">Total Unread: <strong>{broadcastDetail.totalUnread}</strong></span>
-                        <span className="text-slate-300">Read %: <strong>{broadcastDetail.readPercentage}%</strong></span>
-                      </div>
-                      <p className="text-sm font-medium text-white px-3 pt-2 pb-1">Read Receipts</p>
-                      <div className="overflow-x-auto max-h-60 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-800/90 text-slate-400 text-left">
-                            <tr>
-                              <th className="px-3 py-2 font-medium">Recipient</th>
-                              <th className="px-3 py-2 font-medium">Role</th>
-                              <th className="px-3 py-2 font-medium">Status</th>
-                              <th className="px-3 py-2 font-medium">Read At</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-700/50">
-                            {broadcastDetail.recipients.map((r) => (
-                              <tr key={r.recipientId} className={r.read ? 'bg-slate-800/30' : 'bg-amber-500/5'}>
-                                <td className="px-3 py-2 text-slate-200">{r.name || r.email || r.recipientId}</td>
-                                <td className="px-3 py-2 text-slate-400">{r.role || '—'}</td>
-                                <td className="px-3 py-2">
-                                  <span className={r.read ? 'text-green-500 font-medium' : 'text-amber-500 font-medium'}>{r.read ? 'Read' : 'Unread'}</span>
-                                </td>
-                                <td className="px-3 py-2 text-slate-400">{r.read && r.readAt ? new Date(r.readAt).toLocaleString() : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    {/* Reactions Summary + by User (admin analytics); polling keeps counts updated */}
-                    <div className="border border-slate-700/50 rounded-lg overflow-hidden space-y-3">
-                      <p className="text-sm font-medium text-white px-3 pt-3">Reactions Summary</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-3 pb-2 text-sm">
-                        <span className="text-slate-300">👍 Like: <strong>{broadcastDetail.reactionsSummary?.LIKE ?? 0}</strong></span>
-                        <span className="text-slate-300">💪 Strong Arm: <strong>{broadcastDetail.reactionsSummary?.MUSCLE ?? 0}</strong></span>
-                        <span className="text-slate-300">😂 Laugh: <strong>{broadcastDetail.reactionsSummary?.LAUGH ?? 0}</strong></span>
-                        <span className="text-slate-300">🫡 Copy That: <strong>{broadcastDetail.reactionsSummary?.COPY_THAT ?? 0}</strong></span>
-                      </div>
-                      {broadcastDetail.reactionsByUser && broadcastDetail.reactionsByUser.length > 0 && (
-                          <>
-                            <p className="text-sm font-medium text-white px-3 pt-2">Reactions by User</p>
-                            <div className="overflow-x-auto max-h-40 overflow-y-auto px-3 pb-3">
-                              <table className="w-full text-sm">
-                                <thead className="sticky top-0 bg-slate-800/90 text-slate-400 text-left">
-                                  <tr>
-                                    <th className="py-2 font-medium">User Name</th>
-                                    <th className="py-2 font-medium">Reaction</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-700/50">
-                                  {broadcastDetail.reactionsByUser.map((u, i) => (
-                                    <tr key={`${u.userName}-${i}`} className="text-slate-200">
-                                      <td className="py-1.5">{u.userName}</td>
-                                      <td className="py-1.5">
-                                        {u.reactionType === 'LIKE' && '👍'}
-                                        {u.reactionType === 'MUSCLE' && '💪'}
-                                        {u.reactionType === 'LAUGH' && '😂'}
-                                        {u.reactionType === 'COPY_THAT' && '🫡'}
-                                        {!['LIKE', 'MUSCLE', 'LAUGH', 'COPY_THAT'].includes(u.reactionType) && u.reactionType}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-slate-500">Could not load broadcast.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

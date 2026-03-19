@@ -51,3 +51,5 @@ prisma/.env
 *.pid
 
 git-filter-repo/
+
+.vercel
