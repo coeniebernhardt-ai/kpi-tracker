@@ -898,10 +898,39 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user || !profile) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">Redirecting to login…</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg mx-auto">
+        <h1 className="text-xl font-semibold text-white">Profile not linked</h1>
+        <p className="text-slate-400 text-sm">
+          You are signed in as <span className="text-slate-300">{user.email}</span>, but there is no matching row in{' '}
+          <code className="text-cyan-400">profiles</code> for your user ID. An admin must create or fix your profile so{' '}
+          <code className="text-cyan-400">profiles.id</code> equals your Auth user UUID.
+        </p>
+        <button
+          type="button"
+          onClick={() => signOut()}
+          className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-600 text-slate-200 hover:bg-slate-700"
+        >
+          Sign out
+        </button>
       </div>
     );
   }
