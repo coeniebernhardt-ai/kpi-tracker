@@ -6,12 +6,13 @@ export type ExportType = 'all' | 'tickets' | 'new-sites' | 'travel-logs';
 
 export interface ExportsPanelProps {
   isAdmin: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   anchorRef?: React.RefObject<HTMLElement | null>;
   /** Callback to get auth headers (e.g. Bearer token) for fetch */
   getAuthHeaders: () => Promise<HeadersInit>;
   /** Admin only: list of members for "Filter by Member" dropdown */
   memberOptions?: { id: string; full_name: string }[];
+  variant?: 'panel' | 'page';
 }
 
 const QUICK_FILTERS = [
@@ -55,7 +56,13 @@ const MEMBER_OPTIONS: { type: ExportType; label: string; icon: string }[] = [
   { type: 'travel-logs', label: 'Export My Travel Logs', icon: '🚗' },
 ];
 
-export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders, memberOptions = [] }: ExportsPanelProps) {
+export default function ExportsPanel({
+  isAdmin,
+  onClose,
+  getAuthHeaders,
+  memberOptions = [],
+  variant = 'panel',
+}: ExportsPanelProps) {
   const today = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -104,18 +111,26 @@ export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders, memberO
       a.download = filename;
       a.click();
       URL.revokeObjectURL(a.href);
-      onClose();
+      if (variant === 'panel') {
+        onClose?.();
+      }
     } catch {
       setExportError('Export failed. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, selectedMemberId, isAdmin, loading, getAuthHeaders, onClose]);
+  }, [startDate, endDate, selectedMemberId, isAdmin, loading, getAuthHeaders, onClose, variant]);
+
+  const containerClassName = variant === 'page'
+    ? 'relative w-full overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900 shadow-2xl'
+    : 'absolute right-0 top-full z-50 mt-2 flex max-h-[85vh] w-[420px] min-w-[420px] flex-col overflow-hidden rounded-xl border border-slate-600/50 bg-slate-800/95 shadow-xl shadow-black/20';
 
   return (
-    <div className="absolute right-0 top-full mt-2 min-w-[420px] w-[420px] max-h-[85vh] rounded-xl bg-slate-800/95 border border-slate-600/50 shadow-xl shadow-black/20 z-50 overflow-hidden flex flex-col">
+    <div className={containerClassName}>
       <div className="p-4 border-b border-slate-700/70 flex-shrink-0">
-        <h3 className="text-sm font-semibold text-white">Exports</h3>
+        <h3 className="text-sm font-semibold text-white">
+          {variant === 'page' ? 'Reports' : 'Exports'}
+        </h3>
       </div>
 
       <div className="overflow-y-auto flex-1">
@@ -204,7 +219,7 @@ export default function ExportsPanel({ isAdmin, onClose, getAuthHeaders, memberO
 
       {/* Loading overlay (inside panel, non-blocking for page) */}
       {loading && (
-        <div className="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center p-6 rounded-b-xl">
+        <div className={`absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center p-6 ${variant === 'page' ? 'rounded-2xl' : 'rounded-b-xl'}`}>
           <div className="w-10 h-10 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-4" />
           <p className="text-sm font-medium text-white text-center">Preparing your export...</p>
           <p className="text-xs text-slate-400 text-center mt-1">Please wait while we generate your report.</p>
