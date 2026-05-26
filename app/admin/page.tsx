@@ -1,81 +1,69 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import WorkspaceLoader from '../components/WorkspaceLoader';
+import { useAdminData } from './AdminDataProvider';
 import { useAuth } from '../context/AuthContext';
 import {
   createTicket,
-  getAllProfiles,
-  getAllTravelLogs,
-  getKpiMetrics,
-  getLatestTickets,
-  type KpiMetrics,
-  type Profile,
   type Ticket,
-  type TravelLog,
 } from '../lib/supabase';
-
-type MemberStat = {
-  user_id: string | null;
-  open: number;
-  closed: number;
-  handled: number;
-  avgResponseMinutes: number;
-};
-
-const dashboardLinks = [
-  {
-    title: 'Tickets',
-    href: '/admin/tickets',
-    description: 'Manage ticket workflows, assignments, comments, and ticket detail views.',
-    accent: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
-  },
-  {
-    title: 'Team',
-    href: '/admin/team',
-    description: 'Review member profiles and performance from a dedicated team page.',
-    accent: 'border-slate-700/50 bg-slate-900/70 text-white',
-  },
-  {
-    title: 'Data Metrics',
-    href: '/admin/data-metrics',
-    description: 'Open KPI totals and response-time analytics on a full page.',
-    accent: 'border-slate-700/50 bg-slate-900/70 text-white',
-  },
-  {
-    title: 'Images',
-    href: '/admin/images',
-    description: 'Browse profile, ticket, and travel-log images from a single library.',
-    accent: 'border-slate-700/50 bg-slate-900/70 text-white',
-  },
-  {
-    title: 'Reports',
-    href: '/admin/reports',
-    description: 'Run exports from a dedicated reports page instead of a floating panel.',
-    accent: 'border-slate-700/50 bg-slate-900/70 text-white',
-  },
-  {
-    title: 'Manage Users',
-    href: '/admin/manage-users',
-    description: 'See team members, roles, and admin access on their own page.',
-    accent: 'border-slate-700/50 bg-slate-900/70 text-white',
-  },
-];
+import {
+  AdminDateControls,
+  AdminPanel,
+  EmptyState,
+  MetricCard,
+  MiniBarChart,
+  MiniDonutChart,
+  MiniLineChart,
+  getMetricCardAccent,
+} from './admin-ui';
+import {
+  applyDateRangeToParams,
+  buildAvgResponseSeries,
+  buildCreatedResolvedSeries,
+  calculateDashboardMetrics,
+  calculateTeamMemberSummaries,
+  filterTicketsByDateRange,
+  filterTicketsByMetricFocus,
+  filterTravelLogsByDateRange,
+  getClientDistribution,
+  getDateRangeFromSearchParams,
+  getDatePresetRange,
+  getPriorityDistribution,
+  getStatusDistribution,
+  getTeamDistribution,
+  type ChartPoint,
+  type MetricFocus,
+} from './admin-utils';
 
 export default function AdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center text-slate-400">
+          Loading admin dashboard...
+        </div>
+      }
+    >
+      <AdminPageContent />
+    </Suspense>
+  );
+}
+
+function AdminPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, loading, isAdmin, session } = useAuth();
-
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [travelLogs, setTravelLogs] = useState<TravelLog[]>([]);
-  const [kpiMetrics, setKpiMetrics] = useState<KpiMetrics | null>(null);
-  const [memberStats, setMemberStats] = useState<MemberStat[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
+  const { user, loading, isAdmin } = useAuth();
+  const {
+    profiles,
+    tickets,
+    travelLogs,
+    loading: loadingData,
+    setTickets,
+  } = useAdminData();
   const [selectedUserId, setSelectedUserId] = useState('');
   const [submittingTicket, setSubmittingTicket] = useState(false);
   const [newTicketData, setNewTicketData] = useState({
@@ -101,69 +89,6 @@ export default function AdminPage() {
       router.replace('/dashboard');
     }
   }, [user, loading, isAdmin, router]);
-
-  useEffect(() => {
-    if (!user || !isAdmin) return;
-
-    let cancelled = false;
-
-    const loadDashboardData = async () => {
-      setLoadingData(true);
-
-      try {
-        const [profilesData, recentTickets, travelLogsData, metricsResponse] = await Promise.all([
-          getAllProfiles(),
-          getLatestTickets({ limit: 8 }),
-          getAllTravelLogs(),
-          (async () => {
-            try {
-              const response = await fetch('/api/admin/metrics', {
-                headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-              });
-              if (!response.ok) return null;
-              return response.json();
-            } catch {
-              return null;
-            }
-          })(),
-        ]);
-
-        if (cancelled) return;
-
-        setProfiles(profilesData);
-        setTickets(recentTickets);
-        setTravelLogs(travelLogsData);
-
-        if (metricsResponse) {
-          setKpiMetrics({
-            total_tickets: metricsResponse.totalTickets ?? 0,
-            open_tickets: metricsResponse.totalOpen ?? 0,
-            closed_tickets: metricsResponse.totalClosed ?? 0,
-            pending_tickets: metricsResponse.totalPending ?? 0,
-            avg_response_time_minutes: metricsResponse.overallAvgResponseTime ?? null,
-            avg_no_deps: metricsResponse.avgResponseTimeNoDependencies ?? null,
-            avg_with_deps: metricsResponse.avgResponseTimeWithDependencies ?? null,
-          });
-          setMemberStats(Array.isArray(metricsResponse.memberStats) ? metricsResponse.memberStats : []);
-        } else {
-          const fallbackMetrics = await getKpiMetrics();
-          if (cancelled) return;
-          setKpiMetrics(fallbackMetrics);
-          setMemberStats([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingData(false);
-        }
-      }
-    };
-
-    void loadDashboardData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, isAdmin, session?.access_token]);
 
   const closeCreateForm = () => {
     router.replace(pathname, { scroll: false });
@@ -219,14 +144,7 @@ export default function AdminPage() {
         return;
       }
 
-      setTickets((current) => [data, ...current].slice(0, 8));
-      if (kpiMetrics) {
-        setKpiMetrics({
-          ...kpiMetrics,
-          total_tickets: (kpiMetrics.total_tickets ?? 0) + 1,
-          pending_tickets: (kpiMetrics.pending_tickets ?? 0) + 1,
-        });
-      }
+      setTickets((current) => [data, ...current]);
 
       resetNewTicketForm();
       closeCreateForm();
@@ -235,31 +153,96 @@ export default function AdminPage() {
     }
   };
 
-  const recentTravelLogs = useMemo(
-    () =>
-      [...travelLogs]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 5),
-    [travelLogs]
+  const dateRange = useMemo(
+    () => getDateRangeFromSearchParams(new URLSearchParams(searchParams.toString())),
+    [searchParams]
   );
 
-  const memberNames = useMemo(
-    () =>
-      profiles.reduce<Record<string, string>>((acc, profile) => {
-        acc[profile.id] = profile.full_name;
-        return acc;
-      }, {}),
-    [profiles]
-  );
+  const metricFocus = useMemo<MetricFocus>(() => {
+    const value = searchParams.get('metric');
+    if (value === 'open' || value === 'pending' || value === 'closed' || value === 'avg-response') return value;
+    return 'total';
+  }, [searchParams]);
+  const selectedClient = searchParams.get('client');
+  const selectedStatus = searchParams.get('status');
+  const selectedPriority = searchParams.get('priority');
+  const selectedMember = searchParams.get('member');
 
-  const topMembers = useMemo(
-    () =>
-      [...memberStats]
-        .filter((member) => member.user_id)
-        .sort((a, b) => b.handled - a.handled)
-        .slice(0, 4),
-    [memberStats]
+  const updateParams = (updater: (params: URLSearchParams) => void) => {
+    const next = new URLSearchParams(searchParams.toString());
+    updater(next);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const setPreset = (preset: '1d' | '7d' | '30d' | '90d' | '365d') => {
+    const nextRange = getDatePresetRange(preset);
+    updateParams((params) => {
+      const applied = applyDateRangeToParams(params, nextRange);
+      applied.forEach((value, key) => params.set(key, value));
+    });
+  };
+
+  const setStartDate = (value: string) => {
+    updateParams((params) => {
+      params.set('preset', 'custom');
+      params.set('startDate', value);
+      params.set('endDate', dateRange.endDate);
+    });
+  };
+
+  const setEndDate = (value: string) => {
+    updateParams((params) => {
+      params.set('preset', 'custom');
+      params.set('startDate', dateRange.startDate);
+      params.set('endDate', value);
+    });
+  };
+
+  const setMetricFocus = (nextMetric: MetricFocus) => {
+    updateParams((params) => {
+      params.set('metric', nextMetric);
+    });
+  };
+
+  const dateFilteredTickets = useMemo(() => filterTicketsByDateRange(tickets, dateRange), [tickets, dateRange]);
+  const dateFilteredTravelLogs = useMemo(() => filterTravelLogsByDateRange(travelLogs, dateRange), [travelLogs, dateRange]);
+  const dashboardMetrics = useMemo(() => calculateDashboardMetrics(dateFilteredTickets), [dateFilteredTickets]);
+  const focusFilteredTickets = useMemo(
+    () => filterTicketsByMetricFocus(dateFilteredTickets, metricFocus),
+    [dateFilteredTickets, metricFocus]
   );
+  const narrowedTickets = useMemo(
+    () =>
+      focusFilteredTickets.filter((ticket) => {
+        if (selectedClient && ticket.client !== selectedClient) return false;
+        if (selectedStatus && ticket.status !== selectedStatus) return false;
+        if (selectedPriority && ticket.severity !== selectedPriority) return false;
+        if (selectedMember && ticket.user_id !== selectedMember) return false;
+        return true;
+      }),
+    [focusFilteredTickets, selectedClient, selectedMember, selectedPriority, selectedStatus]
+  );
+  const teamSummaries = useMemo(
+    () => calculateTeamMemberSummaries(profiles.filter((profile) => profile.is_active), narrowedTickets, dateFilteredTravelLogs),
+    [profiles, narrowedTickets, dateFilteredTravelLogs]
+  );
+  const createdResolvedSeries = useMemo(() => buildCreatedResolvedSeries(narrowedTickets, dateRange), [narrowedTickets, dateRange]);
+  const avgResponseSeries = useMemo(() => buildAvgResponseSeries(narrowedTickets, dateRange), [narrowedTickets, dateRange]);
+  const clientDistribution = useMemo(() => getClientDistribution(narrowedTickets), [narrowedTickets]);
+  const teamDistribution = useMemo(() => getTeamDistribution(teamSummaries), [teamSummaries]);
+  const statusDistribution = useMemo(() => getStatusDistribution(narrowedTickets), [narrowedTickets]);
+  const priorityDistribution = useMemo(() => getPriorityDistribution(narrowedTickets), [narrowedTickets]);
+
+  const applyPointRange = (point: ChartPoint) => {
+    const pointKey = point.key;
+    if (!pointKey) return;
+    updateParams((params) => {
+      params.set('preset', 'custom');
+      params.set('startDate', pointKey);
+      params.set('endDate', pointKey);
+    });
+  };
 
   if (loading || (!user && !isAdmin)) {
     return (
@@ -274,212 +257,153 @@ export default function AdminPage() {
       <WorkspaceLoader active={loadingData} />
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <section className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              The admin landing page is back to a dashboard view, while tickets, team, metrics, images, reports,
-              and user management live on dedicated routes.
-            </p>
-          </div>
+        <section className="mb-8">
+          <h1 className="text-3xl font-semibold text-white">Dashboard 🏠</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-400">
+            A metrics-first overview of ticket creation, resolution trends, workload distribution, and operational health.
+          </p>
+        </section>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/admin/notifications"
-              className="inline-flex items-center rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-blue-500/30 hover:text-white"
+        <div className="mb-8">
+          <AdminDateControls
+            range={dateRange}
+            onPresetChange={setPreset}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+        </div>
+
+        <section className="mb-8 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <MetricCard
+            title="Total"
+            value={dashboardMetrics.total}
+            detail="All tickets created in range"
+            emphasis={getMetricCardAccent('total')}
+            active={metricFocus === 'total'}
+            onClick={() => setMetricFocus('total')}
+          />
+          <MetricCard
+            title="Open"
+            value={dashboardMetrics.open}
+            detail="Actively being worked"
+            emphasis={getMetricCardAccent('open')}
+            active={metricFocus === 'open'}
+            onClick={() => setMetricFocus('open')}
+          />
+          <MetricCard
+            title="Pending"
+            value={dashboardMetrics.pending}
+            detail="Awaiting assignment or response"
+            emphasis={getMetricCardAccent('pending')}
+            active={metricFocus === 'pending'}
+            onClick={() => setMetricFocus('pending')}
+          />
+          <MetricCard
+            title="Closed"
+            value={dashboardMetrics.closed}
+            detail="Resolved inside the selected window"
+            emphasis={getMetricCardAccent('closed')}
+            active={metricFocus === 'closed'}
+            onClick={() => setMetricFocus('closed')}
+          />
+          <MetricCard
+            title="Avg response"
+            value={dashboardMetrics.avgResponse ? `${Math.round(dashboardMetrics.avgResponse)} min` : '—'}
+            detail="Average response across completed work"
+            emphasis={getMetricCardAccent('avg-response')}
+            active={metricFocus === 'avg-response'}
+            onClick={() => setMetricFocus('avg-response')}
+          />
+        </section>
+
+        <div className="mb-6 flex flex-wrap gap-2">
+          {selectedClient || selectedStatus || selectedPriority || selectedMember ? (
+            <button
+              type="button"
+              onClick={() => {
+                updateParams((params) => {
+                  params.delete('client');
+                  params.delete('status');
+                  params.delete('priority');
+                  params.delete('member');
+                });
+              }}
+              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
             >
-              Notifications
-            </Link>
-            <Link
-              href="/admin?createTicket=1"
-              className="inline-flex items-center rounded-xl border border-blue-500/30 bg-blue-500/15 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-500/20"
-            >
-              Create Ticket
-            </Link>
-          </div>
-        </section>
-
-        <section className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-5">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Tickets</p>
-            <p className="mt-3 text-3xl font-bold text-white">{kpiMetrics?.total_tickets ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-5">
-            <p className="text-xs uppercase tracking-[0.16em] text-blue-300">Open</p>
-            <p className="mt-3 text-3xl font-bold text-blue-300">{kpiMetrics?.open_tickets ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
-            <p className="text-xs uppercase tracking-[0.16em] text-amber-300">Pending</p>
-            <p className="mt-3 text-3xl font-bold text-amber-300">{kpiMetrics?.pending_tickets ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-5">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Avg Response</p>
-            <p className="mt-3 text-3xl font-bold text-white">
-              {kpiMetrics?.avg_response_time_minutes ? `${kpiMetrics.avg_response_time_minutes}m` : '—'}
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {dashboardLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`rounded-2xl border p-5 transition-colors hover:border-blue-500/30 ${link.accent}`}
-            >
-              <p className="text-sm font-semibold">{link.title}</p>
-              <p className="mt-2 text-sm text-slate-400">{link.description}</p>
-            </Link>
-          ))}
-        </section>
-
-        <section className="mb-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Recent Tickets</h2>
-              <Link href="/admin/tickets" className="text-sm text-blue-400 hover:text-blue-300">
-                View all
-              </Link>
-            </div>
-
-            {tickets.length === 0 ? (
-              <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-10 text-center text-slate-400">
-                No recent tickets found.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {tickets.map((ticket) => (
-                  <div key={ticket.id} className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded bg-slate-700 px-2 py-0.5 text-xs font-bold text-slate-200">
-                        {ticket.ticket_number}
-                      </span>
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs ${
-                          ticket.status === 'pending'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : ticket.status === 'open'
-                              ? 'bg-blue-500/20 text-blue-300'
-                              : 'bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {ticket.status}
-                      </span>
-                      {ticket.client && (
-                        <span className="rounded bg-slate-700/70 px-2 py-0.5 text-xs text-slate-300">
-                          {ticket.client}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-sm text-slate-200">{ticket.issue}</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {new Date(ticket.created_at).toLocaleDateString('en-ZA', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-6">
-              <h2 className="mb-4 text-lg font-semibold text-white">Admin Summary</h2>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Members</p>
-                  <p className="mt-2 text-2xl font-bold text-white">{profiles.length}</p>
-                </div>
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Active Members</p>
-                  <p className="mt-2 text-2xl font-bold text-white">{profiles.filter((profile) => profile.is_active).length}</p>
-                </div>
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Travel Logs</p>
-                  <p className="mt-2 text-2xl font-bold text-white">{travelLogs.length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-white">Top Members</h2>
-                <Link href="/admin/team" className="text-sm text-blue-400 hover:text-blue-300">
-                  Team page
-                </Link>
-              </div>
-
-              {topMembers.length === 0 ? (
-                <p className="text-sm text-slate-400">Member performance data will appear here once metrics load.</p>
-              ) : (
-                <div className="space-y-3">
-                  {topMembers.map((member) => (
-                    <div key={member.user_id} className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-white">
-                            {member.user_id ? memberNames[member.user_id] ?? 'Unknown member' : 'Unassigned'}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {member.open} open, {member.closed} closed
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-blue-300">{member.handled} handled</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {member.avgResponseMinutes > 0 ? `${member.avgResponseMinutes}m avg` : 'No avg yet'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">Recent Travel Logs</h2>
-            <Link href="/admin/reports" className="text-sm text-blue-400 hover:text-blue-300">
-              Export travel data
-            </Link>
-          </div>
-
-          {recentTravelLogs.length === 0 ? (
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-10 text-center text-slate-400">
-              No travel logs found.
-            </div>
+              Clear graph filters
+            </button>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {recentTravelLogs.map((log) => (
-                <div key={log.id} className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
-                  <p className="text-sm font-medium text-white">{log.reason}</p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    {memberNames[log.user_id] ?? 'Unknown member'} •{' '}
-                    {new Date(log.created_at).toLocaleDateString('en-ZA', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                  {log.distance_travelled ? (
-                    <p className="mt-3 text-sm text-blue-300">
-                      {log.distance_travelled} km{log.is_return_trip ? ' return trip' : ''}
-                    </p>
-                  ) : null}
-                  {log.comments ? <p className="mt-3 line-clamp-2 text-sm text-slate-400">{log.comments}</p> : null}
-                </div>
-              ))}
-            </div>
+            <span className="rounded-2xl bg-slate-900 px-4 py-2 text-sm text-slate-500">Use the cards and graphs below to drill into the dataset.</span>
           )}
-        </section>
+        </div>
+
+        {loadingData ? (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/80 px-4 py-10 text-center text-slate-400">
+            Loading dashboard metrics...
+          </div>
+        ) : narrowedTickets.length === 0 ? (
+          <EmptyState title="No dashboard metrics available" description="Try another date range or clear the active graph filters." />
+        ) : (
+          <div className="space-y-6">
+            <AdminPanel title="Tickets Created vs Resolved">
+              <MiniLineChart data={createdResolvedSeries} mode="dual" onPointClick={applyPointRange} />
+            </AdminPanel>
+
+            <AdminPanel title="Average Response Time Trend">
+              <MiniLineChart data={avgResponseSeries} mode="single" onPointClick={applyPointRange} />
+            </AdminPanel>
+
+            <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+              <AdminPanel title="Tickets per Client">
+                <MiniBarChart
+                  data={clientDistribution}
+                  onBarClick={(label) => {
+                    updateParams((params) => {
+                      params.set('client', label);
+                    });
+                  }}
+                />
+              </AdminPanel>
+
+              <AdminPanel title="Status Distribution">
+                <MiniDonutChart
+                  data={statusDistribution}
+                  onSliceClick={(label) => {
+                    updateParams((params) => {
+                      params.set('status', label.toLowerCase());
+                    });
+                  }}
+                />
+              </AdminPanel>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <AdminPanel title="Tickets per Team Member">
+                <MiniBarChart
+                  data={teamDistribution}
+                  onBarClick={(label) => {
+                    const profile = profiles.find((item) => item.full_name === label);
+                    if (!profile) return;
+                    updateParams((params) => {
+                      params.set('member', profile.id);
+                    });
+                  }}
+                />
+              </AdminPanel>
+
+              <AdminPanel title="Priority Mix">
+                <MiniDonutChart
+                  data={priorityDistribution}
+                  onSliceClick={(label) => {
+                    updateParams((params) => {
+                      params.set('priority', label);
+                    });
+                  }}
+                />
+              </AdminPanel>
+            </div>
+          </div>
+        )}
       </main>
 
       {showCreateForm && (
@@ -643,7 +567,7 @@ export default function AdminPage() {
                       onClick={() => setNewTicketData({ ...newTicketData, location: 'remote' })}
                       className={`flex-1 rounded-xl border px-4 py-3 ${
                         newTicketData.location === 'remote'
-                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                          ? 'border-cyan-500 bg-cyan-500/20 text-cyan-300'
                           : 'border-slate-700 bg-slate-800 text-slate-400'
                       }`}
                     >

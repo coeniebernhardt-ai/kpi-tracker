@@ -27,10 +27,12 @@ function isExpired(expiresAtIso: string, skewSeconds = 120): boolean {
 }
 
 export async function getMicrosoftImapAccessToken(
+  mailboxUserInput?: string,
   supabase?: SupabaseClient
 ): Promise<{ accessToken: string; expiresAt: string }> {
   const db = supabase ?? getSupabaseAdmin();
-  const mailboxUser = requiredEnv('IMAP_USER').toLowerCase().trim();
+  const mailboxUser = (mailboxUserInput || process.env.IMAP_USER || '').toLowerCase().trim();
+  if (!mailboxUser) throw new Error('Missing mailbox user for Microsoft OAuth');
 
   const { data, error } = await db
     .from('oauth_tokens')

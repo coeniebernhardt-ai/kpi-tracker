@@ -225,7 +225,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
             <div
               className={`rounded-2xl px-4 py-3 text-sm max-w-[85%] ${
                 m.role === 'user'
-                  ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/25'
+                  ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/25'
                   : 'bg-slate-800 text-gray-200 border-l-[3px] border-cyan-400'
               }`}
             >
@@ -313,7 +313,7 @@ export default function AIInsightsPanel({ filters = {} }: AIInsightsPanelProps) 
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Send
         </button>

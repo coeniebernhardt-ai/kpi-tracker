@@ -125,7 +125,7 @@ CREATE TRIGGER on_ticket_assignment_learn_routing
   AFTER UPDATE OF user_id, assigned_to_array ON tickets FOR EACH ROW EXECUTE FUNCTION learn_routing_rule();
 
 
--- ========== STEP 3: EMAIL_TO_TICKET_MAILBOXES (two mailboxes) ==========
+-- ========== STEP 3: EMAIL_TO_TICKET_MAILBOXES (three mailboxes) ==========
 INSERT INTO support_mailboxes (
   mailbox_address, imap_server, imap_port, smtp_server, smtp_port,
   username, password_encrypted, default_assigned_agent_id, is_active
@@ -162,6 +162,24 @@ ON CONFLICT (mailbox_address) DO UPDATE SET
   smtp_server = EXCLUDED.smtp_server, smtp_port = EXCLUDED.smtp_port,
   username = EXCLUDED.username, is_active = EXCLUDED.is_active, updated_at = NOW();
 
+INSERT INTO support_mailboxes (
+  mailbox_address, imap_server, imap_port, smtp_server, smtp_port,
+  username, password_encrypted, default_assigned_agent_id, is_active
+)
+VALUES (
+  'supportq@thinkdigital.co.za',
+  'imap.office365.com', 993, 'smtp.office365.com', 587,
+  'thinkq@thinkdigital.co.za',
+  NULL,
+  (SELECT id FROM profiles WHERE full_name ILIKE '%Cornett%' LIMIT 1),
+  true
+)
+ON CONFLICT (mailbox_address) DO UPDATE SET
+  default_assigned_agent_id = EXCLUDED.default_assigned_agent_id,
+  imap_server = EXCLUDED.imap_server, imap_port = EXCLUDED.imap_port,
+  smtp_server = EXCLUDED.smtp_server, smtp_port = EXCLUDED.smtp_port,
+  username = EXCLUDED.username, is_active = EXCLUDED.is_active, updated_at = NOW();
+
 
 -- ========== STEP 4: ADD PENDING STATUS (email-to-ticket) ==========
 -- Valid statuses: pending, open, closed. Pending = unassigned (from email).
@@ -173,3 +191,4 @@ ALTER TABLE tickets ADD CONSTRAINT tickets_status_check
 -- ========== AFTER RUNNING: set mailbox passwords ==========
 -- UPDATE support_mailboxes SET password_encrypted = 'your-app-password' WHERE mailbox_address = 'support@thinkdigital.co.za';
 -- UPDATE support_mailboxes SET password_encrypted = 'your-app-password' WHERE mailbox_address = 'support@gowaterfall.co.za';
+-- UPDATE support_mailboxes SET password_encrypted = 'your-app-password' WHERE mailbox_address = 'supportq@thinkdigital.co.za';

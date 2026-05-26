@@ -8,6 +8,7 @@ import { verifyPassword, isLoggedIn, login, logout } from '../../data/authData';
 import { getProfilePicture, setProfilePicture, fileToBase64 } from '../../data/profileData';
 import Link from 'next/link';
 import Image from 'next/image';
+import SignOutConfirmModal from '../../components/SignOutConfirmModal';
 
 type TicketStatus = 'open' | 'closed';
 type TaskLocation = 'on-site' | 'remote';
@@ -512,38 +513,14 @@ export default function MemberPage() {
         <div className="fixed inset-0 z-30" onClick={() => setShowProfileMenu(false)} />
       )}
 
-      {showSignOutConfirm && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSignOutConfirm(false)} />
-          <div className="absolute inset-0 flex items-center justify-center p-6">
-            <div className="w-full max-w-md bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-white">Sign out?</h2>
-                <p className="mt-2 text-slate-400">Are you sure you want to sign out? 👋</p>
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowSignOutConfirm(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSignOutConfirm(false);
-                      handleLogout();
-                    }}
-                    className="px-4 py-2 rounded-xl bg-blue-500 text-white hover:bg-blue-600"
-                  >
-                    Yes, Sign Out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <SignOutConfirmModal
+        open={showSignOutConfirm}
+        onCancel={() => setShowSignOutConfirm(false)}
+        onConfirm={() => {
+          setShowSignOutConfirm(false);
+          handleLogout();
+        }}
+      />
 
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* KPI Summary */}

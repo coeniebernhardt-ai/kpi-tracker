@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getTicketsByUserId, createTicket, closeTicket, addTicketUpdate, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
+import { supabase, getTicketsByUserId, createTicket, closeTicket, uploadProfilePicture, uploadTicketAttachment, updateTicket, Ticket, getTravelLogsByUserId, createTravelLog, deleteTravelLog, TravelLog, getAllProfiles, Profile, createNotificationsForNewAssignments, markNotificationAsRead, markAllNotificationsRead, Notification } from '../lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import Logo from '../components/Logo';
 import ExportsPanel from '../components/ExportsPanel';
+import SignOutConfirmModal from '../components/SignOutConfirmModal';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -26,8 +27,12 @@ type TaskLocation = 'on-site' | 'remote';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, loading, isAdmin, signOut, refreshProfile } = useAuth();
+  const { user, profile, session, loading, isAdmin, signOut, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    if (!session?.access_token) return {} as Record<string, string>;
+    return { Authorization: `Bearer ${session.access_token}` } as Record<string, string>;
+  }, [session?.access_token]);
   
   // Force re-render every minute to update time tracker
   useTimeUpdate();
@@ -63,6 +68,7 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showExportsPanel, setShowExportsPanel] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   // FEATURE B: Notification detail view (modal); server-validated fetch
   const [notificationDetailId, setNotificationDetailId] = useState<string | null>(null);
   const [notificationDetail, setNotificationDetail] = useState<Notification | null>(null);
@@ -165,41 +171,32 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user?.id) return;
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const res = await fetch('/api/notifications', { credentials: 'include', headers });
+      const res = await fetch('/api/notifications', { credentials: 'include', headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data) ? data : []);
       }
     })();
-  }, [user?.id]);
+  }, [authHeaders, user?.id]);
 
   // FEATURE A: Poll for new notifications (e.g. admin broadcast) without page refresh; same API with explicit filter
   useEffect(() => {
     if (!user?.id) return;
     const interval = setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const res = await fetch('/api/notifications', { credentials: 'include', headers });
+      const res = await fetch('/api/notifications', { credentials: 'include', headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data) ? data : []);
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [authHeaders, user?.id]);
 
   // Pending tickets: fetch unviewed count when on tickets tab; poll for badge update
   const fetchPendingSummary = async () => {
     if (!user?.id) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers });
+      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setPendingUnviewedCount(typeof data.unviewedCount === 'number' ? data.unviewedCount : 0);
@@ -214,17 +211,14 @@ export default function DashboardPage() {
     fetchPendingSummary();
     const interval = setInterval(fetchPendingSummary, 30000);
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [authHeaders, user?.id]);
 
   // Open Pending panel: load list, mark as viewed, then show
   const openPendingPanel = async () => {
     setPendingPanelOpen(true);
     setLoadingPending(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers });
+      const res = await fetch('/api/pending-tickets', { credentials: 'include', headers: authHeaders });
       if (!res.ok) {
         setPendingTickets([]);
         setLoadingPending(false);
@@ -237,7 +231,7 @@ export default function DashboardPage() {
         await fetch('/api/pending-tickets', {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json', ...headers },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ ticketIds: list.map((t: Ticket) => t.id) }),
         });
         setPendingUnviewedCount(0);
@@ -257,10 +251,7 @@ export default function DashboardPage() {
     setNotificationDetailLoading(true);
     setNotificationDetail(null);
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const opts = { headers, credentials: 'include' as RequestCredentials };
+      const opts = { credentials: 'include' as RequestCredentials, headers: authHeaders };
       try {
         const res = await fetch(`/api/notifications/${notificationDetailId}`, opts);
         if (!res.ok) {
@@ -287,7 +278,7 @@ export default function DashboardPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [notificationDetailId]);
+  }, [authHeaders, notificationDetailId]);
 
   // Part 1: Reset image error when detail changes (imageUrl from API is resolvable proxy URL; cookies sent same-origin)
   useEffect(() => {
@@ -305,10 +296,7 @@ export default function DashboardPage() {
     setReactionSummary({ LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
     setUserReaction(null);
     const fetchReactions = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: HeadersInit = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const res = await fetch(`/api/notifications/${notificationDetailId}/reactions`, { credentials: 'include', headers });
+      const res = await fetch(`/api/notifications/${notificationDetailId}/reactions`, { credentials: 'include', headers: authHeaders });
       if (!res.ok) return;
       const data = await res.json();
       setReactionSummary(data.summary ?? { LIKE: 0, MUSCLE: 0, LAUGH: 0, COPY_THAT: 0 });
@@ -317,14 +305,11 @@ export default function DashboardPage() {
     fetchReactions();
     const interval = setInterval(fetchReactions, 15000);
     return () => clearInterval(interval);
-  }, [notificationDetailId, user?.id]);
+  }, [authHeaders, notificationDetailId, user?.id]);
 
   const loadNotifications = async () => {
     if (!user?.id) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    const headers: HeadersInit = {};
-    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-    const res = await fetch('/api/notifications', { credentials: 'include', headers });
+    const res = await fetch('/api/notifications', { credentials: 'include', headers: authHeaders });
     if (res.ok) {
       const data = await res.json();
       setNotifications(Array.isArray(data) ? data : []);
@@ -542,22 +527,22 @@ export default function DashboardPage() {
         }
       }
 
-      const { data, error } = await addTicketUpdate(
-        ticketId, 
-        newUpdateText.trim(), 
-        profile?.full_name,
-        attachmentUrls.length > 0 ? attachmentUrls : undefined
-      );
+      const response = await fetch('/api/tickets/reply', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          ticketId,
+          text: newUpdateText.trim(),
+          attachments: attachmentUrls.length > 0 ? attachmentUrls : undefined,
+          dependencyName: updateHasDependency && updateDependencyName.trim() ? updateDependencyName.trim() : undefined,
+          clickUpTicket: updateClickUpValue.trim() || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
 
-      if (!error && data) {
+      if (response.ok && result.success) {
         // FEATURE 2: dependency_name is merged (not overwritten) in updateTicket
-        if (updateHasDependency && updateDependencyName.trim()) {
-          await updateTicket(ticketId, { has_dependencies: true, dependency_name: updateDependencyName.trim() });
-        }
-        // FEATURE 1: Optionally add or link ClickUp ticket during update (does not overwrite other fields)
-        if (updateClickUpValue.trim()) {
-          await updateTicket(ticketId, { clickup_ticket: updateClickUpValue.trim() });
-        }
         await loadTickets();
         setNewUpdateText('');
         setUpdateAttachments([]);
@@ -565,8 +550,11 @@ export default function DashboardPage() {
         setUpdateDependencyName('');
         setUpdateClickUpValue('');
         setUpdatingTicketId(null);
-      } else if (error) {
-        alert('Error adding update: ' + (error as Error).message);
+        if (result.emailError) {
+          alert(`Update saved, but the email reply could not be sent: ${result.emailError}`);
+        }
+      } else {
+        alert('Error adding update: ' + (result.error || 'Unknown error'));
       }
     } catch (err) {
       alert('Error adding update: ' + (err as Error).message);
@@ -1050,12 +1038,7 @@ export default function DashboardPage() {
                   <ExportsPanel
                     isAdmin={false}
                     onClose={() => setShowExportsPanel(false)}
-                    getAuthHeaders={async () => {
-                      const { data: { session } } = await supabase.auth.getSession();
-                      const headers: HeadersInit = {};
-                      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-                      return headers;
-                    }}
+                    getAuthHeaders={async () => authHeaders}
                   />
                 </>
               )}
@@ -1163,7 +1146,7 @@ export default function DashboardPage() {
             )}
             
             <button
-              onClick={handleSignOut}
+              onClick={() => setShowSignOutConfirm(true)}
               className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1259,10 +1242,7 @@ export default function DashboardPage() {
                                 type="button"
                                 onClick={async () => {
                                   try {
-                                    const { data: { session } } = await supabase.auth.getSession();
-                                    const headers: HeadersInit = {};
-                                    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-                                    const res = await fetch(`/api/notifications/attachment/${att.id}`, { credentials: 'include', headers });
+                                    const res = await fetch(`/api/notifications/attachment/${att.id}`, { credentials: 'include', headers: authHeaders });
                                     if (!res.ok) {
                                       const text = await res.text();
                                       let msg = 'Download failed';
@@ -1320,13 +1300,10 @@ export default function DashboardPage() {
                                   setUserReaction(type);
                                   setReactionSummary((s) => ({ ...s, [type]: (s[type as keyof typeof s] ?? 0) + 1 }));
                                 }
-                                const { data: { session } } = await supabase.auth.getSession();
-                                const headers: HeadersInit = { 'Content-Type': 'application/json' };
-                                if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
                                 const res = await fetch(`/api/notifications/${notificationDetailId}/react`, {
                                   method: 'POST',
                                   credentials: 'include',
-                                  headers,
+                                  headers: { 'Content-Type': 'application/json', ...authHeaders },
                                   body: JSON.stringify({ reactionType: type }),
                                 });
                                 if (!res.ok) {
@@ -2599,8 +2576,10 @@ export default function DashboardPage() {
                         <div className="space-y-2">
                           {ticket.updates.map((update: any, idx: number) => (
                             <div key={idx} className={`p-3 rounded-xl border ${update.authorRole === 'admin' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                              {update.authorRole === 'admin' && (
-                                <p className="text-xs font-medium text-amber-400 mb-1">Admin comment</p>
+                              {update.authorRole && (
+                                <p className={`text-xs font-medium mb-1 ${update.authorRole === 'admin' ? 'text-amber-400' : update.authorRole === 'client' ? 'text-cyan-400' : 'text-blue-400'}`}>
+                                  {update.authorRole === 'admin' ? 'Admin comment' : update.authorRole === 'client' ? 'Client reply' : 'Member update'}
+                                </p>
                               )}
                               <p className="text-sm text-slate-300">{update.text}</p>
                               {update.attachments && update.attachments.length > 0 && (
@@ -2646,13 +2625,15 @@ export default function DashboardPage() {
                     {/* Add Update Section */}
                     {updatingTicketId === ticket.id ? (
                       <div className="mb-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/50 animate-fade-in">
-                        <h4 className="text-sm font-semibold text-blue-400 mb-3">Add Update</h4>
+                        <h4 className="text-sm font-semibold text-blue-400 mb-3">
+                          {ticket.client_email && ticket.ticket_mailbox ? 'Reply to Client' : 'Add Update'}
+                        </h4>
                         <textarea
                           value={newUpdateText}
                           onChange={(e) => setNewUpdateText(e.target.value)}
                           rows={2}
                           className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-blue-500 outline-none resize-none mb-3"
-                          placeholder="Enter update details..."
+                          placeholder={ticket.client_email && ticket.ticket_mailbox ? 'Write your reply to the client...' : 'Enter update details...'}
                         />
                         
                         {/* FEATURE 1: Optional ClickUp ticket – add or link during update; editable if empty or explicitly changed */}
@@ -2739,7 +2720,7 @@ export default function DashboardPage() {
                             disabled={!newUpdateText.trim() || isSubmitting}
                             className="flex-1 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {isSubmitting ? 'Adding...' : 'Save Update'}
+                            {isSubmitting ? 'Saving...' : ticket.client_email && ticket.ticket_mailbox ? 'Send Reply' : 'Save Update'}
                           </button>
                           <button
                             onClick={() => { 
@@ -3021,8 +3002,10 @@ export default function DashboardPage() {
                         <div className="space-y-2">
                           {ticket.updates.map((update: any, idx: number) => (
                             <div key={idx} className={`p-3 rounded-xl border ${update.authorRole === 'admin' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                              {update.authorRole === 'admin' && (
-                                <p className="text-xs font-medium text-amber-400 mb-1">Admin comment</p>
+                              {update.authorRole && (
+                                <p className={`text-xs font-medium mb-1 ${update.authorRole === 'admin' ? 'text-amber-400' : update.authorRole === 'client' ? 'text-cyan-400' : 'text-blue-400'}`}>
+                                  {update.authorRole === 'admin' ? 'Admin comment' : update.authorRole === 'client' ? 'Client reply' : 'Member update'}
+                                </p>
                               )}
                               <p className="text-sm text-slate-300">{update.text}</p>
                               {update.attachments && update.attachments.length > 0 && (
@@ -3469,6 +3452,12 @@ export default function DashboardPage() {
           </section>
         )}
       </main>
+
+      <SignOutConfirmModal
+        open={showSignOutConfirm}
+        onCancel={() => setShowSignOutConfirm(false)}
+        onConfirm={() => void handleSignOut()}
+      />
     </div>
   );
 }

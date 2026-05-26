@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processAllMailboxes, getActiveMailboxes } from '@/app/lib/email-to-ticket';
+import { processAllMailboxes, getActiveMailboxes, isWebhookOnlyMailbox } from '@/app/lib/email-to-ticket';
 
 export const maxDuration = 60;
 
@@ -30,16 +30,22 @@ export async function GET(request: NextRequest) {
       });
     }
     const mailboxes = await getActiveMailboxes();
-    const withPassword = mailboxes.filter((m) => !!m.password_encrypted).length;
+    const polledMailboxes = mailboxes.filter((mailbox) => !isWebhookOnlyMailbox(mailbox.mailbox_address));
+    const webhookOnlyMailboxes = mailboxes.length - polledMailboxes.length;
+    const withPassword = polledMailboxes.filter((m) => !!m.password_encrypted).length;
     return NextResponse.json({
       ok: true,
       message: 'Check-mailbox endpoint active',
       mailboxesConfigured: mailboxes.length,
+      mailboxesPolled: polledMailboxes.length,
+      webhookOnlyMailboxes,
       mailboxesWithPassword: withPassword,
-      hint: mailboxes.length === 0
-        ? 'Add rows to support_mailboxes (is_active = true) in Supabase.'
-        : withPassword < mailboxes.length
-          ? 'Set password_encrypted for each mailbox (Office 365 App Password).'
+      hint: polledMailboxes.length === 0
+        ? webhookOnlyMailboxes > 0
+          ? 'All active mailboxes are webhook-only; IMAP polling is intentionally skipped.'
+          : 'Add rows to support_mailboxes (is_active = true) in Supabase.'
+        : withPassword < polledMailboxes.length
+          ? 'Set password_encrypted for each polled mailbox (Office 365 App Password), or move that mailbox to EMAIL_WEBHOOK_ONLY_MAILBOXES.'
           : 'Cron runs every 1 min (GET). Use Authorization: Bearer CRON_SECRET to process now.',
     });
   } catch (e) {

@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
   const tenant = requiredEnv('AZURE_TENANT_ID');
   const clientId = requiredEnv('AZURE_CLIENT_ID');
   const redirectUri = requiredEnv('OAUTH_REDIRECT_URI');
+  const mailboxUser = request.nextUrl.searchParams.get('mailbox_user')?.toLowerCase().trim() || process.env.IMAP_USER?.toLowerCase().trim();
+  if (!mailboxUser) {
+    throw new Error('Missing mailbox_user query parameter or IMAP_USER env var');
+  }
 
   const state = crypto.randomBytes(24).toString('hex');
 
@@ -29,6 +33,13 @@ export async function GET(request: NextRequest) {
     sameSite: 'lax',
     path: '/api/auth',
     maxAge: 10 * 60, // 10 minutes
+  });
+  res.cookies.set('msoauth_mailbox_user', mailboxUser, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/api/auth',
+    maxAge: 10 * 60,
   });
   return res;
 }

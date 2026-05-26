@@ -1,6 +1,6 @@
 /**
  * GET /api/pending-tickets
- * Returns pending tickets (status = 'pending') and unviewed count for the current user.
+ * Returns pending tickets (status = 'pending'), total count, and unviewed count for the current user.
  * Used by team member dashboard for Pending queue and badge.
  */
 
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const list = tickets ?? [];
     if (list.length === 0) {
-      return NextResponse.json({ tickets: [], unviewedCount: 0 }, {
+      return NextResponse.json({ tickets: [], totalCount: 0, unviewedCount: 0 }, {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=0' },
       });
     }
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const unviewedCount = list.length - viewedSet.size;
 
     return NextResponse.json(
-      { tickets: list, unviewedCount },
+      { tickets: list, totalCount: list.length, unviewedCount },
       { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=0' } }
     );
   } catch (e) {

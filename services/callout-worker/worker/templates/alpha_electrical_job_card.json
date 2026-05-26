@@ -1,0 +1,13 @@
+{
+  "template_key": "alpha_electrical_v1",
+  "contractor_override": "alpha_electrical",
+  "job_card_prefix": "ALP-",
+  "regex": {
+    "job_card_number": "(?i)(?:ALP-|job\\s*card\\s*#?\\s*)([A-Z0-9\\-/]+)",
+    "service_date": "(?i)(?:date|service date)\\s*[:#]?\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})",
+    "site_name": "(?i)(?:site|store|branch)\\s*[:#]?\\s*([^\\n]+)",
+    "technician_name": "(?i)(?:technician|electrician)\\s*[:#]?\\s*([^\\n]+)",
+    "hours_worked": "(?i)(?:hours?|time)\\s*[:#]?\\s*(\\d+(?:\\.\\d+)?)",
+    "po_number": "(?i)(?:p\\.?o\\.?)\\s*[:#]?\\s*([A-Z0-9\\-/]+)"
+  }
+}

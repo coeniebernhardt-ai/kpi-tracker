@@ -10,68 +10,12 @@ export default function Home() {
   const { user, loading, isAdmin } = useAuth();
 
   useEffect(() => {
-    const target = loading ? 'wait' : !user ? 'login' : isAdmin ? 'admin' : 'dashboard';
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'app/page.tsx:Home',
-        message: 'redirect effect',
-        data: { loading, hasUser: !!user, isAdmin, target },
-        timestamp: Date.now(),
-        hypothesisId: 'H2',
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!loading) {
       if (!user) {
-        // Not logged in → go to login
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'app/page.tsx:pushLogin',
-            message: 'router.push /login',
-            data: {},
-            timestamp: Date.now(),
-            hypothesisId: 'H3',
-          }),
-        }).catch(() => {});
-        // #endregion
         router.replace('/login');
       } else if (isAdmin) {
-        // Admin → go to admin dashboard
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'app/page.tsx:pushAdmin',
-            message: 'router.push /admin',
-            data: {},
-            timestamp: Date.now(),
-            hypothesisId: 'H3',
-          }),
-        }).catch(() => {});
-        // #endregion
         router.replace('/admin');
       } else {
-        // Regular user → go to their tickets
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9f9d758f-7a49-4eb9-9ee6-1128596866c4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'app/page.tsx:pushDashboard',
-            message: 'router.push /dashboard',
-            data: {},
-            timestamp: Date.now(),
-            hypothesisId: 'H3',
-          }),
-        }).catch(() => {});
-        // #endregion
         router.replace('/dashboard');
       }
     }

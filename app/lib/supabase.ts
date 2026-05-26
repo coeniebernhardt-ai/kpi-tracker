@@ -64,7 +64,7 @@ export interface Ticket {
   target_date?: string;
   // Attachments for regular tickets
   attachments?: { url: string; name: string; type: string }[];
-  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[]; authorRole?: 'admin' | 'client'; authorId?: string; authorEmail?: string }[];
+  updates?: { text: string; timestamp: string; attachments?: { url: string; name: string; type: string }[]; authorRole?: 'admin' | 'client' | 'member'; authorId?: string; authorEmail?: string; authorName?: string }[];
   time_logs?: { minutes: number; description: string; timestamp: string; logged_by?: string }[];
   total_time_minutes?: number;
   // Assignment (can have multiple assigned members)
@@ -78,6 +78,9 @@ export interface Ticket {
   // Joined data
   profile?: Profile;
 }
+
+const ADMIN_PROFILE_COLUMNS = 'id, email, full_name, role, avatar, avatar_url, is_admin, is_active, created_at, updated_at';
+const TRAVEL_LOG_SUMMARY_COLUMNS = 'id, user_id, reason, start_address, end_address, is_return_trip, comments, distance_travelled, attachments, created_at, updated_at';
 
 // FEATURE C: Notifications (member-only; admin/member triggers create these)
 // FEATURE A: admin_broadcast added for admin push notifications (optional title, message, image_url)
@@ -202,7 +205,7 @@ export async function getCurrentProfile(userId?: string): Promise<Profile | null
 export async function getAllProfiles(): Promise<Profile[]> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(ADMIN_PROFILE_COLUMNS)
     .order('full_name');
   
   if (error) {
@@ -342,6 +345,7 @@ export async function uploadTicketAttachment(
 
 // Ticket helpers – list columns only (no updates, time_logs, attachments on list)
 const TICKET_LIST_COLUMNS = 'id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, created_at, estate_or_building, cml_location, ticket_type, has_dependencies, dependency_name, assigned_to_array, response_time_minutes, closed_at, resolution, created_by';
+const ADMIN_TICKET_SUMMARY_COLUMNS = `${TICKET_LIST_COLUMNS}, attachments, site_files, display_id`;
 
 /** Global KPI metrics (all tickets). Not affected by pagination or date range. Run CREATE_ADMIN_KPI_FUNCTION.sql in Supabase to enable. */
 export type KpiMetrics = {
@@ -396,7 +400,7 @@ export async function getLatestTickets(options?: { limit?: number; dateFrom?: st
   try {
     let q = supabase
       .from('tickets')
-      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(id, full_name, avatar_url, avatar)`)
+      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (options?.dateFrom) q = q.gte('created_at', options.dateFrom + 'T00:00:00.000Z');
@@ -419,7 +423,7 @@ export async function getNextTickets(lastSeen: string, options?: { limit?: numbe
   try {
     let q = supabase
       .from('tickets')
-      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(id, full_name, avatar_url, avatar)`)
+      .select(`${TICKET_LIST_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
       .lt('created_at', lastSeen)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -492,7 +496,7 @@ export async function getAllTickets(): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
       .from('tickets')
-      .select('*, profile:profiles!user_id(*)')
+      .select(`${ADMIN_TICKET_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -517,32 +521,7 @@ export async function getAllTickets(): Promise<Ticket[]> {
       return [];
     }
     
-    // Normalize data and fetch assigned profiles
-    const normalizedData = await Promise.all((data || []).map(async (ticket: any) => {
-      let assignedProfiles: Profile[] = [];
-      
-      // Handle both old single assigned_to and new assigned_to_array
-      const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? (Array.isArray(ticket.assigned_to) ? ticket.assigned_to : [ticket.assigned_to]) : []);
-      
-      if (assignedIds.length > 0 && Array.isArray(assignedIds)) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', assignedIds.filter((id: any) => id != null));
-        assignedProfiles = profiles || [];
-      }
-      
-      return {
-        ...ticket,
-        assigned_to: assignedIds || [],
-        assigned_profiles: assignedProfiles,
-        time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
-        updates: Array.isArray(ticket.updates) ? ticket.updates : [],
-        total_time_minutes: ticket.total_time_minutes || 0
-      };
-    }));
-    
-    return normalizedData;
+    return await enrichTicketsWithAssignedProfiles(data ?? []);
   } catch (err: any) {
     console.error('Exception in getAllTickets:', err);
     console.error('Exception details:', err?.message, err?.stack);
@@ -1171,7 +1150,10 @@ export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]
       return [];
     }
     
-    return data || [];
+    return (data || []).map((log: any) => ({
+      ...log,
+      profile: Array.isArray(log.profile) ? log.profile[0] : log.profile,
+    })) as TravelLog[];
   } catch (err) {
     console.error('Exception in getTravelLogsByUserId:', err);
     return [];
@@ -1182,7 +1164,7 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
   try {
     const { data, error } = await supabase
       .from('travel_logs')
-      .select('*, profile:profiles!user_id(*)')
+      .select(`${TRAVEL_LOG_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -1190,7 +1172,10 @@ export async function getAllTravelLogs(): Promise<TravelLog[]> {
       return [];
     }
     
-    return data || [];
+    return (data || []).map((log: any) => ({
+      ...log,
+      profile: Array.isArray(log.profile) ? log.profile[0] : log.profile,
+    })) as TravelLog[];
   } catch (err) {
     console.error('Exception in getAllTravelLogs:', err);
     return [];

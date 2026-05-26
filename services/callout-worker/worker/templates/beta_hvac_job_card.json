@@ -1,0 +1,12 @@
+{
+  "template_key": "beta_hvac_v1",
+  "contractor_override": "beta_hvac",
+  "job_card_prefix": "BHV-",
+  "regex": {
+    "job_card_number": "(?i)(?:BHV-|job\\s*no\\.?\\s*)([A-Z0-9\\-/]+)",
+    "service_date": "(?i)(?:attendance date|date)\\s*[:#]?\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})",
+    "site_name": "(?i)(?:client|site)\\s*[:#]?\\s*([^\\n]+)",
+    "technician_name": "(?i)(?:tech|technician)\\s*[:#]?\\s*([^\\n]+)",
+    "hours_worked": "(?i)(?:labour hours|hours)\\s*[:#]?\\s*(\\d+(?:\\.\\d+)?)"
+  }
+}

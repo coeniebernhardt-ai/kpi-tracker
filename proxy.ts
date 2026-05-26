@@ -232,6 +232,7 @@ export async function proxy(request: NextRequest) {
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
     "connect-src 'self' https://*.supabase.co https://*.supabase.in https://vercel.live",
+    "frame-src 'self' https://vercel.live",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -210,6 +210,19 @@ async function generatePendingTicketNumber(supabase: SupabaseClient): Promise<st
 /** Mailboxes that always create pending tickets (no auto-assign); any team member can assign. */
 const ALWAYS_PENDING_MAILBOXES = ['supportq@thinkdigital.co.za'];
 
+function getWebhookOnlyMailboxes(): Set<string> {
+  return new Set(
+    (process.env.EMAIL_WEBHOOK_ONLY_MAILBOXES ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+export function isWebhookOnlyMailbox(mailboxAddress: string): boolean {
+  return getWebhookOnlyMailboxes().has(mailboxAddress.toLowerCase().trim());
+}
+
 /** Create a new ticket from an incoming email. Routing match → open + assigned; no match → pending (unassigned). */
 export async function createTicketFromEmail(
   mailbox: SupportMailbox,
@@ -434,38 +447,81 @@ export async function processOneMailbox(
   const db = supabase ?? getSupabaseAdmin();
   const errors: string[] = [];
   let processed = 0;
+  if (isWebhookOnlyMailbox(mailbox.mailbox_address)) {
+    return { processed: 0, errors };
+  }
   const password = mailbox.password_encrypted || process.env[`MAILBOX_PASSWORD_${mailbox.id}`] || '';
-  const useOAuth = process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && process.env.AZURE_TENANT_ID && process.env.IMAP_USER;
-  if (!password && !useOAuth) {
+  const oauthLoginUser = (mailbox.username || mailbox.mailbox_address).toLowerCase().trim();
+  const passwordLoginUser = (mailbox.username || mailbox.mailbox_address).toLowerCase().trim();
+  const oauthImapUsers = Array.from(
+    new Set([mailbox.mailbox_address.toLowerCase().trim(), oauthLoginUser].filter(Boolean))
+  );
+  const oauthConfigured = Boolean(
+    process.env.AZURE_CLIENT_ID &&
+    process.env.AZURE_CLIENT_SECRET &&
+    process.env.AZURE_TENANT_ID
+  );
+
+  let oauthAccessToken: string | null = null;
+  if (oauthConfigured) {
+    try {
+      const token = await getMicrosoftImapAccessToken(oauthLoginUser, db);
+      oauthAccessToken = token.accessToken;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!password) {
+        errors.push(`OAuth token error for mailbox ${mailbox.mailbox_address}: ${msg}`);
+        return { processed: 0, errors };
+      }
+    }
+  }
+  if (!oauthAccessToken && !password) {
     errors.push(`No password for mailbox ${mailbox.mailbox_address} and OAuth not configured`);
     return { processed: 0, errors };
   }
 
-  // Never log mailbox.password_encrypted or password or OAuth access tokens
-  const auth: { user: string; pass?: string; accessToken?: string } = { user: mailbox.username };
-  if (password) {
-    auth.pass = password;
-  } else if (useOAuth) {
-    try {
-      const token = await getMicrosoftImapAccessToken(db);
-      auth.user = process.env.IMAP_USER!.toLowerCase().trim();
-      auth.accessToken = token.accessToken;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      errors.push(`OAuth token error for mailbox ${mailbox.mailbox_address}: ${msg}`);
+  let client: ImapFlow | null = null;
+  try {
+    if (oauthAccessToken) {
+      const oauthErrors: string[] = [];
+      for (const authUser of oauthImapUsers) {
+        const oauthClient = new ImapFlow({
+          host: mailbox.imap_server,
+          port: mailbox.imap_port,
+          secure: mailbox.imap_port === 993,
+          auth: { user: authUser, accessToken: oauthAccessToken },
+        });
+        try {
+          await oauthClient.connect();
+          client = oauthClient;
+          break;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          oauthErrors.push(`${authUser}: ${msg}`);
+        }
+      }
+      if (!client && !password && oauthErrors.length > 0) {
+        errors.push(`OAuth connection error for mailbox ${mailbox.mailbox_address}: ${oauthErrors.join(' | ')}`);
+        return { processed: 0, errors };
+      }
+    }
+
+    if (!client && password) {
+      client = new ImapFlow({
+        host: mailbox.imap_server,
+        port: mailbox.imap_port,
+        secure: mailbox.imap_port === 993,
+        auth: { user: passwordLoginUser, pass: password },
+      });
+      await client.connect();
+    }
+
+    if (!client) {
+      errors.push(`Connection ${mailbox.mailbox_address}: no valid auth strategy succeeded`);
       return { processed: 0, errors };
     }
-  }
 
-  const client = new ImapFlow({
-    host: mailbox.imap_server,
-    port: mailbox.imap_port,
-    secure: mailbox.imap_port === 993,
-    auth,
-  });
-  try {
-    await client.connect();
-    let lock = await client.getMailboxLock('INBOX');
+    const lock = await client.getMailboxLock('INBOX');
     try {
       const unseen = await client.search({ seen: false }, { uid: true });
       const list = Array.isArray(unseen) ? unseen : [];
@@ -501,17 +557,24 @@ export async function processOneMailbox(
     } finally {
       lock.release();
     }
-    await client.logout();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     errors.push(`Connection ${mailbox.mailbox_address}: ${msg}`);
+  } finally {
+    if (client) {
+      try {
+        await client.logout();
+      } catch {
+        // Ignore logout errors after processing/connection attempts.
+      }
+    }
   }
   return { processed, errors };
 }
 
 /** Process all active mailboxes. Call from cron (e.g. every 30s). */
 export async function processAllMailboxes(supabase?: SupabaseClient): Promise<{ processed: number; errors: string[] }> {
-  const mailboxes = await getActiveMailboxes(supabase);
+  const mailboxes = (await getActiveMailboxes(supabase)).filter((mailbox) => !isWebhookOnlyMailbox(mailbox.mailbox_address));
   let totalProcessed = 0;
   const allErrors: string[] = [];
   for (const m of mailboxes) {

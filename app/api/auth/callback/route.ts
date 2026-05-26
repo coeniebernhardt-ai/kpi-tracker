@@ -47,7 +47,15 @@ export async function GET(request: NextRequest) {
     const clientId = requiredEnv('AZURE_CLIENT_ID');
     const clientSecret = requiredEnv('AZURE_CLIENT_SECRET');
     const redirectUri = requiredEnv('OAUTH_REDIRECT_URI');
-    const mailboxUser = requiredEnv('IMAP_USER').toLowerCase().trim();
+    const mailboxUser =
+      request.cookies.get('msoauth_mailbox_user')?.value?.toLowerCase().trim() ||
+      process.env.IMAP_USER?.toLowerCase().trim();
+    if (!mailboxUser) {
+      return new NextResponse(
+        `<html><body><h2>Missing mailbox user</h2><p>Please restart the mailbox connect flow.</p></body></html>`,
+        { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
 
     const tokenUrl = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
     const body = new URLSearchParams();
@@ -92,10 +100,11 @@ export async function GET(request: NextRequest) {
     }
 
     const res = new NextResponse(
-      `<html><body><h2>Mailbox connected successfully</h2><p>You can close this tab.</p></body></html>`,
+      `<html><body><h2>Mailbox connected successfully</h2><p>OAuth tokens saved for <strong>${mailboxUser}</strong>. You can close this tab.</p></body></html>`,
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
     res.cookies.set('msoauth_state', '', { path: '/api/auth', maxAge: 0 });
+    res.cookies.set('msoauth_mailbox_user', '', { path: '/api/auth', maxAge: 0 });
     return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

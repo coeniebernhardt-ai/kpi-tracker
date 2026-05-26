@@ -1,8 +1,9 @@
-# ThinkQ/FinQ Email-to-Ticket (Two Mailboxes + Pending Queue + Intelligent Routing)
+# ThinkQ/FinQ Email-to-Ticket (Mailboxes + Pending Queue + Intelligent Routing)
 
 ## Overview
 
-- **Two mailboxes:** **support@thinkdigital.co.za** and **support@gowaterfall.co.za**. Both are monitored via IMAP; outbound replies are sent **from** the mailbox that received the ticket (`ticket_mailbox`).
+- **Primary IMAP mailboxes:** **support@thinkdigital.co.za** and **support@gowaterfall.co.za**. Both are monitored via IMAP; outbound replies are sent **from** the mailbox that received the ticket (`ticket_mailbox`).
+- **SupportQ mailbox:** **supportq@thinkdigital.co.za** can be handled as a webhook-only mailbox via FreeScout while tickets are still created inside this app.
 - **Ticket statuses:** `pending`, `open`, `closed`. **Pending** = created from email but not yet assigned; they appear in the Pending queue until a technician assigns them (then status becomes `open`).
 - **Intelligent routing:** When a new email arrives, the system checks **routing memory** only (no default agent): (1) optional sender → estate (Balwin → Cornett, Redefine → Marcellus), (2) learned routing rules (email or domain → agent). If a rule matches → ticket is created with that agent and **status = open**. If **no rule matches** → ticket is created with **status = pending**, **user_id = null** (Pending queue).
 - **Learning:** When a technician assigns a pending ticket (or reassigns any ticket) that has `client_email`, a trigger stores a routing rule. Future emails from that sender or domain are auto-assigned to that agent.
@@ -29,10 +30,35 @@ Populate **`sender_estate`** so that known senders map to an estate (e.g. Balwin
 - In **Microsoft 365 admin** → Users → Active Users → select the mailbox (e.g. support@thinkdigital.co.za) → **Mail** → **Manage email apps** → enable **IMAP** and **Authenticated SMTP**.
 - Create an **App password** at https://mysignins.microsoft.com/security-info and store it in `support_mailboxes.password_encrypted` (or in env as `MAILBOX_PASSWORD_<mailbox_id>`). See **`EMAIL_MAILBOX_SECURITY.md`** for security notes.
 
+### OAuth alternative for inbound IMAP
+
+- The codebase also supports Microsoft OAuth for **inbound mailbox polling**.
+- After setting `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and `OAUTH_REDIRECT_URI`, start the connect flow for a mailbox with:
+  - `/api/auth/login?mailbox_user=supportq@thinkdigital.co.za`
+- After Microsoft redirects back to `/api/auth/callback`, tokens are stored in `oauth_tokens` for that mailbox user and inbound polling will prefer OAuth over password auth.
+- Outbound reply emails still use SMTP username/password today.
+
 ## 5. Cron (mail listener)
 
 - **`POST /api/check-mailbox`** – connects to both mailboxes via IMAP, fetches unread emails, creates tickets (open or pending) or adds comments, marks processed. Runs every **5 minutes** (Vercel Cron). Secure with **`CRON_SECRET`**.
 - **`POST /api/cron/process-email`** – same logic; optional backup cron. Secure with **`CRON_SECRET`**.
+- To skip IMAP polling for webhook-managed mailboxes, set `EMAIL_WEBHOOK_ONLY_MAILBOXES=supportq@thinkdigital.co.za`.
+
+## 5A. FreeScout bridge for SupportQ
+
+- Route: **`POST /api/email/freescout`**
+- Purpose: accepts signed FreeScout conversation webhooks, maps them into the existing email-to-ticket flow, and keeps this app as the system of record.
+- Required env vars:
+  - `FREESCOUT_WEBHOOK_SECRET` – shared secret from **FreeScout → Manage → API & Webhooks**
+  - `FREESCOUT_MAILBOX_ADDRESS=supportq@thinkdigital.co.za` (optional if you keep the default mailbox)
+  - `EMAIL_WEBHOOK_ONLY_MAILBOXES=supportq@thinkdigital.co.za` so IMAP cron stops reading the same mailbox
+- Configure a FreeScout mailbox for `supportq@thinkdigital.co.za` using Microsoft 365 OAuth or IMAP/SMTP.
+- In FreeScout, create a webhook pointing to `/api/email/freescout` and subscribe to:
+  - `convo.created`
+  - `convo.customer.reply.created`
+- The bridge verifies `X-FreeScout-Signature`, accepts only the supported events above, and generates stable message IDs so FreeScout retries are ignored by `processed_emails`.
+- `supportq@thinkdigital.co.za` remains a pending-only mailbox in this app, so new emails still land in the Pending queue until assigned.
+- Outbound replies can continue to be sent from this app using the existing ticket reply flow.
 
 ## 6. Outbound when technician replies
 
