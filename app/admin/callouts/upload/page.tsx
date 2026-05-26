@@ -101,7 +101,10 @@ export default function CalloutsUploadPage() {
             onChange={(e) => void onFiles(e.target.files)}
             className="text-sm text-slate-400"
           />
-          <p className="mt-2 text-xs text-slate-500">PDF only, max 25MB per file</p>
+          <p className="mt-2 text-xs text-slate-500">
+            PDF only, max 25MB. Select <strong className="text-slate-300">Invoice</strong> for invoice PDFs and{' '}
+            <strong className="text-slate-300">Job card</strong> for job cards — matching uses the document type.
+          </p>
         </div>
 
         <div className="border-t border-slate-800 pt-4">

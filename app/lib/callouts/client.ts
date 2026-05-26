@@ -74,8 +74,18 @@ function buildCalloutsApi(accessToken?: string | null) {
       const tokenParam = accessToken ? `&access_token=${encodeURIComponent(accessToken)}` : '';
       return `/api/callouts/export?${p}${tokenParam}`;
     },
-    acceptSuggestion: (id: string) => calloutFetch(`/link-suggestions/${id}/accept`, { method: 'POST' }),
-    reprocess: (id: string) => calloutFetch(`/documents/${id}/reprocess`, { method: 'POST' }),
+    acceptSuggestion: (id: string) =>
+      calloutFetch(`/link-suggestions/${id}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
+    reprocess: (id: string) =>
+      calloutFetch(`/documents/${id}/reprocess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
   };
 }
 

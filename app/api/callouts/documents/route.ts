@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureCalloutAdmin, getCalloutServiceClient } from '@/app/lib/callouts/auth';
 import { jsonError } from '@/app/lib/callouts/api-response';
 import { writeCalloutAudit } from '@/app/lib/callouts/audit';
+import { processCalloutDocumentInline } from '@/app/lib/callouts/inline-process';
 import { enqueueCalloutPipeline } from '@/app/lib/callouts/queue';
 import { CALLOUT_STORAGE_BUCKET } from '@/app/lib/callouts/types';
 import { getSafeErrorMessage, logSafeError } from '@/app/lib/safe-api-error';
 
 const MAX_BYTES = 25 * 1024 * 1024;
+
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const auth = await ensureCalloutAdmin(request);
@@ -76,7 +79,13 @@ export async function POST(request: NextRequest) {
     }
 
     const priority = source === 'bulk_import' ? 3 : 8;
-    await enqueueCalloutPipeline(admin, doc.id, priority);
+    await enqueueCalloutPipeline(admin, doc.id, priority).catch(() => {});
+
+    // Inline processing on Vercel (Python worker optional for heavy OCR)
+    const processResult = await processCalloutDocumentInline(admin, doc.id);
+    if (!processResult.ok) {
+      logSafeError('callout inline process after upload', processResult.error);
+    }
 
     if (batchId) {
       const { data: batch } = await admin

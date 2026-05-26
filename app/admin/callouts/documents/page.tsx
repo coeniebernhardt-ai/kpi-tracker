@@ -10,17 +10,27 @@ export default function CalloutsDocumentsPage() {
   const calloutsApi = useCalloutsApi();
   const [tab, setTab] = useState<'unlinked' | 'failed'>('unlinked');
   const [documents, setDocuments] = useState<Record<string, unknown>[]>([]);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const refresh = () => {
+    const q = tab === 'unlinked' ? 'unlinked=true' : 'failed=true';
+    return calloutsApi.documents(q).then((r) => setDocuments(r.documents ?? []));
+  };
 
   useEffect(() => {
     if (authLoading) return;
-    const q = tab === 'unlinked' ? 'unlinked=true' : 'failed=true';
-    calloutsApi.documents(q).then((r) => setDocuments(r.documents ?? []));
+    if (authLoading) return;
+    void refresh();
   }, [tab, authLoading, calloutsApi]);
 
   return (
     <div>
       <CalloutsNav />
       <h1 className="mb-6 text-2xl font-bold text-white">Documents</h1>
+      <p className="mb-4 text-sm text-slate-400">
+        Status <span className="text-amber-300">queued</span> means not processed yet — click Reprocess. Uploads are
+        processed automatically on the server (no Python worker required for text-based PDFs).
+      </p>
       <div className="mb-4 flex gap-2">
         <button
           type="button"
@@ -48,10 +58,17 @@ export default function CalloutsDocumentsPage() {
             </span>
             <button
               type="button"
-              onClick={() => void calloutsApi.reprocess(d.id as string)}
-              className="text-cyan-400 hover:underline"
+              disabled={processingId === d.id}
+              onClick={() => {
+                setProcessingId(d.id as string);
+                void calloutsApi
+                  .reprocess(d.id as string)
+                  .then(() => refresh())
+                  .finally(() => setProcessingId(null));
+              }}
+              className="text-cyan-400 hover:underline disabled:opacity-50"
             >
-              Reprocess
+              {processingId === d.id ? 'Processing…' : 'Reprocess'}
             </button>
           </li>
         ))}
