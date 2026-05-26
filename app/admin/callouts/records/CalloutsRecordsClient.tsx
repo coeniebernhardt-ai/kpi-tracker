@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsRecordsClient({ statusFilter }: { statusFilter: string }) {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [records, setRecords] = useState<Record<string, unknown>[]>([]);
   const [q, setQ] = useState('');
   const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
@@ -21,8 +24,9 @@ export default function CalloutsRecordsClient({ statusFilter }: { statusFilter: 
   };
 
   useEffect(() => {
+    if (authLoading) return;
     load();
-  }, [statusFilter]);
+  }, [statusFilter, authLoading, calloutsApi]);
 
   return (
     <div>

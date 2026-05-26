@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CalloutsNav from './CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsDashboardPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [analytics, setAnalytics] = useState<{
     totals?: { records: number; openFlags: number; documents: number; needsReview: number; failedDocuments: number };
   } | null>(null);
@@ -13,13 +16,15 @@ export default function CalloutsDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     Promise.all([calloutsApi.analytics(), calloutsApi.monitoring()])
       .then(([a, m]) => {
         setAnalytics(a);
         setMonitoring(m);
+        setError(null);
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [authLoading, calloutsApi]);
 
   const t = analytics?.totals;
 
@@ -35,7 +40,10 @@ export default function CalloutsDashboardPage() {
 
       {error && (
         <p className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-          {error} — run SQL migrations in Supabase if tables are missing.
+          {error}
+          {error.toLowerCase().includes('unauthorized')
+            ? ' — try signing out and back in. On preview, session cookies may require a fresh login after deploy.'
+            : ' — if this persists after login, confirm Supabase migrations ran and env vars are set on Vercel.'}
         </p>
       )}
 

@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 type Contractor = { id: string; name: string; code: string };
 
 export default function CalloutsUploadPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [contractorId, setContractorId] = useState('');
   const [docType, setDocType] = useState<'job_card' | 'invoice'>('job_card');
@@ -16,11 +19,12 @@ export default function CalloutsUploadPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
     calloutsApi.contractors().then((r) => {
       setContractors(r.contractors ?? []);
       if (r.contractors?.[0]) setContractorId(r.contractors[0].id);
     }).catch(() => setStatus('Failed to load contractors'));
-  }, []);
+  }, [authLoading, calloutsApi]);
 
   const startBatch = async () => {
     if (!batchName.trim() || !contractorId) return;

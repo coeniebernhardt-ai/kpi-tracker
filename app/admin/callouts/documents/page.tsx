@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsDocumentsPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [tab, setTab] = useState<'unlinked' | 'failed'>('unlinked');
   const [documents, setDocuments] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
+    if (authLoading) return;
     const q = tab === 'unlinked' ? 'unlinked=true' : 'failed=true';
     calloutsApi.documents(q).then((r) => setDocuments(r.documents ?? []));
-  }, [tab]);
+  }, [tab, authLoading, calloutsApi]);
 
   return (
     <div>

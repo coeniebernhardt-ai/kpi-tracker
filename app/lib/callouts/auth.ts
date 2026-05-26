@@ -32,15 +32,15 @@ export async function ensureCalloutAdmin(request?: NextRequest): Promise<Callout
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  if (authError || !session?.user) return { ok: false, status: 401, error: 'Unauthorized' };
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, status: 401, error: 'Unauthorized' };
   const { data: profile } = await supabase
     .from('profiles')
     .select('is_admin')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
   if (!profile?.is_admin) return { ok: false, status: 403, error: 'Admin only' };
-  return { ok: true, userId: session.user.id, supabase };
+  return { ok: true, userId: user.id, supabase };
 }
 
 export function getCalloutServiceClient() {

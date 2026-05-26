@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsAnalyticsPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [data, setData] = useState<{
     totals?: Record<string, number>;
     suppliers?: { contractorId: string; name: string; count: number; totalBilled: number; avgCompliance: number }[];
@@ -12,8 +15,9 @@ export default function CalloutsAnalyticsPage() {
   } | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     calloutsApi.analytics().then(setData).catch(console.error);
-  }, []);
+  }, [authLoading, calloutsApi]);
 
   return (
     <div>

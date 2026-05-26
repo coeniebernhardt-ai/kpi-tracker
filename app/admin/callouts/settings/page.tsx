@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsSettingsPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [contractors, setContractors] = useState<
     { id: string; name: string; code: string; contractor_extraction_templates?: { doc_type: string; version: string }[] }[]
   >([]);
 
   useEffect(() => {
+    if (authLoading) return;
     calloutsApi.contractors().then((r) => setContractors(r.contractors ?? []));
-  }, []);
+  }, [authLoading, calloutsApi]);
 
   return (
     <div>

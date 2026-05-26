@@ -4,7 +4,16 @@ import { jsonError } from '@/app/lib/callouts/api-response';
 import { getSafeErrorMessage, logSafeError } from '@/app/lib/safe-api-error';
 
 export async function GET(request: NextRequest) {
-  const auth = await ensureCalloutAdmin(request);
+  let auth = await ensureCalloutAdmin(request);
+  if (!auth.ok) {
+    const token = new URL(request.url).searchParams.get('access_token');
+    if (token) {
+      const reqWithBearer = new NextRequest(request.url, {
+        headers: new Headers({ Authorization: `Bearer ${token}` }),
+      });
+      auth = await ensureCalloutAdmin(reqWithBearer);
+    }
+  }
   if (!auth.ok) return jsonError(auth.error, auth.status);
 
   const { searchParams } = new URL(request.url);

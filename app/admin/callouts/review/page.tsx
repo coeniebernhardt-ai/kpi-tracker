@@ -3,16 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CalloutsNav from '../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutsReviewPage() {
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [flags, setFlags] = useState<Record<string, unknown>[]>([]);
 
   const load = () => calloutsApi.flags('status=open').then((r) => setFlags(r.flags ?? []));
 
   useEffect(() => {
+    if (authLoading) return;
     load();
-  }, []);
+  }, [authLoading, calloutsApi]);
 
   const review = async (id: string, status: string) => {
     await calloutsApi.patchFlag(id, { status, reviewNote: 'Review queue' });

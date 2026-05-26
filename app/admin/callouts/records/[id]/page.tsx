@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import CalloutsNav from '../../CalloutsNav';
-import { calloutsApi } from '@/app/lib/callouts/client';
+import { useAuth } from '@/app/context/AuthContext';
+import { useCalloutsApi } from '@/app/lib/callouts/client';
 
 export default function CalloutRecordDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { loading: authLoading } = useAuth();
+  const calloutsApi = useCalloutsApi();
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [comment, setComment] = useState('');
@@ -18,8 +21,9 @@ export default function CalloutRecordDetailPage() {
   };
 
   useEffect(() => {
+    if (authLoading || !id) return;
     load();
-  }, [id]);
+  }, [id, authLoading, calloutsApi]);
 
   const record = data?.record as Record<string, unknown> | undefined;
   const documents = (data?.documents ?? []) as Record<string, unknown>[];
