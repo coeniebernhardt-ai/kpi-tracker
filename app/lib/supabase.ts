@@ -16,7 +16,10 @@ export const SUPABASE_MAX_ROWS_PER_REQUEST = 1000;
 type SupabasePageError = { message: string; code?: string; details?: string; hint?: string };
 
 export async function fetchAllSupabaseRows<T>(
-  fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: SupabasePageError | null }>
+  fetchPage: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: SupabasePageError | null }>
 ): Promise<{ data: T[]; error: SupabasePageError | null }> {
   const all: T[] = [];
   let from = 0;
