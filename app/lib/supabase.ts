@@ -11,6 +11,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+export const SUPABASE_MAX_ROWS_PER_REQUEST = 1000;
+
+type SupabasePageError = { message: string; code?: string; details?: string; hint?: string };
+
+export async function fetchAllSupabaseRows<T>(
+  fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: SupabasePageError | null }>
+): Promise<{ data: T[]; error: SupabasePageError | null }> {
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + SUPABASE_MAX_ROWS_PER_REQUEST - 1;
+    const { data, error } = await fetchPage(from, to);
+    if (error) return { data: all, error };
+    const page = data ?? [];
+    all.push(...page);
+    if (page.length < SUPABASE_MAX_ROWS_PER_REQUEST) break;
+    from += SUPABASE_MAX_ROWS_PER_REQUEST;
+  }
+  return { data: all, error: null };
+}
+
 // Types
 export interface Profile {
   id: string;
@@ -494,10 +515,13 @@ export async function getTicketById(id: string): Promise<Ticket | null> {
 
 export async function getAllTickets(): Promise<Ticket[]> {
   try {
-    const { data, error } = await supabase
-      .from('tickets')
-      .select(`${ADMIN_TICKET_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
-      .order('created_at', { ascending: false });
+    const { data, error } = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from('tickets')
+        .select(`${ADMIN_TICKET_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
     
     if (error) {
       // Log error details in a way that's visible in the console
@@ -531,11 +555,14 @@ export async function getAllTickets(): Promise<Ticket[]> {
 
 export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
   try {
-    const { data, error } = await supabase
-      .from('tickets')
-      .select('*, profile:profiles!user_id(*)')
-      .or(`user_id.eq.${userId},assigned_to_array.cs.{${userId}}`)
-      .order('created_at', { ascending: false });
+    const { data, error } = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from('tickets')
+        .select('*, profile:profiles!user_id(*)')
+        .or(`user_id.eq.${userId},assigned_to_array.cs.{${userId}}`)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
     
     if (error) {
       console.error('Error fetching user tickets:', {
@@ -1139,11 +1166,14 @@ export interface TravelLog {
 // Travel Log Functions
 export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]> {
   try {
-    const { data, error } = await supabase
-      .from('travel_logs')
-      .select('*, profile:profiles!user_id(*)')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from('travel_logs')
+        .select('*, profile:profiles!user_id(*)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
     
     if (error) {
       console.error('Error fetching travel logs:', error);
@@ -1162,10 +1192,13 @@ export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]
 
 export async function getAllTravelLogs(): Promise<TravelLog[]> {
   try {
-    const { data, error } = await supabase
-      .from('travel_logs')
-      .select(`${TRAVEL_LOG_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
-      .order('created_at', { ascending: false });
+    const { data, error } = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from('travel_logs')
+        .select(`${TRAVEL_LOG_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
     
     if (error) {
       console.error('Error fetching all travel logs:', error);
@@ -1205,10 +1238,13 @@ export type TicketRowForAnalytics = {
   resolution?: string | null;
 };
 export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<TicketRowForAnalytics[]> {
-  const { data, error } = await client
-    .from('tickets')
-    .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
-    .order('created_at', { ascending: false });
+  const { data, error } = await fetchAllSupabaseRows<TicketRowForAnalytics>((from, to) =>
+    client
+      .from('tickets')
+      .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
+      .order('created_at', { ascending: false })
+      .range(from, to)
+  );
   if (error) {
     console.error('[Think-Q] getAllTicketsForAnalytics:', error.message);
     return [];
@@ -1227,10 +1263,13 @@ export type TravelRowForAnalytics = {
   is_return_trip?: boolean | null;
 };
 export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Promise<TravelRowForAnalytics[]> {
-  const { data, error } = await client
-    .from('travel_logs')
-    .select('created_at, user_id, end_address, start_address, distance_travelled, reason, is_return_trip')
-    .order('created_at', { ascending: false });
+  const { data, error } = await fetchAllSupabaseRows<TravelRowForAnalytics>((from, to) =>
+    client
+      .from('travel_logs')
+      .select('created_at, user_id, end_address, start_address, distance_travelled, reason, is_return_trip')
+      .order('created_at', { ascending: false })
+      .range(from, to)
+  );
   if (error) {
     console.error('[Think-Q] getAllTravelLogsForAnalytics:', error.message);
     return [];
