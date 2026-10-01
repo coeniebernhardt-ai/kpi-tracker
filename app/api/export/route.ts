@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../lib/supabase-server';
-import { fetchAllSupabaseRows } from '../../lib/supabase';
+import { applyCreatedAtIdCursor, fetchAllByCursor, SUPABASE_MAX_ROWS_PER_REQUEST } from '../../lib/supabase';
 import { getSafeErrorMessage, logSafeError } from '../../lib/safe-api-error';
 import * as XLSX from 'xlsx';
 
@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
     }
 
     const fetchTickets = async (): Promise<{ ticketRows: TicketRow[]; rawRows: Record<string, unknown>[]; profileMap: Map<string, string> }> => {
-      const selectFields = 'ticket_number, ticket_type, user_id, client, status, issue, resolution, response_time_minutes, created_at, closed_at, location, estate_or_building, cml_location, severity, has_dependencies, dependency_name, created_by, site_name, target_date, site_files';
+      const selectFields = 'id, ticket_number, ticket_type, user_id, client, status, issue, resolution, response_time_minutes, created_at, closed_at, location, estate_or_building, cml_location, severity, has_dependencies, dependency_name, created_by, site_name, target_date, site_files';
       const buildTicketsQuery = () => {
         let q = supabase
           .from('tickets')
@@ -186,10 +186,10 @@ export async function GET(request: NextRequest) {
         } else if (memberId) {
           q = q.or(`created_by.eq.${memberId},user_id.eq.${memberId},assigned_to_array.cs.{${memberId}}`);
         }
-        return q.order('created_at', { ascending: false });
+        return q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(SUPABASE_MAX_ROWS_PER_REQUEST);
       };
-      const { data: rows, error } = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
-        buildTicketsQuery().range(from, to)
+      const { data: rows, error } = await fetchAllByCursor((cursor) =>
+        applyCreatedAtIdCursor(buildTicketsQuery(), cursor)
       );
       if (error) throw error;
       const profiles = await supabase.from('profiles').select('id, full_name');
@@ -223,15 +223,15 @@ export async function GET(request: NextRequest) {
       const buildTravelQuery = () => {
         let q = supabase
           .from('travel_logs')
-          .select('user_id, reason, start_address, end_address, distance_travelled, is_return_trip, created_at')
+          .select('id, user_id, reason, start_address, end_address, distance_travelled, is_return_trip, created_at')
           .gte('created_at', startISO)
           .lte('created_at', endISO);
         if (!isAdmin) q = q.eq('user_id', userId);
         else if (memberId) q = q.eq('user_id', memberId);
-        return q.order('created_at', { ascending: false });
+        return q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(SUPABASE_MAX_ROWS_PER_REQUEST);
       };
-      const { data: rows, error } = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
-        buildTravelQuery().range(from, to)
+      const { data: rows, error } = await fetchAllByCursor((cursor) =>
+        applyCreatedAtIdCursor(buildTravelQuery(), cursor)
       );
       if (error) throw error;
       const profiles = await supabase.from('profiles').select('id, full_name');

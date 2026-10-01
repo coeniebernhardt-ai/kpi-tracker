@@ -15,23 +15,47 @@ export const SUPABASE_MAX_ROWS_PER_REQUEST = 1000;
 
 type SupabasePageError = { message: string; code?: string; details?: string; hint?: string };
 
-export async function fetchAllSupabaseRows<T>(
+export type CreatedAtIdCursor = { created_at: string; id: string };
+
+/** Keyset page so we never use an offset past Supabase's 1000-row response cap. */
+export function applyCreatedAtIdCursor<Q extends { or: (filters: string) => Q }>(
+  query: Q,
+  cursor: CreatedAtIdCursor | null
+): Q {
+  if (!cursor) return query;
+  const ts = cursor.created_at.replace(/"/g, '');
+  return query.or(`created_at.lt."${ts}",and(created_at.eq."${ts}",id.lt.${cursor.id})`);
+}
+
+export async function fetchAllByCursor<T extends CreatedAtIdCursor>(
   fetchPage: (
-    from: number,
-    to: number
+    cursor: CreatedAtIdCursor | null
   ) => PromiseLike<{ data: T[] | null; error: SupabasePageError | null }>
 ): Promise<{ data: T[]; error: SupabasePageError | null }> {
   const all: T[] = [];
-  let from = 0;
-  while (true) {
-    const to = from + SUPABASE_MAX_ROWS_PER_REQUEST - 1;
-    const { data, error } = await fetchPage(from, to);
+  const seen = new Set<string>();
+  let cursor: CreatedAtIdCursor | null = null;
+  const maxPages = 100;
+
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+    const { data, error } = await fetchPage(cursor);
     if (error) return { data: all, error };
     const page = data ?? [];
-    all.push(...page);
-    if (page.length < SUPABASE_MAX_ROWS_PER_REQUEST) break;
-    from += SUPABASE_MAX_ROWS_PER_REQUEST;
+    if (page.length === 0) break;
+
+    let added = 0;
+    for (const row of page) {
+      if (!row?.id || seen.has(row.id)) continue;
+      seen.add(row.id);
+      all.push(row);
+      added++;
+    }
+    if (added === 0 || page.length < SUPABASE_MAX_ROWS_PER_REQUEST) break;
+
+    const last = page[page.length - 1];
+    cursor = { created_at: last.created_at, id: last.id };
   }
+
   return { data: all, error: null };
 }
 
@@ -518,12 +542,16 @@ export async function getTicketById(id: string): Promise<Ticket | null> {
 
 export async function getAllTickets(): Promise<Ticket[]> {
   try {
-    const { data, error } = await fetchAllSupabaseRows((from, to) =>
-      supabase
-        .from('tickets')
-        .select(`${ADMIN_TICKET_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
-        .order('created_at', { ascending: false })
-        .range(from, to)
+    const { data, error } = await fetchAllByCursor((cursor) =>
+      applyCreatedAtIdCursor(
+        supabase
+          .from('tickets')
+          .select(`${ADMIN_TICKET_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+        cursor
+      )
     );
     
     if (error) {
@@ -558,13 +586,17 @@ export async function getAllTickets(): Promise<Ticket[]> {
 
 export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
   try {
-    const { data, error } = await fetchAllSupabaseRows((from, to) =>
-      supabase
-        .from('tickets')
-        .select('*, profile:profiles!user_id(*)')
-        .or(`user_id.eq.${userId},assigned_to_array.cs.{${userId}}`)
-        .order('created_at', { ascending: false })
-        .range(from, to)
+    const { data, error } = await fetchAllByCursor((cursor) =>
+      applyCreatedAtIdCursor(
+        supabase
+          .from('tickets')
+          .select('*, profile:profiles!user_id(*)')
+          .or(`user_id.eq.${userId},created_by.eq.${userId},assigned_to_array.cs.{${userId}}`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+        cursor
+      )
     );
     
     if (error) {
@@ -575,39 +607,49 @@ export async function getTicketsByUserId(userId: string): Promise<Ticket[]> {
         hint: error.hint,
         fullError: error
       });
-      return [];
+      return data.length > 0 ? await normalizeUserTickets(data) : [];
     }
     
-    // Normalize data and fetch assigned profiles
-    const normalizedData = await Promise.all((data || []).map(async (ticket) => {
-      let assignedProfiles: Profile[] = [];
-      
-      // Handle both old single assigned_to and new assigned_to_array
-      const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? [ticket.assigned_to] : []);
-      
-      if (assignedIds.length > 0 && Array.isArray(assignedIds)) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', assignedIds.filter(id => id != null));
-        assignedProfiles = profiles || [];
-      }
-      
-      return {
-        ...ticket,
-        assigned_to: assignedIds,
-        assigned_profiles: assignedProfiles,
-        time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
-        updates: Array.isArray(ticket.updates) ? ticket.updates : [],
-        total_time_minutes: ticket.total_time_minutes || 0
-      };
-    }));
-    
-    return normalizedData;
+    return await normalizeUserTickets(data || []);
   } catch (err) {
     console.error('Exception in getTicketsByUserId:', err);
     return [];
   }
+}
+
+async function normalizeUserTickets(rows: any[]): Promise<Ticket[]> {
+  const allAssignedIds = new Set<string>();
+  for (const ticket of rows) {
+    const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? [ticket.assigned_to] : []);
+    if (Array.isArray(assignedIds)) {
+      assignedIds.forEach((id: string) => {
+        if (id) allAssignedIds.add(id);
+      });
+    }
+  }
+
+  const assignedProfilesMap: Record<string, Profile> = {};
+  const idList = [...allAssignedIds];
+  for (let i = 0; i < idList.length; i += 200) {
+    const chunk = idList.slice(i, i + 200);
+    const { data: profiles } = await supabase.from('profiles').select('*').in('id', chunk);
+    (profiles || []).forEach((profile) => {
+      assignedProfilesMap[profile.id] = profile;
+    });
+  }
+
+  return rows.map((ticket) => {
+    const assignedIds = ticket.assigned_to_array || (ticket.assigned_to ? [ticket.assigned_to] : []);
+    const ids = Array.isArray(assignedIds) ? assignedIds.filter((id: string) => id != null) : [];
+    return {
+      ...ticket,
+      assigned_to: ids,
+      assigned_profiles: ids.map((id: string) => assignedProfilesMap[id]).filter(Boolean),
+      time_logs: Array.isArray(ticket.time_logs) ? ticket.time_logs : [],
+      updates: Array.isArray(ticket.updates) ? ticket.updates : [],
+      total_time_minutes: ticket.total_time_minutes || 0,
+    };
+  });
 }
 
 export async function createTicket(ticket: {
@@ -1169,13 +1211,17 @@ export interface TravelLog {
 // Travel Log Functions
 export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]> {
   try {
-    const { data, error } = await fetchAllSupabaseRows((from, to) =>
-      supabase
-        .from('travel_logs')
-        .select('*, profile:profiles!user_id(*)')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(from, to)
+    const { data, error } = await fetchAllByCursor((cursor) =>
+      applyCreatedAtIdCursor(
+        supabase
+          .from('travel_logs')
+          .select('*, profile:profiles!user_id(*)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+        cursor
+      )
     );
     
     if (error) {
@@ -1195,12 +1241,16 @@ export async function getTravelLogsByUserId(userId: string): Promise<TravelLog[]
 
 export async function getAllTravelLogs(): Promise<TravelLog[]> {
   try {
-    const { data, error } = await fetchAllSupabaseRows((from, to) =>
-      supabase
-        .from('travel_logs')
-        .select(`${TRAVEL_LOG_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
-        .order('created_at', { ascending: false })
-        .range(from, to)
+    const { data, error } = await fetchAllByCursor((cursor) =>
+      applyCreatedAtIdCursor(
+        supabase
+          .from('travel_logs')
+          .select(`${TRAVEL_LOG_SUMMARY_COLUMNS}, profile:profiles!user_id(${ADMIN_PROFILE_COLUMNS})`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+        cursor
+      )
     );
     
     if (error) {
@@ -1241,12 +1291,16 @@ export type TicketRowForAnalytics = {
   resolution?: string | null;
 };
 export async function getAllTicketsForAnalytics(client: SupabaseClient): Promise<TicketRowForAnalytics[]> {
-  const { data, error } = await fetchAllSupabaseRows<TicketRowForAnalytics>((from, to) =>
-    client
-      .from('tickets')
-      .select('status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
-      .order('created_at', { ascending: false })
-      .range(from, to)
+  const { data, error } = await fetchAllByCursor((cursor) =>
+    applyCreatedAtIdCursor(
+      client
+        .from('tickets')
+        .select('id, status, created_at, closed_at, response_time_minutes, has_dependencies, ticket_type, client, user_id, location, estate_or_building, cml_location, assigned_to_array, severity, created_by, dependency_name, issue, resolution')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+      cursor
+    )
   );
   if (error) {
     console.error('[Think-Q] getAllTicketsForAnalytics:', error.message);
@@ -1266,12 +1320,16 @@ export type TravelRowForAnalytics = {
   is_return_trip?: boolean | null;
 };
 export async function getAllTravelLogsForAnalytics(client: SupabaseClient): Promise<TravelRowForAnalytics[]> {
-  const { data, error } = await fetchAllSupabaseRows<TravelRowForAnalytics>((from, to) =>
-    client
-      .from('travel_logs')
-      .select('created_at, user_id, end_address, start_address, distance_travelled, reason, is_return_trip')
-      .order('created_at', { ascending: false })
-      .range(from, to)
+  const { data, error } = await fetchAllByCursor((cursor) =>
+    applyCreatedAtIdCursor(
+      client
+        .from('travel_logs')
+        .select('id, created_at, user_id, end_address, start_address, distance_travelled, reason, is_return_trip')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(SUPABASE_MAX_ROWS_PER_REQUEST),
+      cursor
+    )
   );
   if (error) {
     console.error('[Think-Q] getAllTravelLogsForAnalytics:', error.message);
