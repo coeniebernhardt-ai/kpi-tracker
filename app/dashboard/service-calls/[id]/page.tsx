@@ -6,8 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import ServiceCallDetail from '@/app/components/service-calls/ServiceCallDetail';
 
+/** Member / technician detail — stays on dashboard routes (no admin redirect). */
 export default function MemberServiceCallDetailPage() {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const id = String(params.id || '');
@@ -15,10 +16,9 @@ export default function MemberServiceCallDetailPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/login');
-    else if (isAdmin) router.replace(`/admin/service-calls/${id}`);
-  }, [user, loading, isAdmin, router, id]);
+  }, [user, loading, router]);
 
-  if (loading || !user || isAdmin || !id) {
+  if (loading || !user || !id) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
