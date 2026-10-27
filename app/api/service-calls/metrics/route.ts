@@ -49,6 +49,22 @@ export async function GET(request: NextRequest) {
     let paymentOutstanding = 0;
     let disputed = 0;
 
+    const { count: pendingQuotesCount } = await auth.supabase
+      .from('service_call_quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    let duplicateOverrides = 0;
+    {
+      let dupQ = auth.supabase
+        .from('service_call_duplicate_decisions')
+        .select('id', { count: 'exact', head: true });
+      if (from) dupQ = dupQ.gte('created_at', `${from}T00:00:00.000Z`);
+      if (to) dupQ = dupQ.lte('created_at', `${to}T23:59:59.999Z`);
+      const { count } = await dupQ;
+      duplicateOverrides = count ?? 0;
+    }
+
     for (const r of rows) {
       byTechnical[r.technical_status] = (byTechnical[r.technical_status] || 0) + 1;
       byPriority[r.priority] = (byPriority[r.priority] || 0) + 1;
@@ -103,6 +119,8 @@ export async function GET(request: NextRequest) {
       paymentOutstanding,
       disputed,
       closed,
+      pendingQuotes: pendingQuotesCount ?? 0,
+      duplicateOverrides,
     });
   } catch (err) {
     logSafeError('GET metrics', err);

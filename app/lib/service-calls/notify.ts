@@ -9,7 +9,10 @@ type NotifyInput = {
     | 'service_call_job_card_submitted'
     | 'service_call_job_card_returned'
     | 'service_call_ready_to_invoice'
-    | 'service_call_escalation';
+    | 'service_call_escalation'
+    | 'service_call_quote_decided'
+    | 'service_call_duplicate_override'
+    | 'service_call_override';
   title: string;
   message: string;
   ticket_id?: string | null;

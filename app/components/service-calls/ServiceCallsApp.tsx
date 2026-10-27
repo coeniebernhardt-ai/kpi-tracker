@@ -17,7 +17,7 @@ type Props = {
 };
 
 export default function ServiceCallsApp({ basePath, variant }: Props) {
-  const { session, isAdmin } = useAuth();
+  const { session } = useAuth();
   const token = session?.access_token;
   const [items, setItems] = useState<ServiceCall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,13 @@ export default function ServiceCallsApp({ basePath, variant }: Props) {
     site_name: '',
     priority: 'MEDIUM' as ServiceCallPriority,
     location: '' as '' | 'on-site' | 'remote',
+    supplier_invoice_number: '',
+    po_number: '',
+    third_party_job_card_number: '',
+    external_quote_reference: '',
   });
+  const [dupHint, setDupHint] = useState<string | null>(null);
+  const [dupOverrideReason, setDupOverrideReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,8 +79,12 @@ export default function ServiceCallsApp({ basePath, variant }: Props) {
     []
   );
 
-  const create = async () => {
+  const create = async (withOverride = false) => {
     if (!form.title.trim() || creating) return;
+    if (withOverride && !dupOverrideReason.trim()) {
+      setError('Provide a reason to create despite the duplicate reference.');
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -88,13 +98,39 @@ export default function ServiceCallsApp({ basePath, variant }: Props) {
           site_name: form.site_name.trim() || undefined,
           priority: form.priority,
           location: form.location || undefined,
+          supplier_invoice_number: form.supplier_invoice_number.trim() || undefined,
+          po_number: form.po_number.trim() || undefined,
+          third_party_job_card_number: form.third_party_job_card_number.trim() || undefined,
+          external_quote_reference: form.external_quote_reference.trim() || undefined,
+          ...(withOverride
+            ? { duplicate_override: { confirm: true as const, reason: dupOverrideReason.trim() } }
+            : {}),
         }),
       });
       setShowCreate(false);
-      setForm({ title: '', description: '', client: '', site_name: '', priority: 'MEDIUM', location: '' });
+      setDupHint(null);
+      setDupOverrideReason('');
+      setForm({
+        title: '',
+        description: '',
+        client: '',
+        site_name: '',
+        priority: 'MEDIUM',
+        location: '',
+        supplier_invoice_number: '',
+        po_number: '',
+        third_party_job_card_number: '',
+        external_quote_reference: '',
+      });
       window.location.href = `${basePath}/${data.serviceCall.id}`;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create failed');
+      const err = e as Error & { status?: number; data?: { safeHint?: string; code?: string } };
+      if (err.status === 409 && err.data?.code === 'DUPLICATE_REF') {
+        setDupHint(err.data.safeHint || err.message);
+        setError(err.message);
+      } else {
+        setError(err.message || 'Create failed');
+      }
     } finally {
       setCreating(false);
     }
@@ -276,11 +312,61 @@ export default function ServiceCallsApp({ basePath, variant }: Props) {
                   <option value="remote">Remote</option>
                 </select>
               </div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">External refs (optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                  placeholder="Supplier invoice #"
+                  value={form.supplier_invoice_number}
+                  onChange={(e) => setForm((f) => ({ ...f, supplier_invoice_number: e.target.value }))}
+                />
+                <input
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                  placeholder="PO number"
+                  value={form.po_number}
+                  onChange={(e) => setForm((f) => ({ ...f, po_number: e.target.value }))}
+                />
+                <input
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                  placeholder="3rd-party job card #"
+                  value={form.third_party_job_card_number}
+                  onChange={(e) => setForm((f) => ({ ...f, third_party_job_card_number: e.target.value }))}
+                />
+                <input
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                  placeholder="External quote ref"
+                  value={form.external_quote_reference}
+                  onChange={(e) => setForm((f) => ({ ...f, external_quote_reference: e.target.value }))}
+                />
+              </div>
+              {dupHint && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 space-y-2">
+                  <p className="text-xs text-amber-200">{dupHint}</p>
+                  <input
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                    placeholder="Override reason (required)"
+                    value={dupOverrideReason}
+                    onChange={(e) => setDupOverrideReason(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    disabled={creating || !dupOverrideReason.trim()}
+                    onClick={() => void create(true)}
+                    className="rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs text-amber-100 disabled:opacity-50"
+                  >
+                    Create anyway
+                  </button>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
+                onClick={() => {
+                  setShowCreate(false);
+                  setDupHint(null);
+                  setDupOverrideReason('');
+                }}
                 className="rounded-xl px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
               >
                 Cancel
@@ -288,10 +374,10 @@ export default function ServiceCallsApp({ basePath, variant }: Props) {
               <button
                 type="button"
                 disabled={creating || !form.title.trim()}
-                onClick={() => void create()}
+                onClick={() => void create(false)}
                 className="rounded-xl bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-300 ring-1 ring-cyan-500/30 disabled:opacity-50"
               >
-                {creating ? 'Creating…' : isAdmin ? 'Create' : 'Create'}
+                {creating ? 'Creating…' : 'Create'}
               </button>
             </div>
           </div>

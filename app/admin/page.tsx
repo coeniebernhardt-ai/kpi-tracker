@@ -77,6 +77,8 @@ function AdminPageContent() {
     readyToInvoice: number;
     avgResolveMinutes: number | null;
     remoteResolutionRate: number | null;
+    pendingQuotes: number;
+    duplicateOverrides: number;
   } | null>(null);
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
@@ -119,6 +121,8 @@ function AdminPageContent() {
           readyToInvoice: data.readyToInvoice ?? 0,
           avgResolveMinutes: data.avgResolveMinutes ?? null,
           remoteResolutionRate: data.remoteResolutionRate ?? null,
+          pendingQuotes: data.pendingQuotes ?? 0,
+          duplicateOverrides: data.duplicateOverrides ?? 0,
         })
       )
       .catch(() => setScMetrics(null));
@@ -315,7 +319,7 @@ function AdminPageContent() {
             </Link>
           </div>
           {scMetrics ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
               <div className="rounded-xl bg-slate-950/60 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Total</p>
                 <p className="text-lg font-semibold text-white">{scMetrics.total}</p>
@@ -339,6 +343,14 @@ function AdminPageContent() {
               <div className="rounded-xl bg-slate-950/60 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Ready to invoice</p>
                 <p className="text-lg font-semibold text-white">{scMetrics.readyToInvoice}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Pending quotes</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.pendingQuotes}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Dup overrides</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.duplicateOverrides}</p>
               </div>
               <div className="rounded-xl bg-slate-950/60 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Avg resolve</p>

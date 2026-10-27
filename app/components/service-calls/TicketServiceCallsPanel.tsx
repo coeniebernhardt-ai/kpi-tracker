@@ -91,7 +91,11 @@ export default function TicketServiceCallsPanel({ ticketId, ticket, basePath }: 
           onClick={() => void createFromTicket()}
           className="rounded-lg bg-cyan-500/20 px-2.5 py-1 text-xs font-medium text-cyan-300 ring-1 ring-cyan-500/30 disabled:opacity-50"
         >
-          {creating ? 'Creating…' : '+ Create service call'}
+          {creating
+            ? 'Creating…'
+            : calls.length > 0
+              ? '+ Create Another Service Call'
+              : '+ Create service call'}
         </button>
       </div>
       {error && <p className="mb-2 text-xs text-rose-300">{error}</p>}

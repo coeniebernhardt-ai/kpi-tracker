@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSafeErrorMessage, logSafeError } from '@/app/lib/safe-api-error';
 import { applyListScope, requireServiceCallUser } from '@/app/lib/service-calls/auth';
 import { writeServiceCallAudit } from '@/app/lib/service-calls/audit';
+import {
+  buildNormalizedRefs,
+  findDuplicateServiceCalls,
+} from '@/app/lib/service-calls/duplicates';
 import { nextServiceCallNumber } from '@/app/lib/service-calls/numbers';
 import { listAdminIds, notifyServiceCallUsers } from '@/app/lib/service-calls/notify';
 import type { CreateServiceCallInput, ServiceCallPriority } from '@/app/lib/service-calls/types';
@@ -59,8 +63,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
+    const refs = buildNormalizedRefs({
+      supplier_invoice_number: body.supplier_invoice_number,
+      third_party_job_card_number: body.third_party_job_card_number,
+      po_number: body.po_number,
+      external_quote_reference: body.external_quote_reference,
+    });
+
+    const dup = await findDuplicateServiceCalls(auth.supabase, {
+      ...body,
+      ...refs,
+    });
+
+    if (dup.exactMatch) {
+      const override = body.duplicate_override;
+      if (!override?.confirm || !override.reason?.trim()) {
+        return NextResponse.json(
+          {
+            error: 'Possible duplicate detected. Confirm with a reason to proceed.',
+            code: 'DUPLICATE_REF',
+            hasPossibleDuplicate: true,
+            safeHint: dup.safeHint,
+            ...(auth.isAdmin
+              ? {
+                  matches: dup.matches,
+                }
+              : {}),
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const number = await nextServiceCallNumber(auth.supabase);
     const priority: ServiceCallPriority = body.priority || 'MEDIUM';
+
+    // Members always self-assign; only admins may set or leave unassigned
+    const assignedTechnicianId = auth.isAdmin
+      ? body.assigned_technician_id || null
+      : auth.userId;
 
     const insert = {
       service_call_number: number,
@@ -80,13 +121,28 @@ export async function POST(request: NextRequest) {
       reported_by: auth.userId,
       coordinator_id: body.coordinator_id || auth.userId,
       coordinator_role_label: body.coordinator_role_label?.trim() || 'HTO',
-      assigned_technician_id: body.assigned_technician_id || null,
+      assigned_technician_id: assignedTechnicianId,
+      assigned_at: assignedTechnicianId ? new Date().toISOString() : null,
       technical_status: 'new',
       invoicing_status: 'not_ready',
+      ...refs,
     };
 
     const { data, error } = await auth.supabase.from('service_calls').insert(insert).select('*').single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json(
+          {
+            error: 'An external reference already exists on another service call.',
+            code: 'DUPLICATE_REF',
+            hasPossibleDuplicate: true,
+            safeHint: 'Matching external reference on an existing service call',
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     await writeServiceCallAudit(auth.supabase, {
       service_call_id: data.id,
@@ -94,8 +150,38 @@ export async function POST(request: NextRequest) {
       actor_id: auth.userId,
       to_technical_status: 'new',
       to_invoicing_status: 'not_ready',
-      payload_json: { ticket_id: data.ticket_id },
+      payload_json: { ticket_id: data.ticket_id, assigned_technician_id: assignedTechnicianId },
     });
+
+    if (dup.exactMatch && body.duplicate_override?.confirm) {
+      await auth.supabase.from('service_call_duplicate_decisions').insert({
+        service_call_id: data.id,
+        actor_id: auth.userId,
+        reason: body.duplicate_override.reason.trim(),
+        match_criteria: {
+          refs,
+          safeHint: dup.safeHint,
+        },
+        matched_service_call_ids: dup.matches.map((m) => m.id),
+      });
+      await writeServiceCallAudit(auth.supabase, {
+        service_call_id: data.id,
+        action: 'duplicate_override',
+        actor_id: auth.userId,
+        reason: body.duplicate_override.reason.trim(),
+        payload_json: { matched: dup.matches.map((m) => m.service_call_number) },
+      });
+      const admins = await listAdminIds(auth.supabase);
+      await notifyServiceCallUsers(auth.supabase, {
+        userIds: admins,
+        type: 'service_call_duplicate_override',
+        title: `Duplicate override: ${data.service_call_number}`,
+        message: body.duplicate_override.reason.trim(),
+        ticket_id: data.ticket_id,
+        triggering_user_id: auth.userId,
+        triggering_user_role: auth.isAdmin ? 'admin' : 'member',
+      });
+    }
 
     const admins = await listAdminIds(auth.supabase);
     await notifyServiceCallUsers(auth.supabase, {

@@ -94,6 +94,33 @@ export type ServiceCall = {
   payment_status_note: string | null;
   dispute_notes: string | null;
   cancel_reason: string | null;
+  supplier_invoice_number: string | null;
+  third_party_job_card_number: string | null;
+  po_number: string | null;
+  external_quote_reference: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuoteStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
+export type ServiceCallQuote = {
+  id: string;
+  service_call_id: string;
+  revision: number;
+  supplier_name: string;
+  quote_reference: string | null;
+  quote_date: string | null;
+  amount: number | null;
+  currency: string | null;
+  description: string | null;
+  document_id: string | null;
+  status: QuoteStatus;
+  decision_by: string | null;
+  decision_at: string | null;
+  decision_reason: string | null;
+  next_step: 'revise_same_supplier' | 'different_supplier' | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -174,4 +201,9 @@ export type CreateServiceCallInput = {
   coordinator_id?: string | null;
   coordinator_role_label?: string;
   assigned_technician_id?: string | null;
+  supplier_invoice_number?: string | null;
+  third_party_job_card_number?: string | null;
+  po_number?: string | null;
+  external_quote_reference?: string | null;
+  duplicate_override?: { confirm: true; reason: string } | null;
 };

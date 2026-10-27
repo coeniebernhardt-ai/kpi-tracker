@@ -1,9 +1,24 @@
 import type { InvoicingStatus, TechnicalStatus } from './types';
 
 const TECH_TRANSITIONS: Record<TechnicalStatus, TechnicalStatus[]> = {
-  new: ['acknowledgement_pending', 'in_triage', 'cancelled'],
-  acknowledgement_pending: ['in_triage', 'cancelled'],
-  in_triage: ['remote_resolution', 'awaiting_assignment', 'cancelled'],
+  // Members self-assigned on create can triage / go remote / schedule without admin gate
+  new: [
+    'acknowledgement_pending',
+    'in_triage',
+    'remote_resolution',
+    'awaiting_assignment',
+    'awaiting_acceptance',
+    'scheduled',
+    'cancelled',
+  ],
+  acknowledgement_pending: ['in_triage', 'remote_resolution', 'awaiting_assignment', 'cancelled'],
+  in_triage: [
+    'remote_resolution',
+    'awaiting_assignment',
+    'awaiting_acceptance',
+    'scheduled',
+    'cancelled',
+  ],
   remote_resolution: ['job_card_required', 'cancelled'],
   awaiting_assignment: ['awaiting_acceptance', 'cancelled'],
   awaiting_acceptance: ['scheduled', 'awaiting_assignment', 'cancelled'],
@@ -15,9 +30,15 @@ const TECH_TRANSITIONS: Record<TechnicalStatus, TechnicalStatus[]> = {
     'job_card_required',
     'cancelled',
   ],
-  awaiting_parts_quote_escalation: ['awaiting_assignment', 'scheduled', 'cancelled'],
+  awaiting_parts_quote_escalation: [
+    'awaiting_assignment',
+    'scheduled',
+    'on_site',
+    'repair_and_testing',
+    'cancelled',
+  ],
   return_visit_required: ['awaiting_assignment', 'awaiting_acceptance', 'scheduled', 'cancelled'],
-  repair_and_testing: ['job_card_required', 'return_visit_required', 'cancelled'],
+  repair_and_testing: ['job_card_required', 'return_visit_required', 'awaiting_parts_quote_escalation', 'cancelled'],
   job_card_required: ['job_card_correction_required', 'ready_to_invoice', 'cancelled'],
   job_card_correction_required: ['job_card_required', 'ready_to_invoice', 'cancelled'],
   ready_to_invoice: ['awaiting_customer_confirmation', 'closed', 'cancelled'],

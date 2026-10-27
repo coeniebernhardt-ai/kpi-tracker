@@ -481,6 +481,7 @@ export default function DashboardPage() {
       }
 
       let createdServiceCallId: string | null = null;
+      let createdServiceCallNumber: string | null = null;
       if (createServiceCallWithTicket) {
         try {
           const scResult = await scFetch('/api/service-calls', {
@@ -496,10 +497,10 @@ export default function DashboardPage() {
               cml_location: newTicketData.cmlLocation.trim() || undefined,
               location: newTicketData.location,
               priority: newTicketData.severity,
-              assigned_technician_id: user.id,
             }),
           });
           createdServiceCallId = scResult.serviceCall?.id ?? null;
+          createdServiceCallNumber = scResult.serviceCall?.service_call_number ?? null;
         } catch (scErr) {
           console.error('Service call create failed:', scErr);
           alert(
@@ -535,6 +536,9 @@ export default function DashboardPage() {
       setShowNewTicketForm(false);
 
       if (createdServiceCallId) {
+        const ticketLabel = data.ticket_number || data.id;
+        const scLabel = createdServiceCallNumber || createdServiceCallId;
+        alert(`Created ticket ${ticketLabel} and service call ${scLabel}. Opening the service call.`);
         router.push(`/dashboard/service-calls/${createdServiceCallId}`);
         return;
       }

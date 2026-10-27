@@ -24,6 +24,10 @@ export async function POST(request: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    if (!auth.isAdmin) {
+      return NextResponse.json({ error: 'Only admins can assign or reassign technicians' }, { status: 403 });
+    }
+
     const body = await request.json();
     const technicianId = body.technician_id as string | undefined;
     if (!technicianId) return NextResponse.json({ error: 'technician_id required' }, { status: 400 });
@@ -68,7 +72,10 @@ export async function POST(request: NextRequest, ctx: Ctx) {
       actor_id: auth.userId,
       from_technical_status: current.technical_status,
       to_technical_status: nextStatus,
-      payload_json: { technician_id: technicianId },
+      payload_json: {
+        previous_technician_id: current.assigned_technician_id,
+        technician_id: technicianId,
+      },
     });
 
     await notifyServiceCallUsers(auth.supabase, {

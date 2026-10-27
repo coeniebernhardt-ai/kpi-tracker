@@ -6,6 +6,7 @@ import {
   assertInvoicingTransition,
   assertTechnicalTransition,
 } from '@/app/lib/service-calls/transitions';
+import { normalizeExternalRef } from '@/app/lib/service-calls/normalize';
 import type { InvoicingStatus, ServiceCall, TechnicalStatus } from '@/app/lib/service-calls/types';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -48,6 +49,21 @@ export async function GET(request: NextRequest, ctx: Ctx) {
       .select('*')
       .eq('service_call_id', id)
       .order('created_at', { ascending: false });
+    const { data: quotes } = await loaded.auth!.supabase
+      .from('service_call_quotes')
+      .select('*')
+      .eq('service_call_id', id)
+      .order('revision', { ascending: false });
+
+    let assigneeName: string | null = null;
+    if (loaded.data?.assigned_technician_id) {
+      const { data: profile } = await loaded.auth!.supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', loaded.data.assigned_technician_id)
+        .maybeSingle();
+      assigneeName = profile?.full_name ?? null;
+    }
 
     return NextResponse.json({
       serviceCall: loaded.data,
@@ -55,6 +71,8 @@ export async function GET(request: NextRequest, ctx: Ctx) {
       jobCards: jobCards ?? [],
       comments: comments ?? [],
       documents: documents ?? [],
+      quotes: quotes ?? [],
+      assigneeName,
     });
   } catch (err) {
     logSafeError('GET /api/service-calls/[id]', err);
@@ -101,6 +119,20 @@ const ALLOWED_PATCH = new Set([
   'cancel_reason',
   'eta_at',
   'acknowledged_at',
+  'supplier_invoice_number',
+  'third_party_job_card_number',
+  'po_number',
+  'external_quote_reference',
+]);
+
+const ADMIN_ONLY_FINANCIAL = new Set([
+  'invoicing_status',
+  'invoice_number',
+  'invoice_issued_at',
+  'invoice_amount',
+  'amount_paid',
+  'payment_status_note',
+  'dispute_notes',
 ]);
 
 export async function PATCH(request: NextRequest, ctx: Ctx) {
@@ -116,6 +148,36 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
     const updates: Record<string, unknown> = {};
     for (const key of Object.keys(body)) {
       if (ALLOWED_PATCH.has(key)) updates[key] = body[key];
+    }
+
+    if ('assigned_technician_id' in updates && !auth.isAdmin) {
+      return NextResponse.json({ error: 'Only admins can reassign technicians' }, { status: 403 });
+    }
+
+    for (const key of Object.keys(updates)) {
+      if (ADMIN_ONLY_FINANCIAL.has(key) && !auth.isAdmin) {
+        return NextResponse.json({ error: 'Only admins can edit invoicing fields' }, { status: 403 });
+      }
+    }
+
+    // Keep normalized external refs in sync when raw values change
+    if ('supplier_invoice_number' in updates) {
+      updates.supplier_invoice_number_norm = normalizeExternalRef(
+        updates.supplier_invoice_number as string | null
+      );
+    }
+    if ('third_party_job_card_number' in updates) {
+      updates.third_party_job_card_number_norm = normalizeExternalRef(
+        updates.third_party_job_card_number as string | null
+      );
+    }
+    if ('po_number' in updates) {
+      updates.po_number_norm = normalizeExternalRef(updates.po_number as string | null);
+    }
+    if ('external_quote_reference' in updates) {
+      updates.external_quote_reference_norm = normalizeExternalRef(
+        updates.external_quote_reference as string | null
+      );
     }
 
     if (updates.technical_status && updates.technical_status !== current.technical_status) {
