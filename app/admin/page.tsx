@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import WorkspaceLoader from '../components/WorkspaceLoader';
 import { useAdminData } from './AdminDataProvider';
@@ -9,6 +10,7 @@ import {
   createTicket,
   type Ticket,
 } from '../lib/supabase';
+import { scFetch } from '../lib/service-calls/client';
 import {
   AdminDateControls,
   AdminPanel,
@@ -56,7 +58,7 @@ function AdminPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin, session } = useAuth();
   const {
     profiles,
     tickets,
@@ -66,6 +68,16 @@ function AdminPageContent() {
   } = useAdminData();
   const [selectedUserId, setSelectedUserId] = useState('');
   const [submittingTicket, setSubmittingTicket] = useState(false);
+  const [scMetrics, setScMetrics] = useState<{
+    total: number;
+    open: number;
+    unassigned: number;
+    awaitingAcceptance: number;
+    jobCardCorrection: number;
+    readyToInvoice: number;
+    avgResolveMinutes: number | null;
+    remoteResolutionRate: number | null;
+  } | null>(null);
   const [newTicketData, setNewTicketData] = useState({
     issue: '',
     location: 'remote' as 'on-site' | 'remote',
@@ -89,6 +101,28 @@ function AdminPageContent() {
       router.replace('/dashboard');
     }
   }, [user, loading, isAdmin, router]);
+
+  useEffect(() => {
+    if (!isAdmin || !session?.access_token) return;
+    const range = getDateRangeFromSearchParams(new URLSearchParams(searchParams.toString()));
+    void scFetch(
+      `/api/service-calls/metrics?from=${encodeURIComponent(range.startDate)}&to=${encodeURIComponent(range.endDate)}`,
+      { accessToken: session.access_token }
+    )
+      .then((data) =>
+        setScMetrics({
+          total: data.total ?? 0,
+          open: data.open ?? 0,
+          unassigned: data.unassigned ?? 0,
+          awaitingAcceptance: data.awaitingAcceptance ?? 0,
+          jobCardCorrection: data.jobCardCorrection ?? 0,
+          readyToInvoice: data.readyToInvoice ?? 0,
+          avgResolveMinutes: data.avgResolveMinutes ?? null,
+          remoteResolutionRate: data.remoteResolutionRate ?? null,
+        })
+      )
+      .catch(() => setScMetrics(null));
+  }, [isAdmin, session?.access_token, searchParams]);
 
   const closeCreateForm = () => {
     router.replace(pathname, { scroll: false });
@@ -272,6 +306,53 @@ function AdminPageContent() {
             onEndDateChange={setEndDate}
           />
         </div>
+
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-white">Service Calls</h2>
+            <Link href="/admin/service-calls" className="text-xs text-cyan-400 hover:underline">
+              Open module →
+            </Link>
+          </div>
+          {scMetrics ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Total</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.total}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Open</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.open}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Unassigned</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.unassigned}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Awaiting accept</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.awaitingAcceptance}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Job card fix</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.jobCardCorrection}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Ready to invoice</p>
+                <p className="text-lg font-semibold text-white">{scMetrics.readyToInvoice}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">Avg resolve</p>
+                <p className="text-lg font-semibold text-white">
+                  {scMetrics.avgResolveMinutes != null ? `${scMetrics.avgResolveMinutes}m` : '—'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">
+              No service-call metrics yet. Run SERVICE_CALLS_SCHEMA.sql in Supabase, then create calls.
+            </p>
+          )}
+        </section>
 
         <section className="mb-8 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           <MetricCard

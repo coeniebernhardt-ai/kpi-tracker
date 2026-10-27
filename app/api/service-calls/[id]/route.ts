@@ -1,0 +1,178 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getSafeErrorMessage, logSafeError } from '@/app/lib/safe-api-error';
+import { canAccessServiceCallRow, requireServiceCallUser } from '@/app/lib/service-calls/auth';
+import { writeServiceCallAudit } from '@/app/lib/service-calls/audit';
+import {
+  assertInvoicingTransition,
+  assertTechnicalTransition,
+} from '@/app/lib/service-calls/transitions';
+import type { InvoicingStatus, ServiceCall, TechnicalStatus } from '@/app/lib/service-calls/types';
+
+type Ctx = { params: Promise<{ id: string }> };
+
+async function loadScoped(auth: Awaited<ReturnType<typeof requireServiceCallUser>>, id: string) {
+  if (!auth.ok) return { error: NextResponse.json({ error: auth.error }, { status: auth.status }) };
+  const { data, error } = await auth.supabase.from('service_calls').select('*').eq('id', id).maybeSingle();
+  if (error) return { error: NextResponse.json({ error: error.message }, { status: 500 }) };
+  if (!data) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
+  if (!canAccessServiceCallRow(data as ServiceCall, auth.userId, auth.isAdmin)) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return { auth, data: data as ServiceCall };
+}
+
+export async function GET(request: NextRequest, ctx: Ctx) {
+  try {
+    const { id } = await ctx.params;
+    const auth = await requireServiceCallUser(request);
+    const loaded = await loadScoped(auth, id);
+    if ('error' in loaded && loaded.error) return loaded.error;
+
+    const { data: visits } = await loaded.auth!.supabase
+      .from('service_call_visits')
+      .select('*')
+      .eq('service_call_id', id)
+      .order('visit_number', { ascending: true });
+    const { data: jobCards } = await loaded.auth!.supabase
+      .from('service_call_job_cards')
+      .select('*')
+      .eq('service_call_id', id)
+      .order('created_at', { ascending: false });
+    const { data: comments } = await loaded.auth!.supabase
+      .from('service_call_comments')
+      .select('*')
+      .eq('service_call_id', id)
+      .order('created_at', { ascending: false });
+    const { data: documents } = await loaded.auth!.supabase
+      .from('service_call_documents')
+      .select('*')
+      .eq('service_call_id', id)
+      .order('created_at', { ascending: false });
+
+    return NextResponse.json({
+      serviceCall: loaded.data,
+      visits: visits ?? [],
+      jobCards: jobCards ?? [],
+      comments: comments ?? [],
+      documents: documents ?? [],
+    });
+  } catch (err) {
+    logSafeError('GET /api/service-calls/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
+  }
+}
+
+const ALLOWED_PATCH = new Set([
+  'title',
+  'description',
+  'client',
+  'site_name',
+  'estate_or_building',
+  'cml_location',
+  'location',
+  'category',
+  'fault_summary',
+  'priority',
+  'contract_ref',
+  'coordinator_id',
+  'coordinator_role_label',
+  'assigned_technician_id',
+  'technical_status',
+  'invoicing_status',
+  'remote_fix_possible',
+  'remote_diagnosis',
+  'remote_resolution',
+  'escalation_reason',
+  'parts_required',
+  'quotation_required',
+  'quotation_notes',
+  'customer_signoff_obtained',
+  'customer_signoff_notes',
+  'customer_feedback',
+  'confirmation_exception_reason',
+  'knowledge_notes',
+  'recurring_fault',
+  'invoice_number',
+  'invoice_issued_at',
+  'invoice_amount',
+  'amount_paid',
+  'payment_status_note',
+  'dispute_notes',
+  'cancel_reason',
+  'eta_at',
+  'acknowledged_at',
+]);
+
+export async function PATCH(request: NextRequest, ctx: Ctx) {
+  try {
+    const { id } = await ctx.params;
+    const authResult = await requireServiceCallUser(request);
+    const loaded = await loadScoped(authResult, id);
+    if ('error' in loaded && loaded.error) return loaded.error;
+    const auth = loaded.auth!;
+    const current = loaded.data!;
+
+    const body = await request.json();
+    const updates: Record<string, unknown> = {};
+    for (const key of Object.keys(body)) {
+      if (ALLOWED_PATCH.has(key)) updates[key] = body[key];
+    }
+
+    if (updates.technical_status && updates.technical_status !== current.technical_status) {
+      try {
+        assertTechnicalTransition(
+          current.technical_status,
+          updates.technical_status as TechnicalStatus
+        );
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'Invalid transition' }, { status: 400 });
+      }
+      const to = updates.technical_status as TechnicalStatus;
+      if (to === 'acknowledgement_pending' || to === 'in_triage') {
+        updates.acknowledged_at = updates.acknowledged_at || new Date().toISOString();
+      }
+      if (to === 'closed') updates.closed_at = new Date().toISOString();
+      if (to === 'cancelled') updates.cancelled_at = new Date().toISOString();
+      if (to === 'ready_to_invoice') {
+        updates.ready_to_invoice_at = new Date().toISOString();
+        if (!updates.invoicing_status) updates.invoicing_status = 'ready_to_invoice';
+      }
+    }
+
+    if (updates.invoicing_status && updates.invoicing_status !== current.invoicing_status) {
+      try {
+        assertInvoicingTransition(
+          current.invoicing_status,
+          updates.invoicing_status as InvoicingStatus
+        );
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'Invalid transition' }, { status: 400 });
+      }
+    }
+
+    const { data, error } = await auth.supabase
+      .from('service_calls')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await writeServiceCallAudit(auth.supabase, {
+      service_call_id: id,
+      action: 'updated',
+      actor_id: auth.userId,
+      from_technical_status: current.technical_status,
+      to_technical_status: (data.technical_status as string) || current.technical_status,
+      from_invoicing_status: current.invoicing_status,
+      to_invoicing_status: (data.invoicing_status as string) || current.invoicing_status,
+      payload_json: { keys: Object.keys(updates) },
+      reason: typeof body.reason === 'string' ? body.reason : null,
+    });
+
+    return NextResponse.json({ serviceCall: data });
+  } catch (err) {
+    logSafeError('PATCH /api/service-calls/[id]', err);
+    return NextResponse.json({ error: getSafeErrorMessage(err) }, { status: 500 });
+  }
+}

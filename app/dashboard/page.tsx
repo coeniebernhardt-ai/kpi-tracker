@@ -9,6 +9,7 @@ import Image from 'next/image';
 import Logo from '../components/Logo';
 import ExportsPanel from '../components/ExportsPanel';
 import SignOutConfirmModal from '../components/SignOutConfirmModal';
+import TicketServiceCallsPanel from '../components/service-calls/TicketServiceCallsPanel';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -651,7 +652,12 @@ export default function DashboardPage() {
       closeTicketData.resolution.trim()
     );
 
-    if (!error && data) {
+    if (error) {
+      alert((error as Error).message || 'Failed to close ticket');
+      return;
+    }
+
+    if (data) {
       await loadTickets();
       setClosingTicketId(null);
       setCloseTicketData({ resolution: '' });
@@ -996,6 +1002,14 @@ export default function DashboardPage() {
               <p className="text-sm text-slate-400">{profile.role}</p>
             </div>
 
+            <Link
+              href="/dashboard/service-calls"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-colors"
+              title="Service Calls"
+            >
+              <span className="text-sm">🛠️</span>
+              <span className="hidden sm:inline text-sm font-medium">Service Calls</span>
+            </Link>
             {/* Pending (incoming mailbox tickets not yet assigned) — admin and members */}
             <div className="relative">
               <button
@@ -2840,6 +2854,12 @@ export default function DashboardPage() {
                     </div>
                     </div>
                     )}
+
+                    <TicketServiceCallsPanel
+                      ticketId={ticket.id}
+                      ticket={ticket}
+                      basePath="/dashboard/service-calls"
+                    />
 
                     {closingTicketId === ticket.id ? (
                       <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">

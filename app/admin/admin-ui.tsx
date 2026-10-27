@@ -15,7 +15,7 @@ import { DATE_PRESETS } from './admin-utils';
 export type AdminNavKey =
   | 'dashboard'
   | 'tickets'
-  | 'callouts'
+  | 'service-calls'
   | 'team'
   | 'images'
   | 'reports'
@@ -35,7 +35,7 @@ export type AdminNavItem = {
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/admin', emoji: '🏠' },
   { key: 'tickets', label: 'Tickets', href: '/admin/tickets', emoji: '🎫' },
-  { key: 'callouts', label: 'Callouts', href: '/admin/callouts', emoji: '📋' },
+  { key: 'service-calls', label: 'Service Calls', href: '/admin/service-calls', emoji: '🛠️' },
   { key: 'team', label: 'Team', href: '/admin/team', emoji: '👥' },
   { key: 'images', label: 'Images', href: '/admin/images', emoji: '🖼️' },
   { key: 'reports', label: 'Reports', href: '/admin/reports', emoji: '📊' },
@@ -46,7 +46,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
 
 export function getAdminActiveKey(pathname: string): AdminNavKey {
   if (pathname === '/admin/tickets') return 'tickets';
-  if (pathname.startsWith('/admin/callouts')) return 'callouts';
+  if (pathname.startsWith('/admin/service-calls')) return 'service-calls';
   if (pathname === '/admin/team') return 'team';
   if (pathname === '/admin/images') return 'images';
   if (pathname === '/admin/reports') return 'reports';
