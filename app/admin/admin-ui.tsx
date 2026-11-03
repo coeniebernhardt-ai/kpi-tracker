@@ -15,7 +15,7 @@ import { DATE_PRESETS } from './admin-utils';
 export type AdminNavKey =
   | 'dashboard'
   | 'tickets'
-  | 'service-calls'
+  | 'support-calls'
   | 'team'
   | 'images'
   | 'reports'
@@ -33,20 +33,20 @@ export type AdminNavItem = {
 };
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', href: '/admin', emoji: '🏠' },
-  { key: 'tickets', label: 'Tickets', href: '/admin/tickets', emoji: '🎫' },
-  { key: 'service-calls', label: 'Service Calls', href: '/admin/service-calls', emoji: '🛠️' },
-  { key: 'team', label: 'Team', href: '/admin/team', emoji: '👥' },
-  { key: 'images', label: 'Images', href: '/admin/images', emoji: '🖼️' },
+  { key: 'dashboard', label: 'Dashboard', href: '/admin', emoji: '🏠', adminOnly: true },
+  { key: 'tickets', label: 'Tickets', href: '/admin/tickets', emoji: '🎫', adminOnly: true },
+  { key: 'support-calls', label: 'Support Calls', href: '/admin/support-calls', emoji: '🛠️' },
+  { key: 'team', label: 'Team', href: '/admin/team', emoji: '👥', adminOnly: true },
+  { key: 'images', label: 'Images', href: '/admin/images', emoji: '🖼️', adminOnly: true },
   { key: 'reports', label: 'Reports', href: '/admin/reports', emoji: '📊' },
-  { key: 'manage-users', label: 'Manage Users', href: '/admin/manage-users', emoji: '🛡️' },
-  { key: 'notifications', label: 'Notifications', href: '/admin/notifications', emoji: '🔔' },
+  { key: 'manage-users', label: 'Manage Users', href: '/admin/manage-users', emoji: '🛡️', adminOnly: true },
+  { key: 'notifications', label: 'Notifications', href: '/admin/notifications', emoji: '🔔', adminOnly: true },
   { key: 'sign-out', label: 'Sign Out', emoji: '👋', action: 'sign-out' },
 ];
 
 export function getAdminActiveKey(pathname: string): AdminNavKey {
   if (pathname === '/admin/tickets') return 'tickets';
-  if (pathname.startsWith('/admin/service-calls')) return 'service-calls';
+  if (pathname.startsWith('/admin/support-calls')) return 'support-calls';
   if (pathname === '/admin/team') return 'team';
   if (pathname === '/admin/images') return 'images';
   if (pathname === '/admin/reports') return 'reports';

@@ -3,11 +3,12 @@
 import { useCallback, useMemo } from 'react';
 import { useAdminData } from '../AdminDataProvider';
 import ExportsPanel from '../../components/ExportsPanel';
+import SupportCallsReportsPanel from '../../components/support-calls/SupportCallsReportsPanel';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 export default function ReportsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canManageSupportCalls } = useAuth();
   const { profiles } = useAdminData();
   const memberOptions = useMemo(
     () =>
@@ -50,13 +51,17 @@ export default function ReportsPage() {
         ))}
       </section>
 
-      <ExportsPanel
-        variant="page"
-        isAdmin={Boolean(isAdmin)}
-        onClose={() => {}}
-        getAuthHeaders={getAuthHeaders}
-        memberOptions={memberOptions}
-      />
+      {isAdmin && (
+        <ExportsPanel
+          variant="page"
+          isAdmin={Boolean(isAdmin)}
+          onClose={() => {}}
+          getAuthHeaders={getAuthHeaders}
+          memberOptions={memberOptions}
+        />
+      )}
+
+      {canManageSupportCalls && <SupportCallsReportsPanel />}
     </main>
   );
 }

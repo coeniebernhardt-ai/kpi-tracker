@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useAdminData } from '../AdminDataProvider';
 import { AdminPanel, EmptyState } from '../admin-ui';
+import { useAuth } from '../../context/AuthContext';
+import { scFetch } from '../../lib/support-calls/client';
 
 function getAvatarGradient(name: string) {
   const colors = ['from-blue-400 to-blue-600', 'from-blue-500 to-cyan-500', 'from-cyan-400 to-blue-500', 'from-blue-600 to-cyan-500', 'from-cyan-400 to-blue-500'];
@@ -11,8 +13,11 @@ function getAvatarGradient(name: string) {
 }
 
 export default function ManageUsersPage() {
-  const { profiles, loading } = useAdminData();
+  const { profiles, loading, setProfiles } = useAdminData();
+  const { session, isAdmin } = useAuth();
   const [query, setQuery] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   const filteredProfiles = useMemo(
     () =>
@@ -23,7 +28,25 @@ export default function ManageUsersPage() {
   );
 
   const adminCount = profiles.filter((profile) => profile.is_admin).length;
+  const htoCount = profiles.filter((profile) => profile.is_hto).length;
   const activeCount = profiles.filter((profile) => profile.is_active).length;
+
+  const toggleHto = async (userId: string, next: boolean) => {
+    setTogglingId(userId);
+    setToggleError(null);
+    try {
+      await scFetch('/api/admin/toggle-hto', {
+        method: 'PATCH',
+        accessToken: session?.access_token,
+        body: JSON.stringify({ userId, is_hto: next }),
+      });
+      setProfiles((current) => current.map((p) => (p.id === userId ? { ...p, is_hto: next } : p)));
+    } catch (e) {
+      setToggleError(e instanceof Error ? e.message : 'Could not update HTO status');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -34,7 +57,7 @@ export default function ManageUsersPage() {
         </p>
       </section>
 
-      <section className="mb-6 grid gap-4 md:grid-cols-3">
+      <section className="mb-6 grid gap-4 md:grid-cols-4">
         <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
           <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Total users</p>
           <p className="mt-4 text-3xl font-semibold text-white">{profiles.length}</p>
@@ -42,6 +65,10 @@ export default function ManageUsersPage() {
         <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
           <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Admins</p>
           <p className="mt-4 text-3xl font-semibold text-blue-300">{adminCount}</p>
+        </div>
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">HTOs</p>
+          <p className="mt-4 text-3xl font-semibold text-cyan-300">{htoCount}</p>
         </div>
         <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
           <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Active accounts</p>
@@ -75,6 +102,10 @@ export default function ManageUsersPage() {
           />
         </div>
 
+        {toggleError && (
+          <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{toggleError}</div>
+        )}
+
         {loading ? (
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-10 text-center text-slate-400">
             Loading users...
@@ -103,7 +134,22 @@ export default function ManageUsersPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{profile.role}</span>
                   {profile.is_admin && <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-300">Admin</span>}
+                  {profile.is_hto && <span className="rounded-full bg-cyan-500/20 px-3 py-1 text-xs text-cyan-300">HTO</span>}
                   {!profile.is_active && <span className="rounded-full bg-rose-500/20 px-3 py-1 text-xs text-rose-300">Inactive</span>}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      disabled={togglingId === profile.id || (!profile.is_hto && !profile.is_active)}
+                      onClick={() => void toggleHto(profile.id, !profile.is_hto)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        profile.is_hto
+                          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
+                          : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20'
+                      }`}
+                    >
+                      {togglingId === profile.id ? 'Saving…' : profile.is_hto ? 'Remove HTO' : 'Make HTO'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

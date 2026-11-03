@@ -10,6 +10,8 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isAdmin: boolean;
+  isHto: boolean;
+  canManageSupportCalls: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, role: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -152,12 +154,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   };
 
+  const isAdmin = profile?.is_admin ?? false;
+  const isHto = profile?.is_hto ?? false;
   const value = {
     user,
     profile,
     session,
     loading,
-    isAdmin: profile?.is_admin ?? false,
+    isAdmin,
+    isHto,
+    canManageSupportCalls: isAdmin || isHto,
     signIn,
     signUp,
     signOut,

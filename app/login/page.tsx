@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { resetPassword } from '../lib/supabase';
+import { getCurrentProfile, resetPassword, supabase } from '../lib/supabase';
 import Link from 'next/link';
 import Logo from '../components/Logo';
 
@@ -81,10 +81,17 @@ export default function LoginPage() {
           setError(error.message);
           setLoading(false);
         } else {
-          // Wait a moment for session to be saved and auth state to update
-          await new Promise(resolve => setTimeout(resolve, 500));
-          // Use window.location for a hard redirect to ensure cookies are sent
-          window.location.href = '/dashboard';
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          let dest = '/dashboard';
+          if (user?.id) {
+            const prof = await getCurrentProfile(user.id);
+            if (prof?.is_admin) dest = '/admin';
+            else if (prof?.is_hto) dest = '/admin/support-calls';
+          }
+          window.location.href = dest;
         }
       }
     } catch (err) {

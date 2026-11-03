@@ -70,6 +70,7 @@ export interface Profile {
   definition?: string;
   responsibilities?: string[];
   is_admin: boolean;
+  is_hto?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -127,7 +128,7 @@ export interface Ticket {
   profile?: Profile;
 }
 
-const ADMIN_PROFILE_COLUMNS = 'id, email, full_name, role, avatar, avatar_url, is_admin, is_active, created_at, updated_at';
+const ADMIN_PROFILE_COLUMNS = 'id, email, full_name, role, avatar, avatar_url, is_admin, is_hto, is_active, created_at, updated_at';
 const TRAVEL_LOG_SUMMARY_COLUMNS = 'id, user_id, reason, start_address, end_address, is_return_trip, comments, distance_travelled, attachments, created_at, updated_at';
 
 // FEATURE C: Notifications (member-only; admin/member triggers create these)
@@ -136,14 +137,13 @@ export type NotificationType =
   | 'admin_comment'
   | 'added_to_ticket'
   | 'admin_broadcast'
-  | 'service_call_triage'
-  | 'service_call_assigned'
-  | 'service_call_accepted'
-  | 'service_call_job_card_submitted'
-  | 'service_call_job_card_returned'
-  | 'service_call_ready_to_invoice'
-  | 'service_call_escalation';
-export type TriggeringUserRole = 'admin' | 'member';
+  | 'support_call_assigned'
+  | 'support_call_attention'
+  | 'support_call_contribution_submitted'
+  | 'support_call_contribution_returned'
+  | 'support_call_quote_decision'
+  | 'support_call_dependency';
+export type TriggeringUserRole = 'admin' | 'member' | 'hto';
 
 export interface Notification {
   id: string;
@@ -849,20 +849,20 @@ export async function closeTicket(ticketId: string, resolution: string) {
     return { data: null, error: fetchError };
   }
 
-  // Block close while linked service calls are incomplete
+  // Block close while linked support calls are incomplete
   try {
-    const { getTicketCloseBlockers, formatCloseBlockMessage } = await import('./service-calls/ticket-gate');
+    const { getTicketCloseBlockers, formatCloseBlockMessage } = await import('./support-calls/ticket-gate');
     const blockers = await getTicketCloseBlockers(supabase, ticketId);
     if (blockers.length > 0) {
       return {
         data: null,
-        error: { message: formatCloseBlockMessage(blockers), code: 'SERVICE_CALLS_INCOMPLETE' } as Error & {
+        error: { message: formatCloseBlockMessage(blockers), code: 'SUPPORT_CALLS_INCOMPLETE' } as Error & {
           code?: string;
         },
       };
     }
   } catch (gateErr) {
-    console.error('Service call close gate error:', gateErr);
+    console.error('Support call close gate error:', gateErr);
   }
 
   // Calculate response time in minutes

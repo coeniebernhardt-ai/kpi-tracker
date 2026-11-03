@@ -25,12 +25,16 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, profile, session, loading, isAdmin, signOut } = useAuth();
+  const { user, profile, session, loading, isAdmin, isHto, canManageSupportCalls, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showThinkQ, setShowThinkQ] = useState(false);
   const [pendingTotalCount, setPendingTotalCount] = useState(0);
+
+  const htoAllowedPath =
+    pathname.startsWith('/admin/support-calls') || pathname.startsWith('/admin/reports');
+  const canEnterAdminShell = isAdmin || (isHto && htoAllowedPath);
 
   useEffect(() => {
     if (loading) return;
@@ -38,17 +42,22 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       router.replace('/login');
       return;
     }
-    if (!isAdmin) {
-      router.replace('/dashboard');
+    if (isAdmin) return;
+    if (isHto) {
+      if (!htoAllowedPath) {
+        router.replace('/admin/support-calls');
+      }
+      return;
     }
-  }, [user, loading, isAdmin, router]);
+    router.replace('/dashboard');
+  }, [user, loading, isAdmin, isHto, htoAllowedPath, router]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!user?.id || !isAdmin) return;
+    if (!user?.id || !isAdmin) return; // pending badge is admin-only
 
     const fetchPendingCount = async () => {
       try {
@@ -71,8 +80,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   const activeKey = useMemo(() => getAdminActiveKey(pathname), [pathname]);
   const sidebarItems = useMemo(
-    () => ADMIN_NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin),
-    [isAdmin],
+    () =>
+      ADMIN_NAV_ITEMS.filter((item) => {
+        if (item.action === 'sign-out') return true;
+        if (isAdmin) return true;
+        if (!canManageSupportCalls) return false;
+        return item.key === 'support-calls' || item.key === 'reports';
+      }),
+    [isAdmin, canManageSupportCalls],
   );
   const thinkQFilters = useMemo(
     () => ({
@@ -94,10 +109,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     }
   };
 
-  if (loading || !user || !isAdmin) {
+  if (loading || !user || !canEnterAdminShell) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
-        Loading admin workspace...
+        Loading workspace...
       </div>
     );
   }

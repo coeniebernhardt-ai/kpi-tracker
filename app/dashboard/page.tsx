@@ -9,8 +9,7 @@ import Image from 'next/image';
 import Logo from '../components/Logo';
 import ExportsPanel from '../components/ExportsPanel';
 import SignOutConfirmModal from '../components/SignOutConfirmModal';
-import TicketServiceCallsPanel from '../components/service-calls/TicketServiceCallsPanel';
-import { scFetch } from '../lib/service-calls/client';
+import SupportCallMemberPanel from '../components/support-calls/SupportCallMemberPanel';
 
 // Hook to force re-render every minute for time tracking
 function useTimeUpdate() {
@@ -103,8 +102,6 @@ export default function DashboardPage() {
     siteFiles: [] as { file: File; label: string }[]
   });
 
-  // Optional: create a linked service call with this ticket
-  const [createServiceCallWithTicket, setCreateServiceCallWithTicket] = useState(false);
   // Optional travel log when creating a ticket
   const [logTravelWithTicket, setLogTravelWithTicket] = useState(false);
   const [ticketTravelLog, setTicketTravelLog] = useState({
@@ -480,35 +477,6 @@ export default function DashboardPage() {
         }
       }
 
-      let createdServiceCallId: string | null = null;
-      let createdServiceCallNumber: string | null = null;
-      if (createServiceCallWithTicket) {
-        try {
-          const scResult = await scFetch('/api/service-calls', {
-            method: 'POST',
-            accessToken: session?.access_token,
-            body: JSON.stringify({
-              ticket_id: data.id,
-              title: newTicketData.issue.trim().slice(0, 120) || 'Service call',
-              description: newTicketData.issue.trim(),
-              client: newTicketData.client.trim(),
-              site_name: newTicketData.siteName.trim() || undefined,
-              estate_or_building: newTicketData.estateOrBuilding.trim() || undefined,
-              cml_location: newTicketData.cmlLocation.trim() || undefined,
-              location: newTicketData.location,
-              priority: newTicketData.severity,
-            }),
-          });
-          createdServiceCallId = scResult.serviceCall?.id ?? null;
-          createdServiceCallNumber = scResult.serviceCall?.service_call_number ?? null;
-        } catch (scErr) {
-          console.error('Service call create failed:', scErr);
-          alert(
-            `Ticket created, but service call failed: ${scErr instanceof Error ? scErr.message : 'Unknown error'}. You can add one from the ticket.`
-          );
-        }
-      }
-
       setNewTicketData({ 
         issue: '', 
         location: 'remote', 
@@ -529,19 +497,10 @@ export default function DashboardPage() {
         attachments: [],
         siteFiles: []
       });
-      setCreateServiceCallWithTicket(false);
       setLogTravelWithTicket(false);
       setTicketTravelLog({ reason: '', startAddress: '', endAddress: '', isReturnTrip: false, comments: '', distanceTravelled: '' });
       setTicketTravelAttachments([]);
       setShowNewTicketForm(false);
-
-      if (createdServiceCallId) {
-        const ticketLabel = data.ticket_number || data.id;
-        const scLabel = createdServiceCallNumber || createdServiceCallId;
-        alert(`Created ticket ${ticketLabel} and service call ${scLabel}. Opening the service call.`);
-        router.push(`/dashboard/service-calls/${createdServiceCallId}`);
-        return;
-      }
     } finally {
       setIsSubmitting(false);
       setUploadingFiles(false);
@@ -1043,14 +1002,6 @@ export default function DashboardPage() {
               <p className="text-sm text-slate-400">{profile.role}</p>
             </div>
 
-            <Link
-              href="/dashboard/service-calls"
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-colors"
-              title="Service Calls"
-            >
-              <span className="text-sm">🛠️</span>
-              <span className="hidden sm:inline text-sm font-medium">Service Calls</span>
-            </Link>
             {/* Pending (incoming mailbox tickets not yet assigned) — admin and members */}
             <div className="relative">
               <button
@@ -1919,24 +1870,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Optional: create linked service call with this ticket */}
-            <div className="mt-6 p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={createServiceCallWithTicket}
-                  onChange={(e) => setCreateServiceCallWithTicket(e.target.checked)}
-                  className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-cyan-500"
-                />
-                <span className="text-sm font-medium text-cyan-200">
-                  Also create a Service Call for this ticket
-                </span>
-              </label>
-              <p className="mt-2 text-xs text-slate-400 pl-8">
-                Opens the new service call in your member view after the ticket is saved so you can log work, visits, and the job card.
-              </p>
-            </div>
-
             {/* Optional: log travel with this ticket */}
             <div className="mt-6 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -2367,11 +2300,7 @@ export default function DashboardPage() {
                     {/* Expanded Content - Only visible when expanded */}
                     {isExpanded && (
                       <div className="mt-4 pt-4 border-t border-slate-700/50">
-                        <TicketServiceCallsPanel
-                          ticketId={ticket.id}
-                          ticket={ticket}
-                          basePath="/dashboard/service-calls"
-                        />
+                        <SupportCallMemberPanel ticketId={ticket.id} />
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <div className="flex items-center flex-wrap gap-2 mb-2">
@@ -3042,11 +2971,7 @@ export default function DashboardPage() {
                     {/* Expanded Content - Only visible when expanded */}
                     {isExpanded && (
                       <div className="mt-4 pt-4 border-t border-slate-700/50">
-                        <TicketServiceCallsPanel
-                          ticketId={ticket.id}
-                          ticket={ticket}
-                          basePath="/dashboard/service-calls"
-                        />
+                        <SupportCallMemberPanel ticketId={ticket.id} />
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <div className="flex items-center flex-wrap gap-2 mb-2">

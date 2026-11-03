@@ -14,7 +14,7 @@ import {
   type Ticket,
   updateTicket,
 } from '../../lib/supabase';
-import TicketServiceCallsPanel from '../../components/service-calls/TicketServiceCallsPanel';
+import SupportCallConvertPanel from '../../components/support-calls/SupportCallConvertPanel';
 import { AdminDateControls, AdminPanel, EmptyState, SegmentedControl } from '../admin-ui';
 import {
   extractRelatedTicketFromTravelLog,
@@ -520,11 +520,7 @@ function AdminTicketsPageContent() {
                                     </div>
                                   )}
 
-                                  <TicketServiceCallsPanel
-                                    ticketId={ticket.id}
-                                    ticket={detail}
-                                    basePath="/admin/service-calls"
-                                  />
+                                  <SupportCallConvertPanel ticketId={ticket.id} ticket={detail} />
 
                                   <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
                                     <p className="mb-1 text-xs text-amber-400">Add admin comment</p>
