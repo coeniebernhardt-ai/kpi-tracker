@@ -28,7 +28,7 @@ type TaskLocation = 'on-site' | 'remote';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, session, loading, isAdmin, signOut, refreshProfile } = useAuth();
+  const { user, profile, session, loading, isAdmin, isHto, canManageSupportCalls, signOut, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const authHeaders = useMemo<Record<string, string>>(() => {
     if (!session?.access_token) return {} as Record<string, string>;
@@ -146,6 +146,14 @@ export default function DashboardPage() {
       router.push('/login');
     }
   }, [user, loading, router]);
+
+  // HTO-only users work in Support Calls, not the member dashboard
+  useEffect(() => {
+    if (loading || !user || !profile) return;
+    if (isHto && !isAdmin) {
+      router.replace('/admin/support-calls');
+    }
+  }, [loading, user, profile, isHto, isAdmin, router]);
 
   // Load profiles when user ID changes
   useEffect(() => {
@@ -1148,6 +1156,15 @@ export default function DashboardPage() {
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium hover:shadow-lg transition-all"
               >
                 Admin Dashboard
+              </Link>
+            )}
+
+            {canManageSupportCalls && (
+              <Link
+                href="/admin/support-calls"
+                className="px-4 py-2 rounded-xl bg-cyan-500/20 ring-1 ring-cyan-500/40 text-cyan-200 text-sm font-medium hover:bg-cyan-500/30 transition-all"
+              >
+                Support Calls
               </Link>
             )}
             

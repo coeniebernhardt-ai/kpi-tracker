@@ -34,6 +34,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   const htoAllowedPath =
     pathname.startsWith('/admin/support-calls') || pathname.startsWith('/admin/reports');
+  const profileReady = Boolean(profile) || (!loading && !user);
   const canEnterAdminShell = isAdmin || (isHto && htoAllowedPath);
 
   useEffect(() => {
@@ -42,6 +43,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       router.replace('/login');
       return;
     }
+    // Wait for profile flags (is_hto) before redirecting — avoids racing HTO to /dashboard
+    if (!profile) return;
     if (isAdmin) return;
     if (isHto) {
       if (!htoAllowedPath) {
@@ -50,7 +53,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       return;
     }
     router.replace('/dashboard');
-  }, [user, loading, isAdmin, isHto, htoAllowedPath, router]);
+  }, [user, loading, profile, isAdmin, isHto, htoAllowedPath, router]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -109,10 +112,18 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     }
   };
 
-  if (loading || !user || !canEnterAdminShell) {
+  if (loading || !user || !profileReady || !profile || (!canEnterAdminShell && (isHto || isAdmin))) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
         Loading workspace...
+      </div>
+    );
+  }
+
+  if (!canEnterAdminShell) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
+        Redirecting...
       </div>
     );
   }
