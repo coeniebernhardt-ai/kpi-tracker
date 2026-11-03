@@ -589,13 +589,30 @@ function VisitsSection(p: SectionProps) {
   const [followUp, setFollowUp] = useState('');
   const [lines, setLines] = useState<HwLine[]>([]);
 
+  // Keep selects in sync when assignments/partners arrive after first paint
+  // (empty value looks selected in the UI but leaves Save disabled).
+  useEffect(() => {
+    if (!assignmentId && p.b.assignments[0]?.id) setAssignmentId(p.b.assignments[0].id);
+    else if (assignmentId && !p.b.assignments.some((x) => x.id === assignmentId)) {
+      setAssignmentId(p.b.assignments[0]?.id ?? '');
+    }
+  }, [p.b.assignments, assignmentId]);
+
+  useEffect(() => {
+    if (!partnerId && p.b.partners[0]?.id) setPartnerId(p.b.partners[0].id);
+    else if (partnerId && !p.b.partners.some((x) => x.id === partnerId)) {
+      setPartnerId(p.b.partners[0]?.id ?? '');
+    }
+  }, [p.b.partners, partnerId]);
+
   const a = fromLocalInput(arrived);
   const d = fromLocalInput(departed);
   const mins = minutesBetween(a, d);
   const kmNum = km ? Number(km) : null;
+  const partnerReady = Boolean(partnerId) && p.b.partners.some((x) => x.id === partnerId);
+  const internalReady = Boolean(a && d && mins != null && assignmentId);
   const ready =
-    (party === 'internal' ? Boolean(a && d && mins != null && assignmentId) : Boolean(partnerId)) &&
-    (!incomplete || reason.trim());
+    (party === 'internal' ? internalReady : partnerReady) && (!incomplete || reason.trim());
 
   const hwFor = (visitId: string) => p.b.hardware_items.filter((h) => h.visit_id === visitId);
 
@@ -647,6 +664,7 @@ function VisitsSection(p: SectionProps) {
             ) : (
               <Field label="Partner">
                 <select className={inputCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+                  <option value="">Select partner…</option>
                   {p.b.partners.map((x) => <option key={x.id} value={x.id}>{x.company_name}</option>)}
                 </select>
               </Field>
@@ -700,6 +718,15 @@ function VisitsSection(p: SectionProps) {
             disabled={!ready || p.busy === 'visit'}
             onClick={() =>
               void p.call('visit', async () => {
+                if (party === 'external' && !partnerId) {
+                  throw new Error('Select the external partner for this visit');
+                }
+                if (party === 'external' && ((arrived && !departed) || (!arrived && departed))) {
+                  throw new Error('Provide both arrival and departure times, or leave both blank');
+                }
+                if (party === 'external' && arrived && departed && mins == null) {
+                  throw new Error('Departure must be after arrival');
+                }
                 const res = await api(p, 'visits', {
                   party_type: party,
                   assignment_id: party === 'internal' ? assignmentId : undefined,
@@ -721,6 +748,17 @@ function VisitsSection(p: SectionProps) {
           >
             {p.busy === 'visit' ? 'Saving…' : 'Save visit'}
           </button>
+          {!ready && (
+            <p className="text-xs text-amber-300">
+              {party === 'external' && !partnerReady
+                ? 'Select a partner from the list (re-select SSC if needed).'
+                : party === 'internal' && !internalReady
+                  ? 'Internal visits need a team member plus arrival and departure times.'
+                  : incomplete && !reason.trim()
+                    ? 'Add a reason for the incomplete visit.'
+                    : 'Complete the required fields to save.'}
+            </p>
+          )}
         </div>
       )}
     </>
