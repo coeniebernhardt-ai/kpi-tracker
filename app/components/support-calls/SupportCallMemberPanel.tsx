@@ -47,8 +47,8 @@ type MemberBundle = {
   can_manage?: boolean;
 };
 
-type HardwareLine = { description: string; make_model: string; quantity: string; serial_number: string };
-const emptyLine = (): HardwareLine => ({ description: '', make_model: '', quantity: '1', serial_number: '' });
+type HardwareLine = { description: string; quantity: string; mac: string };
+const emptyLine = (): HardwareLine => ({ description: '', quantity: '1', mac: '' });
 
 /**
  * Shown when a dashboard ticket is expanded. Renders nothing unless the ticket is linked to a
@@ -80,6 +80,12 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
 
   const [summary, setSummary] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [partnerRequired, setPartnerRequired] = useState(false);
+  const [referralReason, setReferralReason] = useState('');
+  const [hwVisitId, setHwVisitId] = useState('');
+  const [hwDesc, setHwDesc] = useState('');
+  const [hwQty, setHwQty] = useState('1');
+  const [hwMac, setHwMac] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
   const [syncLabel, setSyncLabel] = useState<'Synced' | 'Sync Pending' | 'Sync Failed' | 'Conflict Requires Review'>('Synced');
 
@@ -206,7 +212,7 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
         body: JSON.stringify(body),
       });
     } catch (e) {
-      if ((path === 'visits' || path === 'contributions') && isNetworkError(e)) {
+      if ((path === 'visits' || path === 'contributions' || path === 'eta' || path === 'hardware') && isNetworkError(e)) {
         enqueueOutbox({
           supportCallId: sc.id,
           path,
@@ -242,12 +248,11 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
         const valid = lines.filter((l) => l.description.trim());
         if (valid.length) {
           await post('hardware', {
-            visit_id: res.visit.id,
+            visit_id: res.visit?.id ?? res.visit?.id,
             items: valid.map((l) => ({
               description: l.description,
-              make_model: l.make_model,
               quantity: Number(l.quantity) || 1,
-              serial_number: l.serial_number,
+              mac: l.mac || undefined,
             })),
           });
         }
@@ -430,17 +435,16 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
 
                 <div>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Hardware used / replaced</span>
+                    <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Hardware / stock (with this visit)</span>
                     <button type="button" className="text-xs text-cyan-300" onClick={() => setLines((l) => [...l, emptyLine()])}>
                       + Add line
                     </button>
                   </div>
                   {lines.map((l, i) => (
-                    <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[2fr_1.5fr_70px_1fr_auto]">
-                      <input className={inputCls} placeholder="Description" value={l.description} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
-                      <input className={inputCls} placeholder="Make / model" value={l.make_model} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, make_model: e.target.value } : x)))} />
-                      <input className={inputCls} type="number" min="0" step="1" value={l.quantity} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
-                      <input className={inputCls} placeholder="Serial" value={l.serial_number} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, serial_number: e.target.value } : x)))} />
+                    <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[2fr_70px_1.2fr_auto]">
+                      <input className={inputCls} placeholder="Description *" value={l.description} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
+                      <input className={inputCls} type="number" min="1" step="1" value={l.quantity} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+                      <input className={inputCls} placeholder="MAC (optional)" value={l.mac} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, mac: e.target.value } : x)))} />
                       <button type="button" className="text-xs text-rose-300" onClick={() => setLines((all) => all.filter((_, j) => j !== i))}>Remove</button>
                     </div>
                   ))}
@@ -483,30 +487,131 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
                   <textarea className={textareaCls} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="What you found, what you did, what is outstanding…" />
                 </Field>
                 <label className="flex items-start gap-2 text-sm text-slate-300">
+                  <input type="checkbox" className="mt-1" checked={partnerRequired} onChange={(e) => setPartnerRequired(e.target.checked)} />
+                  UNABLE TO COMPLETE — SUPPORT PARTNER REQUIRED
+                </label>
+                {partnerRequired && (
+                  <Field label="Referral reason (required)">
+                    <textarea
+                      className={textareaCls}
+                      value={referralReason}
+                      onChange={(e) => setReferralReason(e.target.value)}
+                      placeholder="Why external specialist assistance is required…"
+                    />
+                  </Field>
+                )}
+                <label className="flex items-start gap-2 text-sm text-slate-300">
                   <input type="checkbox" className="mt-1" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
                   I confirm this technical work (including my visits and hardware) is accurate.
                 </label>
                 <button
                   type="button"
                   className={btnPrimary}
-                  disabled={busy === 'contrib' || !summary.trim() || !confirmed}
+                  disabled={
+                    busy === 'contrib' ||
+                    !summary.trim() ||
+                    !confirmed ||
+                    (partnerRequired && !referralReason.trim())
+                  }
+                  title={
+                    !summary.trim()
+                      ? 'Enter a work summary before completing'
+                      : partnerRequired && !referralReason.trim()
+                        ? 'Enter a referral reason when Support Partner is required'
+                        : !confirmed
+                          ? 'Confirm accuracy before completing'
+                          : undefined
+                  }
                   onClick={() =>
-                    run('contrib', async () => {
-                      await post('contributions', { summary, confirmed_accurate: true });
-                      setSummary('');
-                      setConfirmed(false);
-                    }, 'Your work is marked complete')
+                    run(
+                      'contrib',
+                      async () => {
+                        await post('contributions', {
+                          summary,
+                          confirmed_accurate: true,
+                          referred_to_partner: partnerRequired,
+                          referral_reason: partnerRequired ? referralReason : undefined,
+                        });
+                        setSummary('');
+                        setConfirmed(false);
+                        setPartnerRequired(false);
+                        setReferralReason('');
+                      },
+                      partnerRequired
+                        ? 'Work completed — referred to support partner'
+                        : 'Your work is marked complete'
+                    )
                   }
                 >
                   {busy === 'contrib' ? 'Submitting…' : 'COMPLETE MY WORK'}
                 </button>
-                <p className="text-[11px] text-slate-500">Requires at least one visit with arrival and departure times. No HTO approval needed.</p>
+                <p className="text-[11px] text-slate-500">
+                  Requires at least one visit with arrival and departure times. No HTO approval needed.
+                  {partnerRequired ? ' Category: COMPLETED — REFERRED TO SUPPORT PARTNER.' : ''}
+                </p>
                 {rtStatus === 'failed' && (
-                  <p className="text-[11px] text-amber-300">Live sync unavailable — refresh if data looks stale.</p>
+                  <p className="text-[11px] text-amber-300">
+                    Your changes are saved locally but have not yet synchronised with Think-Q. They will be retried when connectivity returns.
+                  </p>
                 )}
               </div>
             )}
           </div>
+
+          {/* Standalone hardware entry linked to an existing visit */}
+          {isOpen && mine && (bundle.visits?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Hardware / Stock Used</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1.2fr_2fr_70px_1.2fr_auto]">
+                <select className={inputCls} value={hwVisitId} onChange={(e) => setHwVisitId(e.target.value)}>
+                  <option value="">Visit…</option>
+                  {(bundle.visits || []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Visit #{v.visit_number}
+                    </option>
+                  ))}
+                </select>
+                <input className={inputCls} placeholder="Description *" value={hwDesc} onChange={(e) => setHwDesc(e.target.value)} />
+                <input className={inputCls} type="number" min="1" value={hwQty} onChange={(e) => setHwQty(e.target.value)} />
+                <input className={inputCls} placeholder="MAC (optional)" value={hwMac} onChange={(e) => setHwMac(e.target.value)} />
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  disabled={busy === 'hw' || !hwVisitId || !hwDesc.trim()}
+                  title={!hwVisitId ? 'Select the visit this stock was used on' : !hwDesc.trim() ? 'Enter a description' : undefined}
+                  onClick={() =>
+                    run(
+                      'hw',
+                      async () => {
+                        await post('hardware', {
+                          visit_id: hwVisitId,
+                          description: hwDesc,
+                          quantity: Number(hwQty) || 1,
+                          mac: hwMac || undefined,
+                        });
+                        setHwDesc('');
+                        setHwQty('1');
+                        setHwMac('');
+                      },
+                      'Hardware recorded'
+                    )
+                  }
+                >
+                  Add
+                </button>
+              </div>
+              {(bundle.hardware_items || []).length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                  {(bundle.hardware_items || []).map((h) => (
+                    <li key={h.id}>
+                      {h.quantity ?? 1}× {h.description}
+                      {h.new_mac || h.old_mac ? ` · MAC ${h.new_mac || h.old_mac}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

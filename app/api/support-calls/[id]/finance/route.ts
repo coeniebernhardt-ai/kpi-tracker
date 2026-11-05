@@ -182,37 +182,42 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     }
 
     if (action === 'sent') {
-      if (body.confirm !== true) return jsonError('Confirm that the report was actually sent to finance', 400);
-      if (!target.downloaded_at) {
-        return jsonError('Download the finance report before confirming it was sent', 409, { code: 'NOT_DOWNLOADED' });
+      if (body.confirm !== true) {
+        return jsonError(
+          'Finance Handover cannot be marked as sent. Tick SENT TO FINANCE after you have actually sent the report outside Think-Q.',
+          400
+        );
       }
-      if (target.sent_confirmed) return jsonError('This handover is already marked as sent', 409);
-      const finance_recipient = cleanStr(body.finance_recipient, 200);
-      const communication_method = cleanStr(body.communication_method, 100);
-      if (!finance_recipient) return jsonError('finance_recipient is required', 400);
-      if (!communication_method) return jsonError('communication_method is required', 400);
+      if (!target.downloaded_at) {
+        return jsonError(
+          'Finance Handover cannot be marked as sent because the report has not yet been successfully downloaded. Download the PDF first, then tick SENT TO FINANCE.',
+          409,
+          { code: 'NOT_DOWNLOADED' }
+        );
+      }
+      if (target.sent_confirmed) {
+        return jsonError('This finance handover is already marked as sent.', 409);
+      }
 
+      const notes = cleanStr(body.notes, 3000);
       const { data: updated, error } = await supabase
         .from('support_call_finance_handovers')
         .update({
           sent_confirmed: true,
           sent_at: cleanIso(body.sent_at) ?? new Date().toISOString(),
           sent_by: auth.userId,
-          finance_recipient,
-          communication_method,
-          email_subject: cleanStr(body.email_subject, 300),
-          notes: cleanStr(body.notes, 3000),
+          notes,
         })
         .eq('id', target.id)
         .eq('sent_confirmed', false)
         .select('*')
         .maybeSingle();
       if (error) return dbError('finance.sent', error);
-      if (!updated) return jsonError('This handover is already marked as sent', 409);
+      if (!updated) return jsonError('This finance handover is already marked as sent.', 409);
 
       await ctx.audit('finance_sent_confirmed', {
         related_id: updated.id,
-        new_value: { finance_recipient, communication_method, version: updated.version },
+        new_value: { version: updated.version, notes, sent_by: auth.userId },
       });
       const stage = await recomputeWorkflowStage(supabase, sc.id);
       return NextResponse.json({ handover: updated, workflow: stage });

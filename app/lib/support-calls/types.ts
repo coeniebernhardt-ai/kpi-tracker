@@ -36,6 +36,16 @@ export type SupportCall = {
   reporter_organisation: string | null;
   reporter_email: string | null;
   reporter_phone: string | null;
+  /** Single contact: email or telephone */
+  reporter_contact: string | null;
+  client_houston_userid: string | null;
+  eta_sent_event_id: string | null;
+  eta_sent_at: string | null;
+  eta_sent_by: string | null;
+  partner_required?: boolean;
+  partner_required_at?: string | null;
+  partner_required_by?: string | null;
+  partner_required_reason?: string | null;
   reported_at: string | null;
   original_description: string;
   operational_description: string | null;
@@ -92,6 +102,9 @@ export type SupportCallAssignment = {
   first_submitted_at: string | null;
   work_completed_at: string | null;
   work_completed_by: string | null;
+  referred_to_partner?: boolean;
+  referral_reason?: string | null;
+  completion_category?: 'completed' | 'completed_referred_to_partner' | null;
 };
 
 export type SupportCallPartner = {
@@ -189,6 +202,7 @@ export type SupportCallHardwareItem = {
   new_mac: string | null;
   serial_number: string | null;
   replacement_reason: string | null;
+  document_id: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -204,6 +218,9 @@ export type SupportCallContribution = {
   summary: string | null;
   confirmed_accurate: boolean;
   correction_notes: string | null;
+  referred_to_partner?: boolean;
+  referral_reason?: string | null;
+  completion_category?: 'completed' | 'completed_referred_to_partner' | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;

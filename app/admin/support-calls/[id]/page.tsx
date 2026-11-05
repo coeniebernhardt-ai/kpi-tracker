@@ -184,7 +184,7 @@ function Locked({ locked }: { locked: boolean }) {
 /* -------------------------------------------------------------------------- */
 
 const INTAKE_KEYS = [
-  'report_method', 'reporter_name', 'reporter_organisation', 'reporter_email', 'reporter_phone',
+  'report_method', 'reporter_contact', 'client_houston_userid',
   'location',
   'responsible_name', 'responsible_position', 'responsible_organisation', 'responsible_email', 'responsible_phone',
   'priority', 'operational_description',
@@ -254,10 +254,8 @@ function IntakeSection(p: SectionProps) {
         <Field label="Reported via">
           <input className={inputCls} value={f.report_method} disabled={p.locked} onChange={(e) => set('report_method', e.target.value)} />
         </Field>
-        {text('reporter_name', 'Reporter name')}
-        {text('reporter_organisation', 'Reporter organisation')}
-        {text('reporter_email', 'Reporter email', 'email')}
-        {text('reporter_phone', 'Reporter phone')}
+        {text('reporter_contact', 'Reporter Contact (email or telephone)')}
+        {text('client_houston_userid', 'Client Houston UserID (optional)')}
         <Field label="Priority">
           <select className={inputCls} value={f.priority} disabled={p.locked} onChange={(e) => set('priority', e.target.value)}>
             {['Critical', 'High', 'Medium', 'Low'].map((x) => <option key={x}>{x}</option>)}
@@ -401,9 +399,10 @@ function CommunicationsSection(p: SectionProps) {
   const [kind, setKind] = useState('initial_notification');
   const [outcome, setOutcome] = useState('complete');
   const [method, setMethod] = useState('Telephone');
-  const [recipient, setRecipient] = useState(sc.responsible_name || sc.reporter_name || '');
-  const [contact, setContact] = useState(sc.responsible_phone || sc.reporter_phone || '');
-  const [eta, setEta] = useState('');
+  const [recipient, setRecipient] = useState(sc.responsible_name || '');
+  const [contact, setContact] = useState(
+    sc.responsible_phone || sc.reporter_contact || sc.reporter_phone || sc.reporter_email || ''
+  );
   const [when, setWhen] = useState(nowLocalInput());
   const [notes, setNotes] = useState('');
   const [failure, setFailure] = useState('');
@@ -411,8 +410,7 @@ function CommunicationsSection(p: SectionProps) {
 
   const tone = (s: string) => (s === 'complete' ? 'emerald' : s === 'attempted' ? 'amber' : 'slate');
 
-  const valid =
-    (outcome === 'complete' ? confirmed && (kind !== 'eta_notification' || eta) : failure.trim()) ? true : false;
+  const valid = (outcome === 'complete' ? confirmed : failure.trim()) ? true : false;
 
   return (
     <>
@@ -447,7 +445,6 @@ function CommunicationsSection(p: SectionProps) {
             <Field label="Checkpoint">
               <select className={inputCls} value={kind} onChange={(e) => setKind(e.target.value)}>
                 <option value="initial_notification">Initial notification</option>
-                <option value="eta_notification">ETA notification</option>
                 <option value="partner_contact">Partner contact</option>
                 <option value="other">Other</option>
               </select>
@@ -468,13 +465,11 @@ function CommunicationsSection(p: SectionProps) {
             </Field>
             <Field label="Recipient"><input className={inputCls} value={recipient} onChange={(e) => setRecipient(e.target.value)} /></Field>
             <Field label="Contact used"><input className={inputCls} value={contact} onChange={(e) => setContact(e.target.value)} /></Field>
-            {kind === 'eta_notification' && (
-              <Field label="ETA given">
-                <input type="datetime-local" className={inputCls} value={eta} onChange={(e) => setEta(e.target.value)} />
-              </Field>
-            )}
             <Field label="Notes"><input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
           </div>
+          <p className="text-xs text-slate-500">
+            To confirm an ETA was sent to the client, use the ETA section below (select an ETA and tick ETA SENT TO CLIENT).
+          </p>
           {outcome === 'attempted' ? (
             <Field label="Why could they not be reached? (required)">
               <input className={inputCls} value={failure} onChange={(e) => setFailure(e.target.value)} />
@@ -496,7 +491,7 @@ function CommunicationsSection(p: SectionProps) {
                   await api(p, 'communications', {
                     kind, outcome, method,
                     recipient_name: recipient, recipient_contact: contact,
-                    eta_at: fromLocalInput(eta), communicated_at: fromLocalInput(when),
+                    communicated_at: fromLocalInput(when),
                     notes, failure_reason: failure, confirmed,
                   });
                   setConfirmed(false); setFailure(''); setNotes('');
@@ -518,48 +513,124 @@ function CommunicationsSection(p: SectionProps) {
 /* -------------------------------------------------------------------------- */
 
 function EtaSection(p: SectionProps) {
+  const sc = p.b.support_call;
   const [eta, setEta] = useState('');
   const [target, setTarget] = useState(p.b.assignments[0]?.id ?? '');
   const [notes, setNotes] = useState('');
+  const [selectedId, setSelectedId] = useState(sc.eta_sent_event_id || '');
+  const [sentConfirm, setSentConfirm] = useState(false);
   const events = [...p.b.eta_events].reverse();
+
+  useEffect(() => {
+    if (!selectedId && events[0]?.id) setSelectedId(events[0].id);
+  }, [events, selectedId]);
+
   return (
     <>
-      {events.length === 0 && <p className="text-sm text-slate-500">No ETA recorded yet.</p>}
-      {events.map((e) => (
-        <Card key={e.id}>
-          <span className="font-medium text-white">{fmtDateTime(e.new_eta)}</span>
-          <span className="ml-2 text-xs text-slate-500">
-            {e.previous_eta ? `was ${fmtDateTime(e.previous_eta)} · ` : ''}
-            {e.assignment_id ? assigneeName(p.b, e.assignment_id) : e.partner_assignment_id ? 'Partner' : '—'} · set by {nameOf(p.b, e.actor_id)} · {fmtDateTime(e.created_at)}
-          </span>
-          {e.notes && <p className="mt-1 text-xs text-slate-400">{e.notes}</p>}
-        </Card>
-      ))}
+      <p className="text-xs text-slate-500">
+        An ETA is not a visit. Entering or confirming an ETA never creates a site visit — only physical attendance does.
+      </p>
+      {sc.eta_sent_at && (
+        <Notice tone="success">
+          ETA SENT TO CLIENT · {fmtDateTime(sc.eta_sent_at)} by {nameOf(p.b, sc.eta_sent_by)}
+          {sc.eta_sent_event_id ? ` · selected ${fmtDateTime(events.find((e) => e.id === sc.eta_sent_event_id)?.new_eta ?? null)}` : ''}
+        </Notice>
+      )}
+      {events.length === 0 && <p className="text-sm text-slate-500">No ETA recorded yet. Member or HTO can add one below.</p>}
+      <div className="space-y-2">
+        {events.map((e) => (
+          <label
+            key={e.id}
+            className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-2 ${
+              selectedId === e.id ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-slate-800 bg-slate-950/40'
+            }`}
+          >
+            <input
+              type="radio"
+              className="mt-1"
+              name="eta-select"
+              checked={selectedId === e.id}
+              disabled={p.locked || sc.eta_notification_status === 'complete'}
+              onChange={() => setSelectedId(e.id)}
+            />
+            <div>
+              <span className="font-medium text-white">{fmtDateTime(e.new_eta)}</span>
+              <span className="ml-2 text-xs text-slate-500">
+                {e.previous_eta ? `was ${fmtDateTime(e.previous_eta)} · ` : ''}
+                {e.assignment_id ? assigneeName(p.b, e.assignment_id) : e.partner_assignment_id ? 'Partner' : '—'} · set by{' '}
+                {nameOf(p.b, e.actor_id)} · {fmtDateTime(e.created_at)}
+              </span>
+              {e.notes && <p className="mt-1 text-xs text-slate-400">{e.notes}</p>}
+            </div>
+          </label>
+        ))}
+      </div>
+      {!p.locked && sc.eta_notification_status !== 'complete' && events.length > 0 && (
+        <div className="space-y-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <label className="flex items-center gap-2 text-sm text-emerald-100">
+            <input type="checkbox" checked={sentConfirm} onChange={(e) => setSentConfirm(e.target.checked)} />
+            ETA SENT TO CLIENT
+          </label>
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={!sentConfirm || !selectedId || p.busy === 'eta-sent'}
+            title={!selectedId ? 'Select an ETA entry first' : !sentConfirm ? 'Tick ETA SENT TO CLIENT after notifying the customer' : undefined}
+            onClick={() =>
+              void p.call(
+                'eta-sent',
+                () => api(p, 'eta', { action: 'sent_to_client', eta_event_id: selectedId, confirm: true }),
+                'ETA marked as sent to client'
+              )
+            }
+          >
+            Confirm ETA sent
+          </button>
+        </div>
+      )}
       {!p.locked && (
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <Field label="Whose ETA">
             <select className={inputCls} value={target} onChange={(e) => setTarget(e.target.value)}>
-              {p.b.assignments.map((a) => <option key={a.id} value={a.id}>{nameOf(p.b, a.member_id)}</option>)}
-              {p.b.partners.map((x) => <option key={x.id} value={`partner:${x.id}`}>{x.company_name} (partner)</option>)}
+              {p.b.assignments.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {nameOf(p.b, a.member_id)}
+                </option>
+              ))}
+              {p.b.partners.map((x) => (
+                <option key={x.id} value={`partner:${x.id}`}>
+                  {x.company_name} (partner)
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="New ETA"><input type="datetime-local" className={inputCls} value={eta} onChange={(e) => setEta(e.target.value)} /></Field>
-          <Field label="Notes"><input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+          <Field label="New ETA">
+            <input type="datetime-local" className={inputCls} value={eta} onChange={(e) => setEta(e.target.value)} />
+          </Field>
+          <Field label="Notes">
+            <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </Field>
           <div className="flex items-end">
             <button
               type="button"
               className={btnPrimary}
               disabled={!eta || p.busy === 'eta'}
+              title={!eta ? 'Enter an ETA date/time before saving' : undefined}
               onClick={() =>
-                void p.call('eta', async () => {
-                  await api(p, 'eta', {
-                    new_eta: fromLocalInput(eta),
-                    notes,
-                    assignment_id: target.startsWith('partner:') ? undefined : target || undefined,
-                    partner_assignment_id: target.startsWith('partner:') ? target.slice(8) : undefined,
-                  });
-                  setEta(''); setNotes('');
-                }, 'ETA recorded')
+                void p.call(
+                  'eta',
+                  async () => {
+                    await api(p, 'eta', {
+                      new_eta: fromLocalInput(eta),
+                      notes,
+                      assignment_id: target.startsWith('partner:') ? undefined : target || undefined,
+                      partner_assignment_id: target.startsWith('partner:') ? target.slice(8) : undefined,
+                    });
+                    setEta('');
+                    setNotes('');
+                  },
+                  'ETA recorded (no visit created)'
+                )
               }
             >
               Add ETA
@@ -669,7 +740,7 @@ function PartnersSection(p: SectionProps) {
 /* 6. Visits & hardware                                                       */
 /* -------------------------------------------------------------------------- */
 
-type HwLine = { description: string; make_model: string; quantity: string; serial_number: string };
+type HwLine = { description: string; quantity: string; mac: string };
 
 function VisitsSection(p: SectionProps) {
   const [party, setParty] = useState<'internal' | 'external'>('internal');
@@ -799,14 +870,14 @@ function VisitsSection(p: SectionProps) {
           )}
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Hardware</span>
-              <button type="button" className="text-xs text-cyan-300" onClick={() => setLines((l) => [...l, { description: '', make_model: '', quantity: '1', serial_number: '' }])}>+ Add line</button>
+              <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Hardware / stock</span>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => setLines((l) => [...l, { description: '', quantity: '1', mac: '' }])}>+ Add line</button>
             </div>
             {lines.map((l, i) => (
-              <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[2fr_1.5fr_70px_1fr_auto]">
-                {(['description', 'make_model', 'quantity', 'serial_number'] as const).map((k) => (
-                  <input key={k} className={inputCls} placeholder={k.replace('_', ' ')} value={l[k]} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))} />
-                ))}
+              <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[2fr_70px_1.2fr_auto]">
+                <input className={inputCls} placeholder="Description *" value={l.description} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
+                <input className={inputCls} type="number" min="1" value={l.quantity} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+                <input className={inputCls} placeholder="MAC (optional)" value={l.mac} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? { ...x, mac: e.target.value } : x)))} />
                 <button type="button" className="text-xs text-rose-300" onClick={() => setLines((all) => all.filter((_, j) => j !== i))}>Remove</button>
               </div>
             ))}
@@ -838,7 +909,14 @@ function VisitsSection(p: SectionProps) {
                 });
                 const valid = lines.filter((l) => l.description.trim());
                 if (valid.length) {
-                  await api(p, 'hardware', { visit_id: res.visit.id, items: valid.map((l) => ({ ...l, quantity: Number(l.quantity) || 1 })) });
+                  await api(p, 'hardware', {
+                    visit_id: res.visit.id,
+                    items: valid.map((l) => ({
+                      description: l.description,
+                      quantity: Number(l.quantity) || 1,
+                      mac: l.mac || undefined,
+                    })),
+                  });
                 }
                 setArrived(''); setDeparted(''); setKm(''); setExtCost(''); setDiagnosis(''); setWork(''); setTests('');
                 setIncomplete(false); setReason(''); setDependency(''); setFollowUp(''); setLines([]);
@@ -869,9 +947,83 @@ function VisitsSection(p: SectionProps) {
 /* Technical submission review (inside Technical Work)                        */
 /* -------------------------------------------------------------------------- */
 
+function HardwareStockSection(p: SectionProps) {
+  const [visitId, setVisitId] = useState(p.b.visits[0]?.id ?? '');
+  const [description, setDescription] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [mac, setMac] = useState('');
+
+  useEffect(() => {
+    if (!visitId && p.b.visits[0]?.id) setVisitId(p.b.visits[0].id);
+  }, [p.b.visits, visitId]);
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
+      <p className="text-sm font-medium text-white">Hardware / Stock Used</p>
+      <p className="text-xs text-slate-500">Description and quantity required. MAC and photo are optional. Linked to a visit — not inventory or cost.</p>
+      {p.b.hardware_items.length === 0 && <p className="text-sm text-slate-500">No hardware recorded yet.</p>}
+      {p.b.hardware_items.map((h) => (
+        <Card key={h.id}>
+          <span className="font-medium text-white">
+            {h.quantity ?? 1}× {h.description}
+          </span>
+          <span className="ml-2 text-xs text-slate-500">
+            {h.new_mac || h.old_mac ? `MAC ${h.new_mac || h.old_mac} · ` : ''}
+            by {nameOf(p.b, h.created_by)} · {fmtDateTime(h.created_at)}
+            {h.visit_id ? ` · visit ${p.b.visits.find((v) => v.id === h.visit_id)?.visit_number ?? ''}` : ''}
+          </span>
+        </Card>
+      ))}
+      {!p.locked && p.b.visits.length > 0 && (
+        <div className="grid gap-2 md:grid-cols-[1.2fr_2fr_70px_1.2fr_auto]">
+          <select className={inputCls} value={visitId} onChange={(e) => setVisitId(e.target.value)}>
+            {p.b.visits.map((v) => (
+              <option key={v.id} value={v.id}>
+                Visit #{v.visit_number}
+              </option>
+            ))}
+          </select>
+          <input className={inputCls} placeholder="Description *" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input className={inputCls} type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <input className={inputCls} placeholder="MAC (optional)" value={mac} onChange={(e) => setMac(e.target.value)} />
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={!visitId || !description.trim() || p.busy === 'hw-stock'}
+            title={!visitId ? 'Select a visit' : !description.trim() ? 'Enter a description' : undefined}
+            onClick={() =>
+              void p.call(
+                'hw-stock',
+                async () => {
+                  await api(p, 'hardware', {
+                    visit_id: visitId,
+                    description,
+                    quantity: Number(quantity) || 1,
+                    mac: mac || undefined,
+                  });
+                  setDescription('');
+                  setQuantity('1');
+                  setMac('');
+                },
+                'Hardware recorded'
+              )
+            }
+          >
+            Add
+          </button>
+        </div>
+      )}
+      {!p.locked && p.b.visits.length === 0 && (
+        <p className="text-xs text-amber-300">Log a site visit first, then attach hardware / stock to that visit.</p>
+      )}
+    </div>
+  );
+}
+
 function TechnicalReviewBlock(p: SectionProps) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   if (p.b.assignments.length === 0) return null;
+  const sc = p.b.support_call;
   const allDone = p.b.assignments.every((a) => a.work_completed_at);
   const partnersDone = p.b.partners.length === 0 || p.b.partners.every((x) => (x as { work_completed_at?: string | null }).work_completed_at);
   return (
@@ -880,30 +1032,47 @@ function TechnicalReviewBlock(p: SectionProps) {
       <p className="text-xs text-slate-500">
         Technicians COMPLETE MY WORK from their ticket. No HTO approval is required for completion — use Request correction only if needed.
       </p>
-      {allDone && partnersDone && (
+      {sc.partner_required && (
+        <Notice tone="error">
+          SUPPORT PARTNER REQUIRED
+          {sc.partner_required_reason ? ` — ${sc.partner_required_reason}` : ''}
+          {sc.partner_required_at ? ` · ${fmtDateTime(sc.partner_required_at)} by ${nameOf(p.b, sc.partner_required_by)}` : ''}
+          . Appoint a support partner below and continue the Support Call.
+        </Notice>
+      )}
+      {allDone && partnersDone && !sc.partner_required && (
         <Notice tone="success">READY FOR HTO TICKET CLOSURE — all applicable work is complete. Close the ticket when ready; the Support Call stays open for job card / finance.</Notice>
+      )}
+      {allDone && partnersDone && sc.partner_required && (
+        <Notice tone="info">Technician referral complete — appoint the partner, then record partner work complete before ticket closure.</Notice>
       )}
       {p.b.assignments.map((a) => {
         const mine = p.b.contributions.filter((c) => c.assignment_id === a.id).sort((x, y) => y.revision - x.revision);
         const latest = mine[0];
+        const referred = a.referred_to_partner || latest?.referred_to_partner || a.completion_category === 'completed_referred_to_partner';
         return (
           <Card key={a.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-white">{nameOf(p.b, a.member_id)}</span>
               <span className="flex flex-wrap gap-2">
                 {a.work_completed_at ? (
-                  <Badge tone="emerald">Completed {fmtDateTime(a.work_completed_at)}</Badge>
+                  <Badge tone={referred ? 'violet' : 'emerald'}>
+                    {referred ? 'COMPLETED — REFERRED TO SUPPORT PARTNER' : 'Completed'} {fmtDateTime(a.work_completed_at)}
+                  </Badge>
                 ) : (
                   <Badge tone="amber">Not completed</Badge>
                 )}
                 {latest && (
-                  <Badge tone={latest.status === 'approved' ? 'emerald' : latest.status === 'returned' ? 'amber' : latest.status === 'submitted' ? 'blue' : 'slate'}>
+                  <Badge tone={latest.status === 'returned' ? 'amber' : latest.status === 'submitted' ? 'blue' : 'slate'}>
                     {latest.status} · rev {latest.revision}
                   </Badge>
                 )}
               </span>
             </div>
             {latest?.summary && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-300">{latest.summary}</p>}
+            {(a.referral_reason || latest?.referral_reason) && (
+              <p className="mt-1 text-xs text-violet-300">Referral: {a.referral_reason || latest?.referral_reason}</p>
+            )}
             {latest?.correction_notes && <p className="mt-1 text-xs text-amber-300">Correction notes: {latest.correction_notes}</p>}
             {latest && (latest.status === 'submitted' || latest.status === 'approved') && a.work_completed_at && !p.locked && (
               <div className="mt-3 space-y-2">
@@ -1183,7 +1352,8 @@ function JobCardSection(p: SectionProps & { newLink: { url: string; expires_at: 
 /* -------------------------------------------------------------------------- */
 
 function FinanceSection(p: SectionProps) {
-  const [sent, setSent] = useState({ finance_recipient: '', communication_method: 'Email', email_subject: '', notes: '', confirm: false });
+  const [notes, setNotes] = useState('');
+  const [confirm, setConfirm] = useState(false);
   const handovers = [...p.b.finance_handovers].sort((a, b) => b.version - a.version);
   const latest = handovers[0];
 
@@ -1195,54 +1365,82 @@ function FinanceSection(p: SectionProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-medium text-white">Report v{h.version}</span>
             <span className="flex items-center gap-2">
-              {h.downloaded_at && <Badge tone="blue">Downloaded</Badge>}
-              {h.sent_confirmed ? <Badge tone="emerald">Sent {fmtDateTime(h.sent_at)}</Badge> : <Badge tone="amber">Not sent</Badge>}
+              {h.downloaded_at && <Badge tone="blue">Downloaded {fmtDateTime(h.downloaded_at)}</Badge>}
+              {h.sent_confirmed ? (
+                <Badge tone="emerald">SENT TO FINANCE {fmtDateTime(h.sent_at)}</Badge>
+              ) : (
+                <Badge tone="amber">Not sent</Badge>
+              )}
               {!p.locked && (
-                <button type="button" className={btnGhost} disabled={p.busy === `dl-${h.id}`}
-                  onClick={() => void p.call(`dl-${h.id}`, async () => {
-                    const res = await api(p, 'finance', { action: 'download-ack', handover_id: h.id });
-                    if (res.url) window.open(res.url, '_blank', 'noopener');
-                  })}>
+                <button
+                  type="button"
+                  className={btnGhost}
+                  disabled={p.busy === `dl-${h.id}`}
+                  onClick={() =>
+                    void p.call(`dl-${h.id}`, async () => {
+                      const res = await api(p, 'finance', { action: 'download-ack', handover_id: h.id });
+                      if (res.url) window.open(res.url, '_blank', 'noopener');
+                      else throw new Error('Download failed. The report file could not be opened — try Generate again.');
+                    }, 'Download recorded')
+                  }
+                >
                   Download
                 </button>
               )}
             </span>
           </div>
           {h.sent_confirmed && (
-            <p className="mt-1 text-xs text-slate-400">To {h.finance_recipient} via {h.communication_method} by {nameOf(p.b, h.sent_by)}{h.email_subject ? ` · "${h.email_subject}"` : ''}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Confirmed by {nameOf(p.b, h.sent_by)}
+              {h.notes ? ` · ${h.notes}` : ''}
+            </p>
           )}
         </Card>
       ))}
 
       {!p.locked && (
         <>
-          <button type="button" className={btnPrimary} disabled={p.busy === 'fin'}
-            onClick={() => void p.call('fin', () => api(p, 'finance', { action: 'generate' }), 'Finance report generated')}>
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={p.busy === 'fin'}
+            onClick={() => void p.call('fin', () => api(p, 'finance', { action: 'generate' }), 'Finance report generated')}
+          >
             {latest ? 'Generate new report version' : 'Generate finance report'}
           </button>
 
-          {latest && !latest.sent_confirmed && (
+          {latest && !latest.sent_confirmed && latest.downloaded_at && (
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-              <p className="text-sm font-medium text-white">Confirm handover to finance</p>
-              {!latest.downloaded_at && <p className="text-xs text-amber-300">Download the report before confirming it was sent.</p>}
-              <div className="grid gap-3 md:grid-cols-3">
-                <Field label="Finance recipient"><input className={inputCls} value={sent.finance_recipient} onChange={(e) => setSent({ ...sent, finance_recipient: e.target.value })} /></Field>
-                <Field label="Method">
-                  <select className={inputCls} value={sent.communication_method} onChange={(e) => setSent({ ...sent, communication_method: e.target.value })}>
-                    {['Email', 'WhatsApp', 'In person', 'Other'].map((m) => <option key={m}>{m}</option>)}
-                  </select>
-                </Field>
-                <Field label="Email subject"><input className={inputCls} value={sent.email_subject} onChange={(e) => setSent({ ...sent, email_subject: e.target.value })} /></Field>
-              </div>
-              <Field label="Notes"><input className={inputCls} value={sent.notes} onChange={(e) => setSent({ ...sent, notes: e.target.value })} /></Field>
+              <p className="text-sm font-medium text-white">After sending the PDF outside Think-Q</p>
+              <Field label="Optional comment">
+                <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </Field>
               <label className="flex items-center gap-2 text-sm text-slate-300">
-                <input type="checkbox" checked={sent.confirm} onChange={(e) => setSent({ ...sent, confirm: e.target.checked })} /> I confirm the report was sent to finance.
+                <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
+                SENT TO FINANCE
               </label>
-              <button type="button" className={btnPrimary} disabled={!sent.confirm || !sent.finance_recipient.trim() || !latest.downloaded_at || p.busy === 'sent'}
-                onClick={() => void p.call('sent', () => api(p, 'finance', { action: 'sent', handover_id: latest.id, ...sent }), 'Finance handover confirmed')}>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={!confirm || p.busy === 'sent'}
+                title={!confirm ? 'Tick SENT TO FINANCE after you have sent the report' : undefined}
+                onClick={() =>
+                  void p.call(
+                    'sent',
+                    () => api(p, 'finance', { action: 'sent', handover_id: latest.id, confirm: true, notes }),
+                    'Finance handover confirmed'
+                  )
+                }
+              >
                 Confirm sent
               </button>
             </div>
+          )}
+          {latest && !latest.sent_confirmed && !latest.downloaded_at && (
+            <p className="text-xs text-amber-300">
+              Finance Handover cannot be marked as sent because the report has not yet been successfully downloaded.
+              Use Download first.
+            </p>
           )}
         </>
       )}
@@ -1256,16 +1454,18 @@ function FinanceSection(p: SectionProps) {
 
 function CloseSection(p: SectionProps) {
   const f = p.b.flags;
+  const ticket = p.b.ticket;
   const gates: [string, boolean][] = [
     ['Team member assigned', Boolean(f.hasAssignments)],
     ['At least one visit logged', Boolean(f.hasVisits)],
     ['No open dependency', !f.hasOpenDependency],
     ['No quote pending decision', !f.hasPendingQuote],
-    ['All contributions approved', !f.contributionsOutstanding && !f.contributionsAwaitingReview && Boolean(f.hasAssignments)],
+    ['All technicians / partners completed their work', !f.contributionsOutstanding && Boolean(f.hasAssignments)],
     ['Job card signed or signature exception recorded', f.jobCardStatus === 'signed' || Boolean(f.hasSignatureException)],
     ['Finance handover sent', Boolean(f.financeSent)],
   ];
   const allOk = gates.every(([, ok]) => ok);
+  const workReady = !f.contributionsOutstanding && Boolean(f.hasAssignments);
   const [resolution, setResolution] = useState('');
   const [cancel, setCancel] = useState({ reason: '', explanation: '', ticket_action: 'leave_open' });
   const [showCancel, setShowCancel] = useState(false);
@@ -1279,10 +1479,41 @@ function CloseSection(p: SectionProps) {
       </ul>
       {!p.locked && (
         <>
+          {workReady && ticket && ticket.status !== 'closed' && (
+            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+              <p className="text-sm text-cyan-100">READY FOR HTO TICKET CLOSURE — closing the ticket does not close this Support Call.</p>
+              <button
+                type="button"
+                className={`${btnPrimary} mt-2`}
+                disabled={p.busy === 'close-ticket'}
+                onClick={() =>
+                  void p.call(
+                    'close-ticket',
+                    () => api(p, 'close-ticket', { resolution: resolution || 'Technical work complete' }),
+                    'Shared ticket closed — Support Call remains open'
+                  )
+                }
+              >
+                Close shared ticket only
+              </button>
+            </div>
+          )}
           <Field label="Ticket resolution (optional)"><textarea className={textareaCls} value={resolution} onChange={(e) => setResolution(e.target.value)} /></Field>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={btnPrimary} disabled={!allOk || p.busy === 'close'}
-              onClick={() => void p.call('close', () => api(p, 'close', { resolution }), 'Support call and ticket closed')}>
+            <button
+              type="button"
+              className={btnPrimary}
+              disabled={!allOk || p.busy === 'close'}
+              title={
+                !allOk
+                  ? `Support Call cannot be closed yet. Outstanding: ${gates
+                      .filter(([, ok]) => !ok)
+                      .map(([l]) => l)
+                      .join('; ')}`
+                  : undefined
+              }
+              onClick={() => void p.call('close', () => api(p, 'close', { resolution }), 'Support call and ticket closed')}
+            >
               Close support call & ticket
             </button>
             <button type="button" className={btnDanger} onClick={() => setShowCancel((s) => !s)}>Cancel support call…</button>
@@ -1369,6 +1600,8 @@ export default function SupportCallDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [newLink, setNewLink] = useState<{ url: string; expires_at: string } | null>(null);
   const [toast, setToast] = useState<{ tone: 'success' | 'error' | 'warning'; text: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -1376,16 +1609,21 @@ export default function SupportCallDetailPage() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts?: { manual?: boolean }) => {
     if (!token || !id) return;
+    if (opts?.manual) setRefreshing(true);
     try {
       const data = (await scFetch(`/api/support-calls/${id}`, { accessToken: token })) as Bundle;
       setB(data);
       setError(null);
+      setLastRefreshAt(new Date().toISOString());
+      if (opts?.manual) setToast({ tone: 'success', text: 'Support call data refreshed.' });
     } catch (e) {
       setError(errorMessage(e));
+      if (opts?.manual) setToast({ tone: 'error', text: errorMessage(e) });
     } finally {
       setLoading(false);
+      if (opts?.manual) setRefreshing(false);
     }
   }, [id, token]);
 
@@ -1484,17 +1722,37 @@ export default function SupportCallDetailPage() {
               </span>
             </p>
           </div>
-          <button type="button" className={btnGhost} onClick={() => void reload()}>Refresh</button>
         </div>
         {!locked && (
           <p className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100">
             <span className="text-cyan-300">Next:</span> {b.workflow.next_action}
           </p>
         )}
+        {sc.partner_required && (
+          <p className="mt-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm text-violet-100">
+            <span className="font-semibold text-violet-200">SUPPORT PARTNER REQUIRED</span>
+            {sc.partner_required_reason ? ` — ${sc.partner_required_reason}` : ''}
+          </p>
+        )}
         {sc.overall_status === 'cancelled' && (
           <p className="mt-3 text-sm text-rose-300">Cancelled: {sc.cancel_reason} — {sc.cancel_explanation} (ticket: {sc.cancel_ticket_action?.replace('_', ' ')})</p>
         )}
       </section>
+
+      <div className="sticky top-3 z-40 flex justify-end">
+        <button
+          type="button"
+          className={`${btnGhost} shadow-lg shadow-black/40 ${refreshing ? 'bg-slate-700 text-white ring-2 ring-cyan-400/50' : 'bg-slate-900/95 backdrop-blur'}`}
+          disabled={refreshing}
+          onClick={() => void reload({ manual: true })}
+          title="Refresh current Support Call data without a full page reload. Unsaved form fields are kept."
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {lastRefreshAt && !refreshing && (
+            <span className="ml-2 text-[10px] text-slate-500">Last {fmtDateTime(lastRefreshAt)}</span>
+          )}
+        </button>
+      </div>
 
       {toast && (
         <div
@@ -1561,7 +1819,7 @@ export default function SupportCallDetailPage() {
 
         return (
           <>
-            <Section n={1} title="Intake & site" mode={modes.intake} meta={intakeDone ? `Updated ${fmtDateTime(sc.updated_at)}` : null} chip={<Badge tone="slate">{sc.reporter_name || 'Reporter n/a'}</Badge>}>
+            <Section n={1} title="Intake & site" mode={modes.intake} meta={intakeDone ? `Updated ${fmtDateTime(sc.updated_at)}` : null} chip={<Badge tone="slate">{sc.reporter_contact || sc.reporter_email || sc.reporter_phone || 'Contact n/a'}</Badge>}>
               <IntakeSection key={sc.updated_at} {...lockedSp('intake')} />
             </Section>
             <Section n={2} title="Customer communication" mode={modes.comms} meta={`Initial: ${sc.initial_notification_status}`} chip={chip(sc.initial_notification_status === 'complete', 'Customer notified', `Initial: ${sc.initial_notification_status}`)}>
@@ -1573,17 +1831,24 @@ export default function SupportCallDetailPage() {
             <Section n={4} title="Partners" mode={modes.partners} chip={<Badge tone="slate">{b.partners.length}</Badge>}>
               <PartnersSection {...sp} />
             </Section>
-            <Section n={5} title="ETA" mode="optional" chip={<Badge tone={sc.eta_notification_status === 'complete' ? 'emerald' : 'slate'}>ETA notice: {sc.eta_notification_status}</Badge>}>
+            <Section
+              n={5}
+              title="ETA"
+              mode={sc.eta_notification_status === 'complete' ? 'completed' : modes.assign === 'completed' || modes.assign === 'current' ? (b.eta_events.length ? 'current' : 'optional') : 'future'}
+              meta={sc.eta_sent_at ? `Sent ${fmtDateTime(sc.eta_sent_at)} by ${nameOf(b, sc.eta_sent_by)}` : null}
+              chip={<Badge tone={sc.eta_notification_status === 'complete' ? 'emerald' : 'slate'}>ETA notice: {sc.eta_notification_status}</Badge>}
+            >
               <EtaSection {...sp} />
             </Section>
             <Section
               n={6}
               title="Technical Work / Job Card"
               mode={modes.tech}
-              meta={techDone ? 'All applicable work complete — READY FOR HTO TICKET CLOSURE' : 'Awaiting COMPLETE MY WORK'}
+              meta={techDone ? 'All applicable work complete — READY FOR HTO TICKET CLOSURE' : sc.partner_required ? 'SUPPORT PARTNER REQUIRED' : 'Awaiting COMPLETE MY WORK'}
               chip={chip(techDone, `${b.visits.length} visit(s) · complete`, `${b.visits.length} visit(s)`)}
             >
               <VisitsSection {...lockedSp('tech')} />
+              <HardwareStockSection {...lockedSp('tech')} />
             </Section>
             {(b.quotes.length > 0 || f.hasPendingQuote) && (
               <Section n={7} title="Quotes" mode={modes.quotes} chip={<Badge tone={f.hasPendingQuote ? 'amber' : 'slate'}>{f.hasPendingQuote ? 'Decision pending' : `${b.quotes.length} quote(s)`}</Badge>}>

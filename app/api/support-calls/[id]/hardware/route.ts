@@ -35,11 +35,26 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
 
     for (const [i, item] of rawItems.entries()) {
       const description = cleanStr(item.description, 500);
-      if (!description) return jsonError(`Line ${i + 1}: description is required`, 400);
+      if (!description) {
+        return jsonError(
+          `Hardware line ${i + 1} cannot be saved. Enter a description (for example: Hikvision reader, network cable).`,
+          400
+        );
+      }
       const qty = cleanNum(item.quantity) ?? 1;
-      if (qty <= 0) return jsonError(`Line ${i + 1}: quantity must be greater than zero`, 400);
+      if (qty <= 0) {
+        return jsonError(`Hardware line ${i + 1} cannot be saved. Quantity must be greater than zero.`, 400);
+      }
       const visit_id = isUuid(item.visit_id) ? item.visit_id : defaultVisit;
-      if (visit_id) visitIds.add(visit_id);
+      if (!visit_id) {
+        return jsonError(
+          `Hardware line ${i + 1} cannot be saved. Select the visit this stock was used on.`,
+          400
+        );
+      }
+      visitIds.add(visit_id);
+      const mac = cleanStr(item.mac ?? item.new_mac ?? item.old_mac, 50);
+      const document_id = isUuid(item.document_id) ? item.document_id : null;
       rows.push({
         support_call_id: sc.id,
         visit_id,
@@ -49,9 +64,10 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
         old_equipment: cleanStr(item.old_equipment, 300),
         new_equipment: cleanStr(item.new_equipment, 300),
         old_mac: cleanStr(item.old_mac, 50),
-        new_mac: cleanStr(item.new_mac, 50),
+        new_mac: mac,
         serial_number: cleanStr(item.serial_number, 100),
         replacement_reason: cleanStr(item.replacement_reason, 1000),
+        document_id,
         created_by: auth.userId,
       });
     }
@@ -63,7 +79,10 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
         .eq('support_call_id', sc.id)
         .in('id', [...visitIds]);
       if ((visits || []).length !== visitIds.size) {
-        return jsonError('visit_id does not belong to this support call', 400);
+        return jsonError(
+          'Hardware cannot be saved. The selected visit does not belong to this support call. Refresh and choose a visit again.',
+          400
+        );
       }
     }
 

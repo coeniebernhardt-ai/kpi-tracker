@@ -18,7 +18,7 @@ import {
   syncAssignments,
   actorRole,
 } from '@/app/lib/support-calls/server';
-import { parseIntake } from '@/app/lib/support-calls/intake';
+import { applyReporterContact, parseIntake } from '@/app/lib/support-calls/intake';
 import { findDuplicateSupportCalls } from '@/app/lib/support-calls/duplicates';
 import { nextSupportCallNumber } from '@/app/lib/support-calls/numbers';
 import { writeSupportCallAudit } from '@/app/lib/support-calls/audit';
@@ -139,12 +139,18 @@ export async function GET(request: NextRequest) {
 }
 
 function requiredForSubmit(v: Record<string, unknown>, description: string, clientName: string | null) {
-  if (!description) return 'original_description is required';
-  if (!clientName) return 'client is required';
-  if (!v.report_method) return 'report_method is required';
-  if (!v.reported_at) return 'reported_at is required';
-  if (!v.estate_or_building) return 'estate_or_building is required';
-  return null;
+  const missing: string[] = [];
+  if (!description) missing.push('Issue description');
+  if (!clientName) missing.push('Client');
+  if (!v.report_method) missing.push('Reporting method');
+  if (!v.reported_at) missing.push('Date/time received');
+  if (!v.estate_or_building) missing.push('Estate / Building');
+  if (!v.reporter_contact) missing.push('Reporter Contact (email or telephone)');
+  if (!missing.length) return null;
+  return (
+    'Support Call cannot be submitted. The following information is still required:\n- ' +
+    missing.join('\n- ')
+  );
 }
 
 /** POST /api/support-calls — managers only. as_draft=true skips ticket creation. */
@@ -172,11 +178,16 @@ export async function POST(request: NextRequest) {
     const parsed = parseIntake(body);
     if (parsed.error) return jsonError(parsed.error, 400);
     const v = parsed.values;
+    if (!asDraft) {
+      const contactErr = applyReporterContact(v, body, { require: true });
+      if (contactErr) return jsonError(contactErr, 400);
+    } else {
+      applyReporterContact(v, body);
+    }
     const priority = parsePriority(body.priority, 'Medium');
     const clientName =
       (v.client as string | null) ||
       cleanStr(body.client, 200) ||
-      (v.reporter_organisation as string | null) ||
       null;
 
     if (!asDraft) {
@@ -186,7 +197,6 @@ export async function POST(request: NextRequest) {
         clientName
       );
       if (reqErr) return jsonError(reqErr, 400);
-      if (!(v.report_method || body.report_method)) return jsonError('report_method is required', 400);
     }
 
     let htoOwnerId: string | null = null;
@@ -234,7 +244,7 @@ export async function POST(request: NextRequest) {
         estate_or_building: v.estate_or_building as string | null,
         cml_location: v.cml_location as string | null,
         onsite_location: onsite,
-        client_email: (v.reporter_email as string | null) ?? null,
+        client_email: (v.reporter_email as string | null) ?? (v.reporter_contact as string | null),
       });
       createdTicketId = ticket.id;
     }

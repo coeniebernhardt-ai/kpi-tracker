@@ -124,6 +124,21 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       return jsonError('Explain why the visit is incomplete (incomplete_reason)', 400);
     }
 
+    const idempotencyKey =
+      cleanStr(body.client_idempotency_key ?? request.headers.get('Idempotency-Key'), 120) ?? null;
+    if (idempotencyKey) {
+      const { data: existing } = await supabase
+        .from('support_call_visits')
+        .select('*')
+        .eq('support_call_id', sc.id)
+        .eq('client_idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (existing) {
+        const stage = await recomputeWorkflowStage(supabase, sc.id);
+        return NextResponse.json({ visit: existing, workflow: stage, deduplicated: true });
+      }
+    }
+
     const row = {
       support_call_id: sc.id,
       party_type,
@@ -145,6 +160,7 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       expected_follow_up_date: cleanDate(body.expected_follow_up_date),
       next_action_party: cleanStr(body.next_action_party, 200),
       created_by: auth.userId,
+      client_idempotency_key: idempotencyKey,
     };
 
     // visit_number is unique per support call; retry on a concurrent insert.
@@ -166,6 +182,19 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       if (!error && data) visit = data;
       else {
         lastErr = error;
+        // Concurrent idempotent retry won the unique key — return the winner.
+        if (error?.code === '23505' && idempotencyKey) {
+          const { data: existing } = await supabase
+            .from('support_call_visits')
+            .select('*')
+            .eq('support_call_id', sc.id)
+            .eq('client_idempotency_key', idempotencyKey)
+            .maybeSingle();
+          if (existing) {
+            const stage = await recomputeWorkflowStage(supabase, sc.id);
+            return NextResponse.json({ visit: existing, workflow: stage, deduplicated: true });
+          }
+        }
         if (error?.code !== '23505') break;
       }
     }

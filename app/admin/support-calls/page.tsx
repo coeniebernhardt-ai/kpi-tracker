@@ -62,10 +62,8 @@ const REPORT_METHODS = ['Email', 'Telephone', 'WhatsApp', 'In person', 'Other'];
 
 const emptyForm = () => ({
   report_method: 'Telephone',
-  reporter_name: '',
-  reporter_organisation: '',
-  reporter_email: '',
-  reporter_phone: '',
+  reporter_contact: '',
+  client_houston_userid: '',
   reported_at: nowLocalInput(),
   original_description: '',
   priority: 'Medium',
@@ -158,7 +156,7 @@ export default function SupportCallsPage() {
   const payload = (asDraft: boolean) => ({
     ...form,
     ...loc,
-    client: loc.client || form.reporter_organisation,
+    client: loc.client,
     site_name: loc.onsite_location || loc.site_name,
     reported_at: fromLocalInput(form.reported_at),
     hto_owner_id: effectiveHto || undefined,
@@ -180,7 +178,7 @@ export default function SupportCallsPage() {
           third_party_job_card_number: form.third_party_job_card_number,
           po_number: form.po_number,
           external_quote_reference: form.external_quote_reference,
-          client: loc.client || form.reporter_organisation,
+          client: loc.client,
           site_name: loc.onsite_location || loc.site_name,
         }),
       })) as DupResult;
@@ -218,13 +216,14 @@ export default function SupportCallsPage() {
     form.original_description.trim() &&
     form.report_method.trim() &&
     form.reported_at.trim() &&
+    form.reporter_contact.trim() &&
     loc.client.trim() &&
     loc.estate_or_building.trim() &&
     effectiveHto &&
     !dup?.exactMatch &&
     (!needsAck || ackReason.trim());
   const canDraft =
-    effectiveHto && (form.original_description.trim() || loc.client.trim() || form.reporter_organisation.trim());
+    effectiveHto && (form.original_description.trim() || loc.client.trim());
 
   if (!canManageSupportCalls) {
     return (
@@ -278,11 +277,24 @@ export default function SupportCallsPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <Field label="Reporter name"><input className={inputCls} value={form.reporter_name} onChange={(e) => set('reporter_name', e.target.value)} /></Field>
-                <Field label="Reporter organisation"><input className={inputCls} value={form.reporter_organisation} onChange={(e) => set('reporter_organisation', e.target.value)} /></Field>
-                <Field label="Reporter email"><input type="email" className={inputCls} value={form.reporter_email} onChange={(e) => set('reporter_email', e.target.value)} /></Field>
-                <Field label="Reporter phone"><input className={inputCls} value={form.reporter_phone} onChange={(e) => set('reporter_phone', e.target.value)} /></Field>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Reporter Contact (email or telephone)">
+                  <input
+                    className={inputCls}
+                    value={form.reporter_contact}
+                    onChange={(e) => set('reporter_contact', e.target.value)}
+                    placeholder="name@example.com or +27…"
+                    required
+                  />
+                </Field>
+                <Field label="Client Houston UserID (optional)">
+                  <input
+                    className={inputCls}
+                    value={form.client_houston_userid}
+                    onChange={(e) => set('client_houston_userid', e.target.value)}
+                    placeholder="Free text when available"
+                  />
+                </Field>
               </div>
 
               <Field label="Problem reported (stays unchanged after creation)">

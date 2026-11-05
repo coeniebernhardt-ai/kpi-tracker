@@ -9,13 +9,20 @@ let cachedLogoDataUrl: string | null | undefined;
 
 function thinkDigitalLogoDataUrl(): string | null {
   if (cachedLogoDataUrl !== undefined) return cachedLogoDataUrl;
-  try {
-    const logoPath = path.join(process.cwd(), 'public', 'think-digital-logo.png');
-    const buf = fs.readFileSync(logoPath);
-    cachedLogoDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
-  } catch {
-    cachedLogoDataUrl = null;
+  const candidates = [
+    path.join(process.cwd(), 'public', 'TD_Logo_RGB_ThinkDigital_OnLight.png'),
+    path.join(process.cwd(), 'public', 'think-digital-logo.png'),
+  ];
+  for (const logoPath of candidates) {
+    try {
+      const buf = fs.readFileSync(logoPath);
+      cachedLogoDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+      return cachedLogoDataUrl;
+    } catch {
+      /* try next */
+    }
   }
+  cachedLogoDataUrl = null;
   return cachedLogoDataUrl;
 }
 

@@ -7,6 +7,8 @@ const TEXT_FIELDS = [
   'reporter_organisation',
   'reporter_email',
   'reporter_phone',
+  'reporter_contact',
+  'client_houston_userid',
   'operational_description',
   'client',
   'site_name',
@@ -19,6 +21,51 @@ const TEXT_FIELDS = [
   'responsible_email',
   'responsible_phone',
 ] as const;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^[+]?[\d\s().-]{7,}$/;
+
+/** Classify a single Reporter Contact value as email or phone. */
+export function classifyReporterContact(raw: string | null | undefined): {
+  contact: string | null;
+  email: string | null;
+  phone: string | null;
+  error?: string;
+} {
+  const contact = cleanStr(raw, 200);
+  if (!contact) return { contact: null, email: null, phone: null };
+  if (EMAIL_RE.test(contact)) return { contact, email: contact, phone: null };
+  if (PHONE_RE.test(contact.replace(/\s/g, ''))) return { contact, email: null, phone: contact };
+  return {
+    contact,
+    email: null,
+    phone: null,
+    error:
+      'Reporter Contact must be a valid email address or telephone number (only one is required).',
+  };
+}
+
+/** Apply reporter_contact onto values, mirroring into reporter_email or reporter_phone. */
+export function applyReporterContact(
+  values: Record<string, unknown>,
+  body: Record<string, unknown>,
+  opts?: { require?: boolean }
+): string | undefined {
+  if (!('reporter_contact' in body) && !opts?.require) return undefined;
+  const classified = classifyReporterContact(
+    (body.reporter_contact as string | undefined) ?? (values.reporter_contact as string | null)
+  );
+  if (classified.error) return classified.error;
+  if (opts?.require && !classified.contact) {
+    return 'Support Call cannot be submitted. Enter a Reporter Contact (email or telephone) before continuing.';
+  }
+  if ('reporter_contact' in body || classified.contact) {
+    values.reporter_contact = classified.contact;
+    values.reporter_email = classified.email;
+    values.reporter_phone = classified.phone;
+  }
+  return undefined;
+}
 
 const UUID_FIELDS = ['client_id', 'estate_id', 'cml_location_id', 'onsite_location_id'] as const;
 
@@ -79,6 +126,9 @@ export function parseIntake(body: Record<string, unknown>): {
       values[`${f}_norm`] = normalizeExternalRef(raw);
     }
   }
+
+  const contactErr = applyReporterContact(values, body);
+  if (contactErr) return { values, error: contactErr };
 
   return { values };
 }

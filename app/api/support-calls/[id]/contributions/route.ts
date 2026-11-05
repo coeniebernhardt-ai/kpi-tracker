@@ -15,7 +15,8 @@ import { notifySupportCallUsers } from '@/app/lib/support-calls/notify';
 /**
  * POST /api/support-calls/[id]/contributions
  * COMPLETE MY WORK: submit technical summary + mark assignment work_completed_at.
- * HTO approval is NOT required for completion. HTO may later Request correction (return).
+ * Optional partner referral: referred_to_partner + referral_reason → ticket Pending / HTO.
+ * HTO approval is NOT required for completion.
  */
 export async function POST(request: NextRequest, { params }: RouteCtx) {
   try {
@@ -26,30 +27,57 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     const supabase = auth.supabase;
 
     if (!assignment) {
-      return jsonError('Only assigned team members can complete their work', 403);
+      return jsonError(
+        'You cannot complete work on this support call because you are not an assigned technician. Ask the HTO to assign you first.',
+        403
+      );
     }
 
     if ((assignment as { work_completed_at?: string | null }).work_completed_at) {
-      return jsonError('Your work is already marked complete', 409);
+      return jsonError(
+        'Your work is already marked complete. If HTO requested a correction, wait for the return before submitting again.',
+        409
+      );
     }
 
     const body = await readJson(request);
     const summary = cleanStr(body.summary, 20000);
-    if (!summary) return jsonError('A summary of your work is required', 400);
+    if (!summary) {
+      return jsonError(
+        'Complete My Work cannot continue. Enter a summary of your investigation and work performed.',
+        400
+      );
+    }
     if (body.confirmed_accurate !== true) {
-      return jsonError('You must confirm that your technical work is accurate', 400);
+      return jsonError(
+        'Complete My Work cannot continue. Tick the confirmation that your technical work (visits and hardware) is accurate.',
+        400
+      );
     }
 
-    // Require at least one internal visit with arrival/departure for this assignment
+    const referred = body.referred_to_partner === true || body.unable_to_complete_partner_required === true;
+    const referral_reason = cleanStr(body.referral_reason, 5000);
+    if (referred && !referral_reason) {
+      return jsonError(
+        'Support Partner referral cannot be submitted. Provide a short reason explaining why external specialist assistance is required.',
+        400
+      );
+    }
+
     const { data: visits } = await supabase
       .from('support_call_visits')
       .select('id, arrived_at, departed_at, work_performed')
       .eq('support_call_id', sc.id)
       .eq('assignment_id', assignment.id)
       .eq('party_type', 'internal');
-    const validVisits = (visits || []).filter((v: { arrived_at: string | null; departed_at: string | null }) => v.arrived_at && v.departed_at);
+    const validVisits = (visits || []).filter(
+      (v: { arrived_at: string | null; departed_at: string | null }) => v.arrived_at && v.departed_at
+    );
     if (!validVisits.length) {
-      return jsonError('Log at least one visit with arrival and departure times before completing your work', 400);
+      return jsonError(
+        'Complete My Work cannot continue. Log at least one visit with both arrival and departure times for your assignment first.',
+        400
+      );
     }
 
     const payload_json =
@@ -63,15 +91,14 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       .eq('assignment_id', assignment.id)
       .order('revision', { ascending: false })
       .limit(1);
-    const latest = latestRows?.[0] as
-      | { id: string; revision: number; status: string }
-      | undefined;
+    const latest = latestRows?.[0] as { id: string; revision: number; status: string } | undefined;
 
     if (latest?.status === 'submitted' || latest?.status === 'approved') {
-      return jsonError('Your work is already submitted', 409);
+      return jsonError('Your work is already submitted and counted as complete.', 409);
     }
 
     const now = new Date().toISOString();
+    const completion_category = referred ? 'completed_referred_to_partner' : 'completed';
     const common = {
       summary,
       confirmed_accurate: true,
@@ -79,6 +106,9 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       payload_json,
       status: 'submitted',
       submitted_at: now,
+      referred_to_partner: referred,
+      referral_reason: referred ? referral_reason : null,
+      completion_category,
     };
 
     let contribution: Record<string, unknown> | null = null;
@@ -93,7 +123,6 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       if (error) return dbError('contributions.update', error);
       contribution = data;
     } else {
-      // draft missing, returned, or first submit — new revision preserves history
       const { data, error } = await supabase
         .from('support_call_contributions')
         .insert({
@@ -115,25 +144,57 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
         work_completed_by: auth.userId,
         first_submitted_at: assignment.first_submitted_at ?? now,
         first_update_at: assignment.first_update_at ?? now,
+        referred_to_partner: referred,
+        referral_reason: referred ? referral_reason : null,
+        completion_category,
       })
       .eq('id', assignment.id);
     if (doneErr) return dbError('assignments.complete', doneErr);
 
-    await ctx.audit('member_work_completed', {
+    if (referred) {
+      await supabase
+        .from('support_calls')
+        .update({
+          partner_required: true,
+          partner_required_at: now,
+          partner_required_by: auth.userId,
+          partner_required_reason: referral_reason,
+        })
+        .eq('id', sc.id);
+
+      if (sc.ticket_id) {
+        await supabase
+          .from('tickets')
+          .update({
+            status: 'pending',
+            assigned_to_array: [sc.hto_owner_id],
+            user_id: sc.hto_owner_id,
+          })
+          .eq('id', sc.ticket_id);
+      }
+    }
+
+    await ctx.audit(referred ? 'member_work_referred_partner' : 'member_work_completed', {
       related_id: contribution!.id as string,
       new_value: {
         revision: contribution!.revision,
         status: 'submitted',
         work_completed_at: now,
-        confirmed_accurate: true,
+        completion_category,
+        referred_to_partner: referred,
+        referral_reason: referred ? referral_reason : null,
       },
     });
 
     await notifySupportCallUsers(supabase, {
       userIds: [sc.hto_owner_id].filter((u) => u !== auth.userId),
-      type: 'support_call_contribution_submitted',
-      title: `Work completed on ${sc.support_call_number}`,
-      message: 'A team member completed their technical work.',
+      type: referred ? 'support_call_attention' : 'support_call_contribution_submitted',
+      title: referred
+        ? `SUPPORT PARTNER REQUIRED — ${sc.support_call_number}`
+        : `Work completed on ${sc.support_call_number}`,
+      message: referred
+        ? `Technician referred to external support partner: ${referral_reason}`
+        : 'A team member completed their technical work.',
       ticket_id: sc.ticket_id,
       triggering_user_id: auth.userId,
       triggering_user_role: notifyRole(auth),
@@ -143,7 +204,12 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     return NextResponse.json(
       {
         contribution,
-        assignment: { id: assignment.id, work_completed_at: now },
+        assignment: {
+          id: assignment.id,
+          work_completed_at: now,
+          completion_category,
+          referred_to_partner: referred,
+        },
         workflow: stage,
       },
       { status: 201 }

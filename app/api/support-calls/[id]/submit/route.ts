@@ -36,12 +36,22 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     }
 
     const description = (sc.original_description || '').trim();
-    if (!description || description === '(draft)') return jsonError('Issue description is required before submit', 400);
-    if (!sc.client) return jsonError('Client is required before submit', 400);
-    if (!sc.report_method) return jsonError('Reporting method is required before submit', 400);
-    if (!sc.reported_at) return jsonError('Date/time received is required before submit', 400);
-    if (!sc.estate_or_building) return jsonError('Estate / Building is required before submit', 400);
-    if (!sc.priority) return jsonError('Priority is required before submit', 400);
+    const missing: string[] = [];
+    if (!description || description === '(draft)') missing.push('Issue description');
+    if (!sc.client) missing.push('Client');
+    if (!sc.report_method) missing.push('Reporting method');
+    if (!sc.reported_at) missing.push('Date/time received');
+    if (!sc.estate_or_building) missing.push('Estate / Building');
+    if (!sc.priority) missing.push('Priority');
+    if (!(sc as { reporter_contact?: string | null }).reporter_contact && !sc.reporter_email && !sc.reporter_phone) {
+      missing.push('Reporter Contact (email or telephone)');
+    }
+    if (missing.length) {
+      return jsonError(
+        'Support Call cannot be submitted. The following information is still required:\n- ' + missing.join('\n- '),
+        400
+      );
+    }
 
     const body = await readJson(request).catch(() => ({} as Record<string, unknown>));
     const ackReason = typeof body.duplicate_ack_reason === 'string' ? body.duplicate_ack_reason.trim() : '';
@@ -72,14 +82,17 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     const ticket = await createPendingTicket(auth.supabase, {
       hto_owner_id: sc.hto_owner_id,
       created_by: auth.userId,
-      client: sc.client,
+      client: sc.client as string,
       location,
       issue: description,
       severity: priorityToSeverity(sc.priority),
       estate_or_building: sc.estate_or_building,
       cml_location: sc.cml_location,
       onsite_location: onsite,
-      client_email: sc.reporter_email,
+      client_email:
+        sc.reporter_email ||
+        (sc as { reporter_contact?: string | null }).reporter_contact ||
+        null,
     });
 
     const { data: updated, error } = await auth.supabase
