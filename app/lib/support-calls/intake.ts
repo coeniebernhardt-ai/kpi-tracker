@@ -12,12 +12,15 @@ const TEXT_FIELDS = [
   'site_name',
   'estate_or_building',
   'cml_location',
+  'onsite_location',
   'responsible_name',
   'responsible_position',
   'responsible_organisation',
   'responsible_email',
   'responsible_phone',
 ] as const;
+
+const UUID_FIELDS = ['client_id', 'estate_id', 'cml_location_id', 'onsite_location_id'] as const;
 
 const REF_FIELDS = [
   'supplier_invoice_number',
@@ -38,6 +41,18 @@ export function parseIntake(body: Record<string, unknown>): {
 
   for (const f of TEXT_FIELDS) {
     if (f in body) values[f] = cleanStr(body[f], f === 'operational_description' ? 20000 : 500);
+  }
+
+  for (const f of UUID_FIELDS) {
+    if (f in body) {
+      const raw = body[f];
+      if (raw === null || raw === '' || raw === undefined) values[f] = null;
+      else if (typeof raw === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) {
+        values[f] = raw;
+      } else {
+        return { values, error: `${f} must be a UUID or empty` };
+      }
+    }
   }
 
   if ('reported_at' in body) values.reported_at = cleanIso(body.reported_at);

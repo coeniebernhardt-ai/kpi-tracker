@@ -105,6 +105,7 @@ export interface Ticket {
   ticket_type?: 'Hardware' | 'Software' | 'New Site';
   estate_or_building?: string;
   cml_location?: string;
+  onsite_location?: string;
   // New Site fields
   site_name?: string;
   installers?: string[];
@@ -402,7 +403,7 @@ export async function uploadTicketAttachment(
 }
 
 // Ticket helpers – list columns only (no updates, time_logs, attachments on list)
-const TICKET_LIST_COLUMNS = 'id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, created_at, estate_or_building, cml_location, ticket_type, has_dependencies, dependency_name, assigned_to_array, response_time_minutes, closed_at, resolution, created_by';
+const TICKET_LIST_COLUMNS = 'id, ticket_number, user_id, client, clickup_ticket, location, status, severity, issue, created_at, estate_or_building, cml_location, onsite_location, ticket_type, has_dependencies, dependency_name, assigned_to_array, response_time_minutes, closed_at, resolution, created_by';
 const ADMIN_TICKET_SUMMARY_COLUMNS = `${TICKET_LIST_COLUMNS}, attachments, site_files, display_id`;
 
 /** Global KPI metrics (all tickets). Not affected by pagination or date range. Run CREATE_ADMIN_KPI_FUNCTION.sql in Supabase to enable. */
@@ -675,6 +676,7 @@ export async function createTicket(ticket: {
   ticket_type?: 'Hardware' | 'Software' | 'New Site';
   estate_or_building?: string;
   cml_location?: string;
+  onsite_location?: string;
   // New Site fields
   site_name?: string;
   installers?: string[];

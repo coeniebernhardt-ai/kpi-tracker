@@ -27,7 +27,7 @@ import { notifySupportCallUsers } from '@/app/lib/support-calls/notify';
 /**
  * GET /api/support-calls
  * Managers see everything; members only calls they are assigned to.
- * Query: status=open|closed|cancelled|all, stage, priority, q, include=members, limit
+ * Query: status=open|closed|cancelled|draft|all, stage, priority, q, include=members, limit
  */
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     let query = auth.supabase
       .from('support_calls')
       .select(
-        'id, support_call_number, ticket_id, hto_owner_id, priority, overall_status, workflow_stage, client, site_name, location, original_description, reporter_name, reported_at, initial_notification_status, eta_notification_status, created_at, updated_at, closed_at, cancelled_at'
+        'id, support_call_number, ticket_id, hto_owner_id, priority, overall_status, workflow_stage, client, site_name, estate_or_building, cml_location, onsite_location, location, original_description, reporter_name, reported_at, initial_notification_status, eta_notification_status, created_at, updated_at, closed_at, cancelled_at'
       )
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -75,9 +75,10 @@ export async function GET(request: NextRequest) {
 
     const { data: calls, error } = await query;
     if (error) return dbError('list', error);
-    const rows = (calls || []) as Array<Record<string, unknown> & { id: string; ticket_id: string; hto_owner_id: string }>;
+    const rows = (calls || []) as Array<Record<string, unknown> & { id: string; ticket_id: string | null; hto_owner_id: string }>;
 
     const ids = rows.map((r) => r.id);
+    const ticketIds = rows.map((r) => r.ticket_id).filter((id): id is string => Boolean(id));
     const [assignRes, ticketRes] = await Promise.all([
       ids.length
         ? auth.supabase
@@ -85,11 +86,8 @@ export async function GET(request: NextRequest) {
             .select('support_call_id, member_id, is_lead, acknowledged_at, started_work_at')
             .in('support_call_id', ids)
         : Promise.resolve({ data: [] }),
-      rows.length
-        ? auth.supabase
-            .from('tickets')
-            .select('id, ticket_number, status')
-            .in('id', rows.map((r) => r.ticket_id))
+      ticketIds.length
+        ? auth.supabase.from('tickets').select('id, ticket_number, status').in('id', ticketIds)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -110,7 +108,7 @@ export async function GET(request: NextRequest) {
 
     const support_calls = rows.map((r) => ({
       ...r,
-      ticket: ticketMap.get(r.ticket_id) ?? null,
+      ticket: r.ticket_id ? ticketMap.get(r.ticket_id) ?? null : null,
       hto_owner_name: profiles[r.hto_owner_id]?.full_name ?? null,
       assignments: assignments
         .filter((x) => x.support_call_id === r.id)
@@ -140,7 +138,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST /api/support-calls — managers only. Creates a PENDING ticket assigned to the HTO + the support call. */
+function requiredForSubmit(v: Record<string, unknown>, description: string, clientName: string | null) {
+  if (!description) return 'original_description is required';
+  if (!clientName) return 'client is required';
+  if (!v.report_method) return 'report_method is required';
+  if (!v.reported_at) return 'reported_at is required';
+  if (!v.estate_or_building) return 'estate_or_building is required';
+  return null;
+}
+
+/** POST /api/support-calls — managers only. as_draft=true skips ticket creation. */
 export async function POST(request: NextRequest) {
   let createdTicketId: string | null = null;
   let svc: SupabaseClient | null = null;
@@ -151,18 +158,37 @@ export async function POST(request: NextRequest) {
     const supabase = auth.supabase;
     svc = supabase;
     const body = await readJson(request);
+    const asDraft = body.as_draft === true;
 
     const description = cleanStr(body.original_description, 20000);
-    if (!description) return jsonError('original_description is required', 400);
+    if (!description && !asDraft) return jsonError('original_description is required', 400);
+    if (!description && asDraft) {
+      // drafts still need something to identify the call
+      if (!cleanStr(body.client, 200) && !cleanStr(body.reporter_organisation, 200)) {
+        return jsonError('Provide at least a client or description to save a draft', 400);
+      }
+    }
 
     const parsed = parseIntake(body);
     if (parsed.error) return jsonError(parsed.error, 400);
     const v = parsed.values;
     const priority = parsePriority(body.priority, 'Medium');
-    const clientName = (v.client as string | null) || (v.reporter_organisation as string | null) || null;
-    if (!clientName) return jsonError('client (or reporter_organisation) is required', 400);
+    const clientName =
+      (v.client as string | null) ||
+      cleanStr(body.client, 200) ||
+      (v.reporter_organisation as string | null) ||
+      null;
 
-    // HTO owner
+    if (!asDraft) {
+      const reqErr = requiredForSubmit(
+        { ...v, reported_at: (v.reported_at as string | null) ?? cleanStr(body.reported_at, 40) },
+        description || '',
+        clientName
+      );
+      if (reqErr) return jsonError(reqErr, 400);
+      if (!(v.report_method || body.report_method)) return jsonError('report_method is required', 400);
+    }
+
     let htoOwnerId: string | null = null;
     if (isUuid(body.hto_owner_id)) htoOwnerId = body.hto_owner_id;
     else if (auth.isHto) htoOwnerId = auth.userId;
@@ -173,20 +199,19 @@ export async function POST(request: NextRequest) {
       return jsonError('hto_owner_id must be an active HTO', 400);
     }
 
-    // Duplicate guard (exact refs block; same client/site/day needs acknowledgement)
     const dup = await findDuplicateSupportCalls(supabase, {
       supplier_invoice_number: v.supplier_invoice_number as string | null,
       third_party_job_card_number: v.third_party_job_card_number as string | null,
       po_number: v.po_number as string | null,
       external_quote_reference: v.external_quote_reference as string | null,
       client: clientName,
-      site_name: v.site_name as string | null,
+      site_name: (v.site_name as string | null) || (v.onsite_location as string | null),
     });
     const ackReason = cleanStr(body.duplicate_ack_reason, 1000);
-    if (dup.exactMatch) {
+    if (!asDraft && dup.exactMatch) {
       return jsonError(dup.safeHint || 'Duplicate reference', 409, { code: 'DUPLICATE', duplicates: dup });
     }
-    if (dup.hasPossibleDuplicate && !ackReason) {
+    if (!asDraft && dup.hasPossibleDuplicate && !ackReason) {
       return jsonError(dup.safeHint || 'Possible duplicate', 409, {
         code: 'POSSIBLE_DUPLICATE',
         requires_ack: true,
@@ -194,43 +219,48 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const location = (v.location as 'on-site' | 'remote' | null) ?? 'remote';
-    const ticket = await createPendingTicket(supabase, {
-      hto_owner_id: htoOwnerId,
-      created_by: auth.userId,
-      client: clientName,
-      location,
-      issue: description,
-      severity: priorityToSeverity(priority),
-      estate_or_building: v.estate_or_building as string | null,
-      cml_location: v.cml_location as string | null,
-      client_email: (v.reporter_email as string | null) ?? null,
-    });
-    createdTicketId = ticket.id;
+    const location = (v.location as 'on-site' | 'remote' | null) ?? 'on-site';
+    const onsite = (v.onsite_location as string | null) || (v.site_name as string | null) || null;
 
-    // Insert the support call (retry on daily-number collision)
+    let ticket: { id: string; ticket_number: string } | null = null;
+    if (!asDraft) {
+      ticket = await createPendingTicket(supabase, {
+        hto_owner_id: htoOwnerId,
+        created_by: auth.userId,
+        client: clientName!,
+        location,
+        issue: description!,
+        severity: priorityToSeverity(priority),
+        estate_or_building: v.estate_or_building as string | null,
+        cml_location: v.cml_location as string | null,
+        onsite_location: onsite,
+        client_email: (v.reporter_email as string | null) ?? null,
+      });
+      createdTicketId = ticket.id;
+    }
+
     let sc: Record<string, unknown> | null = null;
     let lastErr: { message: string; code?: string } | null = null;
     for (let attempt = 0; attempt < 5 && !sc; attempt++) {
       const support_call_number = await nextSupportCallNumber(supabase);
-      const { data, error } = await supabase
-        .from('support_calls')
-        .insert({
-          ...v,
-          client: clientName,
-          location: (v.location as string | null) ?? location,
-          support_call_number,
-          ticket_id: ticket.id,
-          hto_owner_id: htoOwnerId,
-          created_by: auth.userId,
-          priority,
-          overall_status: 'open',
-          workflow_stage: 'awaiting_assignment',
-          original_description: description,
-          reported_at: (v.reported_at as string | null) ?? new Date().toISOString(),
-        })
-        .select('*')
-        .single();
+      const insertRow: Record<string, unknown> = {
+        ...v,
+        client: clientName,
+        site_name: onsite || (v.site_name as string | null),
+        onsite_location: onsite,
+        location: (v.location as string | null) ?? location,
+        support_call_number,
+        ticket_id: ticket?.id ?? null,
+        hto_owner_id: htoOwnerId,
+        created_by: auth.userId,
+        priority,
+        overall_status: asDraft ? 'draft' : 'open',
+        workflow_stage: asDraft ? 'logged' : 'awaiting_assignment',
+        original_description: description || '(draft)',
+        reported_at: (v.reported_at as string | null) ?? (asDraft ? null : new Date().toISOString()),
+        report_method: (v.report_method as string | null) || cleanStr(body.report_method, 100),
+      };
+      const { data, error } = await supabase.from('support_calls').insert(insertRow).select('*').single();
       if (!error && data) {
         sc = data as Record<string, unknown>;
       } else {
@@ -239,31 +269,34 @@ export async function POST(request: NextRequest) {
       }
     }
     if (!sc) {
-      await supabase.from('tickets').delete().eq('id', ticket.id);
-      createdTicketId = null;
+      if (ticket) {
+        await supabase.from('tickets').delete().eq('id', ticket.id);
+        createdTicketId = null;
+      }
       return dbError('create', lastErr || { message: 'Insert failed' });
     }
-    createdTicketId = null; // committed
+    createdTicketId = null;
 
     const scId = sc.id as string;
 
     await writeSupportCallAudit(supabase, {
       support_call_id: scId,
-      ticket_id: ticket.id,
+      ticket_id: ticket?.id ?? null,
       actor_id: auth.userId,
       actor_role: actorRole(auth),
-      event_type: 'support_call_created',
+      event_type: asDraft ? 'support_call_draft_created' : 'support_call_created',
       new_value: {
         support_call_number: sc.support_call_number,
-        ticket_number: ticket.ticket_number,
-        ticket_status: 'pending',
+        ticket_number: ticket?.ticket_number ?? null,
+        ticket_status: ticket ? 'pending' : null,
         hto_owner_id: htoOwnerId,
         priority,
+        overall_status: sc.overall_status,
       },
       source: 'api',
     });
 
-    if (dup.hasPossibleDuplicate && ackReason) {
+    if (!asDraft && dup.hasPossibleDuplicate && ackReason) {
       await supabase.from('support_call_duplicate_decisions').insert({
         support_call_id: scId,
         actor_id: auth.userId,
@@ -273,7 +306,7 @@ export async function POST(request: NextRequest) {
       });
       await writeSupportCallAudit(supabase, {
         support_call_id: scId,
-        ticket_id: ticket.id,
+        ticket_id: ticket!.id,
         actor_id: auth.userId,
         actor_role: actorRole(auth),
         event_type: 'duplicate_acknowledged',
@@ -283,49 +316,52 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Optional immediate assignment
     let assignResult: unknown = null;
     const memberIds = Array.isArray(body.member_ids) ? (body.member_ids as unknown[]).filter(isUuid) : [];
-    if (memberIds.length) {
-      const res = await syncAssignments(
-        supabase,
-        { id: scId, ticket_id: ticket.id, hto_owner_id: htoOwnerId },
-        memberIds,
-        isUuid(body.lead_id) ? body.lead_id : null,
-        auth.userId
-      );
-      if (res.ok) {
-        assignResult = { added: res.added, lead_id: res.lead_id };
-        await writeSupportCallAudit(supabase, {
-          support_call_id: scId,
-          ticket_id: ticket.id,
-          actor_id: auth.userId,
-          actor_role: actorRole(auth),
-          event_type: 'assignments_changed',
-          previous_value: res.previous,
-          new_value: res.next,
-          source: 'api',
-        });
-        await notifySupportCallUsers(supabase, {
-          userIds: res.added.filter((id) => id !== auth.userId),
-          type: 'support_call_assigned',
-          title: `Support call ${sc.support_call_number} assigned`,
-          message: `You have been assigned to support call ${sc.support_call_number}.`,
-          ticket_id: ticket.id,
-          triggering_user_id: auth.userId,
-          triggering_user_role: notifyRole(auth),
-        });
+    if (!asDraft && ticket && memberIds.length) {
+      if (!onsite) {
+        assignResult = { error: 'On-site location is required before dispatch' };
       } else {
-        assignResult = { error: res.error };
+        const res = await syncAssignments(
+          supabase,
+          { id: scId, ticket_id: ticket.id, hto_owner_id: htoOwnerId },
+          memberIds,
+          isUuid(body.lead_id) ? body.lead_id : null,
+          auth.userId
+        );
+        if (res.ok) {
+          assignResult = { added: res.added, lead_id: res.lead_id };
+          await writeSupportCallAudit(supabase, {
+            support_call_id: scId,
+            ticket_id: ticket.id,
+            actor_id: auth.userId,
+            actor_role: actorRole(auth),
+            event_type: 'assignments_changed',
+            previous_value: res.previous,
+            new_value: res.next,
+            source: 'api',
+          });
+          await notifySupportCallUsers(supabase, {
+            userIds: res.added.filter((id) => id !== auth.userId),
+            type: 'support_call_assigned',
+            title: `Support call ${sc.support_call_number} assigned`,
+            message: `You have been assigned to support call ${sc.support_call_number}.`,
+            ticket_id: ticket.id,
+            triggering_user_id: auth.userId,
+            triggering_user_role: notifyRole(auth),
+          });
+        } else {
+          assignResult = { error: res.error };
+        }
       }
     }
 
-    const stage = await recomputeWorkflowStage(supabase, scId);
+    const stage = asDraft ? null : await recomputeWorkflowStage(supabase, scId);
 
     return NextResponse.json(
       {
         support_call: { ...sc, workflow_stage: stage?.stage ?? sc.workflow_stage },
-        ticket: { id: ticket.id, ticket_number: ticket.ticket_number, status: 'pending' },
+        ticket: ticket ? { id: ticket.id, ticket_number: ticket.ticket_number, status: 'pending' } : null,
         assignment: assignResult,
       },
       { status: 201 }
@@ -335,7 +371,7 @@ export async function POST(request: NextRequest) {
       try {
         await svc.from('tickets').delete().eq('id', createdTicketId);
       } catch {
-        /* ignore rollback failure */
+        /* ignore */
       }
     }
     return handleRouteError('POST /support-calls', e);

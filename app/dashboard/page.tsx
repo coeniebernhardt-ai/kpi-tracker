@@ -1135,6 +1135,13 @@ export default function DashboardPage() {
                                 <p className={`text-sm ${n.read ? 'text-slate-400' : 'text-white'}`}>
                                   {n.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to'}
                                   {n.type === 'added_to_ticket' && 'You were added to a ticket'}
+                                  {n.type === 'support_call_assigned' && (n.title || 'Support call assigned — open Technical Work')}
+                                  {n.type === 'support_call_attention' && (n.title || 'Support call needs attention')}
+                                  {n.type === 'support_call_contribution_submitted' && (n.title || 'Technical work submitted')}
+                                  {n.type === 'support_call_contribution_returned' && (n.title || 'Technical work returned for correction')}
+                                  {n.type === 'support_call_quote_decision' && (n.title || 'Quote decision recorded')}
+                                  {n.type === 'support_call_dependency' && (n.title || 'Support call dependency update')}
+                                  {!['admin_comment', 'added_to_ticket', 'support_call_assigned', 'support_call_attention', 'support_call_contribution_submitted', 'support_call_contribution_returned', 'support_call_quote_decision', 'support_call_dependency'].includes(n.type) && (n.title || n.message || 'Notification')}
                                 </p>
                               )}
                               <p className="text-xs text-slate-500 mt-0.5">
@@ -1240,6 +1247,7 @@ export default function DashboardPage() {
                       <p className="text-slate-300">
                         {notificationDetail.type === 'admin_comment' && 'Admin commented on a ticket you are assigned to.'}
                         {notificationDetail.type === 'added_to_ticket' && 'You were added to a ticket.'}
+                        {String(notificationDetail.type || '').startsWith('support_call_') && 'Open the ticket and go to Technical Work / Job Card.'}
                       </p>
                     )}
                     {/* Part 1: imageUrl from API is resolvable (proxy); use directly; graceful fallback */}
@@ -1359,15 +1367,25 @@ export default function DashboardPage() {
                         onClick={() => {
                           setMainTab('tickets');
                           setExpandedTickets((prev) => new Set(prev).add(notificationDetail.ticket_id!));
-                          const t = tickets.find((x) => x.id === notificationDetail.ticket_id);
-                          if (t) setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                          const t =
+                            tickets.find((x) => x.id === notificationDetail.ticket_id) ||
+                            pendingTickets.find((x) => x.id === notificationDetail.ticket_id);
+                          if (t?.status === 'pending') {
+                            setPendingPanelOpen(true);
+                          } else if (t) {
+                            setActiveTab(t.status === 'open' ? 'open' : 'closed');
+                            setPendingPanelOpen(false);
+                          }
                           setNotificationDetailId(null);
                           setNotificationDetail(null);
                           setNotificationDetailImageError(false);
+                          window.setTimeout(() => {
+                            document.getElementById('technical-work')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }, 350);
                         }}
                         className="w-full py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium hover:bg-blue-500/30"
                       >
-                        View ticket
+                        {String(notificationDetail.type || '').startsWith('support_call_') ? 'Open Technical Work' : 'View ticket'}
                       </button>
                     )}
                   </div>
@@ -2291,6 +2309,14 @@ export default function DashboardPage() {
                             No Estate/Building
                           </span>
                         )}
+                        {ticket.cml_location ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">CML: {ticket.cml_location}</span>
+                        ) : null}
+                        {(ticket.onsite_location || (ticket.location === 'on-site' && ticket.estate_or_building)) ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
+                            On-site: {ticket.onsite_location || '—'}
+                          </span>
+                        ) : null}
                         {ticket.severity && (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
                             {ticket.severity}
@@ -2962,6 +2988,12 @@ export default function DashboardPage() {
                             No Estate/Building
                           </span>
                         )}
+                        {ticket.cml_location ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">CML: {ticket.cml_location}</span>
+                        ) : null}
+                        {ticket.onsite_location ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">On-site: {ticket.onsite_location}</span>
+                        ) : null}
                         {ticket.severity && (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
                             {ticket.severity}

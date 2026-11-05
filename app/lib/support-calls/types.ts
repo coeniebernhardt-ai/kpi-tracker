@@ -1,7 +1,7 @@
 /** Types mirroring SUPPORT_CALLS_SCHEMA.sql. Timestamps/dates are ISO strings; NUMERIC columns are numbers. */
 
 export type SupportCallPriority = 'Critical' | 'High' | 'Medium' | 'Low';
-export type SupportCallOverallStatus = 'open' | 'closed' | 'cancelled';
+export type SupportCallOverallStatus = 'draft' | 'open' | 'closed' | 'cancelled';
 export type SupportCallLocation = 'on-site' | 'remote';
 export type NotificationCheckpointStatus = 'pending' | 'complete' | 'attempted';
 export type CancelTicketAction = 'close' | 'leave_open';
@@ -24,7 +24,7 @@ export type SupportPartner = {
 export type SupportCall = {
   id: string;
   support_call_number: string;
-  ticket_id: string;
+  ticket_id: string | null;
   hto_owner_id: string;
   created_by: string | null;
   priority: SupportCallPriority;
@@ -44,6 +44,11 @@ export type SupportCall = {
   site_name: string | null;
   estate_or_building: string | null;
   cml_location: string | null;
+  onsite_location: string | null;
+  client_id: string | null;
+  estate_id: string | null;
+  cml_location_id: string | null;
+  onsite_location_id: string | null;
   location: SupportCallLocation | null;
   responsible_name: string | null;
   responsible_position: string | null;

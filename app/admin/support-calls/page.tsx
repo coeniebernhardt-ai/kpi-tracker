@@ -21,13 +21,14 @@ import {
   textareaCls,
 } from '../../components/support-calls/sc-ui';
 import { AdminPanel, EmptyState } from '../admin-ui';
+import LocationCascade, { emptyLocationSelection, type LocationSelection } from '../../components/support-calls/LocationCascade';
 
 type ListAssignment = { member_id: string; full_name: string | null; is_lead: boolean };
 type ListRow = {
   id: string;
   support_call_number: string;
   priority: string;
-  overall_status: 'open' | 'closed' | 'cancelled';
+  overall_status: 'draft' | 'open' | 'closed' | 'cancelled';
   workflow_stage: string;
   client: string | null;
   site_name: string | null;
@@ -46,10 +47,11 @@ type DupMatch = { id: string; support_call_number: string; matched_fields: strin
 type DupResult = { hasPossibleDuplicate: boolean; exactMatch: boolean; safeHint: string | null; matches: DupMatch[] };
 
 const QUEUES: { key: string; label: string; match: (r: ListRow) => boolean }[] = [
+  { key: 'draft', label: 'Drafts', match: (r) => r.overall_status === 'draft' },
   { key: 'open', label: 'All open', match: (r) => r.overall_status === 'open' },
   { key: 'assign', label: 'Needs assignment', match: (r) => r.overall_status === 'open' && ['awaiting_assignment', 'awaiting_acknowledgement'].includes(r.workflow_stage) },
   { key: 'progress', label: 'In progress', match: (r) => r.overall_status === 'open' && ['in_progress', 'awaiting_dependency', 'awaiting_quote_decision'].includes(r.workflow_stage) },
-  { key: 'contrib', label: 'Contributions', match: (r) => r.overall_status === 'open' && ['contributions_pending', 'contributions_in_review'].includes(r.workflow_stage) },
+  { key: 'contrib', label: 'Technical work', match: (r) => r.overall_status === 'open' && ['contributions_pending', 'contributions_in_review', 'technical_pending', 'technical_in_review'].includes(r.workflow_stage) },
   { key: 'signoff', label: 'Job card & signature', match: (r) => r.overall_status === 'open' && ['job_card_pending', 'awaiting_signature'].includes(r.workflow_stage) },
   { key: 'finance', label: 'Ready for finance', match: (r) => r.overall_status === 'open' && r.workflow_stage === 'ready_for_finance' },
   { key: 'closed', label: 'Closed', match: (r) => r.overall_status === 'closed' },
@@ -67,10 +69,6 @@ const emptyForm = () => ({
   reported_at: nowLocalInput(),
   original_description: '',
   priority: 'Medium',
-  client: '',
-  site_name: '',
-  estate_or_building: '',
-  cml_location: '',
   location: 'on-site',
   responsible_name: '',
   responsible_position: '',
@@ -98,6 +96,7 @@ export default function SupportCallsPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [loc, setLoc] = useState<LocationSelection>(emptyLocationSelection);
   const [htoId, setHtoId] = useState('');
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [leadId, setLeadId] = useState('');
@@ -156,13 +155,17 @@ export default function SupportCallsPage() {
     if (!next.includes(leadId)) setLeadId(next[0] ?? '');
   };
 
-  const payload = () => ({
+  const payload = (asDraft: boolean) => ({
     ...form,
+    ...loc,
+    client: loc.client || form.reporter_organisation,
+    site_name: loc.onsite_location || loc.site_name,
     reported_at: fromLocalInput(form.reported_at),
     hto_owner_id: effectiveHto || undefined,
-    member_ids: memberIds,
-    lead_id: leadId || memberIds[0] || undefined,
+    member_ids: asDraft ? [] : memberIds,
+    lead_id: asDraft ? undefined : leadId || memberIds[0] || undefined,
     duplicate_ack_reason: ackReason.trim() || undefined,
+    as_draft: asDraft,
   });
 
   const checkDuplicates = async () => {
@@ -177,8 +180,8 @@ export default function SupportCallsPage() {
           third_party_job_card_number: form.third_party_job_card_number,
           po_number: form.po_number,
           external_quote_reference: form.external_quote_reference,
-          client: form.client || form.reporter_organisation,
-          site_name: form.site_name,
+          client: loc.client || form.reporter_organisation,
+          site_name: loc.onsite_location || loc.site_name,
         }),
       })) as DupResult;
       setDup(res.hasPossibleDuplicate ? res : null);
@@ -190,14 +193,14 @@ export default function SupportCallsPage() {
     }
   };
 
-  const create = async () => {
+  const create = async (asDraft: boolean) => {
     setCreating(true);
     setCreateError(null);
     try {
       const res = await scFetch('/api/support-calls', {
         method: 'POST',
         accessToken: token,
-        body: JSON.stringify(payload()),
+        body: JSON.stringify(payload(asDraft)),
       });
       router.push(`/admin/support-calls/${res.support_call.id}`);
     } catch (e) {
@@ -213,10 +216,15 @@ export default function SupportCallsPage() {
   const needsAck = Boolean(dup?.hasPossibleDuplicate && !dup.exactMatch);
   const canSubmit =
     form.original_description.trim() &&
-    (form.client.trim() || form.reporter_organisation.trim()) &&
+    form.report_method.trim() &&
+    form.reported_at.trim() &&
+    loc.client.trim() &&
+    loc.estate_or_building.trim() &&
     effectiveHto &&
     !dup?.exactMatch &&
     (!needsAck || ackReason.trim());
+  const canDraft =
+    effectiveHto && (form.original_description.trim() || loc.client.trim() || form.reporter_organisation.trim());
 
   if (!canManageSupportCalls) {
     return (
@@ -232,7 +240,7 @@ export default function SupportCallsPage() {
         <div>
           <h1 className="text-3xl font-semibold text-white">Support Calls</h1>
           <p className="mt-2 text-sm text-slate-400">
-            HTO-owned operational calls — assignment, visits, contributions, job cards, signing and finance handover.
+            HTO-owned operational calls — assignment, technical work, job cards, signing and finance handover.
           </p>
         </div>
         <button type="button" className={btnPrimary} onClick={() => setShowCreate((s) => !s)}>
@@ -244,8 +252,8 @@ export default function SupportCallsPage() {
         <div className="mb-6">
           <AdminPanel title="New support call" accent="strong">
             <p className="mb-4 text-xs text-slate-400">
-              Creating a support call also creates a <span className="text-amber-300">Pending</span> ticket owned by the HTO.
-              The ticket opens when the technician starts work.
+              Save a <span className="text-amber-300">Draft</span> without a ticket, or submit to create a{' '}
+              <span className="text-amber-300">Pending</span> ticket owned by the HTO.
             </p>
             <div className="space-y-5">
               <div className="grid gap-3 md:grid-cols-4">
@@ -281,18 +289,13 @@ export default function SupportCallsPage() {
                 <textarea className={textareaCls} value={form.original_description} onChange={(e) => set('original_description', e.target.value)} />
               </Field>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <Field label="Client"><input className={inputCls} value={form.client} onChange={(e) => set('client', e.target.value)} /></Field>
-                <Field label="Site"><input className={inputCls} value={form.site_name} onChange={(e) => set('site_name', e.target.value)} /></Field>
-                <Field label="Estate / building"><input className={inputCls} value={form.estate_or_building} onChange={(e) => set('estate_or_building', e.target.value)} /></Field>
-                <Field label="CML location"><input className={inputCls} value={form.cml_location} onChange={(e) => set('cml_location', e.target.value)} /></Field>
-                <Field label="Work location">
-                  <select className={inputCls} value={form.location} onChange={(e) => set('location', e.target.value)}>
-                    <option value="on-site">On-site</option>
-                    <option value="remote">Remote</option>
-                  </select>
-                </Field>
-              </div>
+              <LocationCascade token={token} value={loc} onChange={setLoc} requireOnsite={false} />
+              <Field label="Work type">
+                <select className={inputCls} value={form.location} onChange={(e) => set('location', e.target.value)}>
+                  <option value="on-site">On-site</option>
+                  <option value="remote">Remote</option>
+                </select>
+              </Field>
 
               <div className="grid gap-3 md:grid-cols-5">
                 <Field label="Responsible person"><input className={inputCls} value={form.responsible_name} onChange={(e) => set('responsible_name', e.target.value)} /></Field>
@@ -363,11 +366,14 @@ export default function SupportCallsPage() {
 
               {createError && <Notice tone="error">{createError}</Notice>}
 
-              <div className="flex gap-3">
-                <button type="button" className={btnPrimary} disabled={creating || !canSubmit} onClick={() => void create()}>
-                  {creating ? 'Creating…' : 'Create support call'}
+              <div className="flex flex-wrap gap-3">
+                <button type="button" className={btnGhost} disabled={creating || !canDraft} onClick={() => void create(true)}>
+                  {creating ? 'Saving…' : 'Save draft'}
                 </button>
-                <button type="button" className={btnGhost} onClick={() => { setForm(emptyForm()); setDup(null); setAckReason(''); setMemberIds([]); setCreateError(null); }}>
+                <button type="button" className={btnPrimary} disabled={creating || !canSubmit} onClick={() => void create(false)}>
+                  {creating ? 'Creating…' : 'Submit support call'}
+                </button>
+                <button type="button" className={btnGhost} onClick={() => { setForm(emptyForm()); setLoc(emptyLocationSelection()); setDup(null); setAckReason(''); setMemberIds([]); setCreateError(null); }}>
                   Reset
                 </button>
               </div>

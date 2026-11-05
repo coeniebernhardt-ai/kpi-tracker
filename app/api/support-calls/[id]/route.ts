@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, { params }: RouteCtx) {
 export async function PATCH(request: NextRequest, { params }: RouteCtx) {
   try {
     const { id } = await params;
-    const ctx = await scContext(request, id, 'manager', { requireOpen: true });
+    const ctx = await scContext(request, id, 'manager', { requireOpen: true, allowDraft: true });
     if (!ctx.ok) return ctx.response;
     const { auth, sc } = ctx;
     const body = await readJson(request);
@@ -83,15 +83,28 @@ export async function PATCH(request: NextRequest, { params }: RouteCtx) {
       .single();
     if (upErr) return dbError('patch', upErr);
 
-    if (changed.priority) {
-      await auth.supabase
-        .from('tickets')
-        .update({ severity: priorityToSeverity(changed.priority as 'Critical' | 'High' | 'Medium' | 'Low') })
-        .eq('id', sc.ticket_id);
+    if (sc.ticket_id) {
+      const ticketPatch: Record<string, unknown> = {};
+      if (changed.priority) {
+        ticketPatch.severity = priorityToSeverity(changed.priority as 'Critical' | 'High' | 'Medium' | 'Low');
+      }
+      if ('client' in changed) ticketPatch.client = changed.client;
+      if ('estate_or_building' in changed) ticketPatch.estate_or_building = changed.estate_or_building;
+      if ('cml_location' in changed) ticketPatch.cml_location = changed.cml_location;
+      if ('onsite_location' in changed) ticketPatch.onsite_location = changed.onsite_location;
+      if ('site_name' in changed && !('onsite_location' in changed)) {
+        ticketPatch.onsite_location = changed.site_name;
+      }
+      if ('location' in changed) ticketPatch.location = changed.location;
+      if (Object.keys(ticketPatch).length) {
+        await auth.supabase.from('tickets').update(ticketPatch).eq('id', sc.ticket_id);
+      }
     }
 
     await ctx.audit('support_call_updated', { previous_value: previous, new_value: changed });
-    await recomputeWorkflowStage(auth.supabase, sc.id);
+    if (sc.overall_status !== 'draft') {
+      await recomputeWorkflowStage(auth.supabase, sc.id);
+    }
 
     return NextResponse.json({ support_call: updated });
   } catch (e) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { scFetch } from '../../lib/support-calls/client';
+import { useSupportCallRealtime } from '../../lib/support-calls/useSupportCallRealtime';
 import { INTERNAL_TRAVEL_RATE_ZAR } from '../../lib/support-calls/constants';
 import { formatLabourDisplay, minutesBetween, travelAmountZar } from '../../lib/support-calls/labour';
 import type {
@@ -85,9 +86,19 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
   }, [ticketId, token]);
 
   useEffect(() => {
-    // Initial fetch of the linked support call (state is set when the request resolves).
     void load();
   }, [load]);
+
+  const scId = bundle?.support_call?.id ?? null;
+  const { status: rtStatus } = useSupportCallRealtime({
+    supportCallId: scId,
+    ticketId,
+    enabled: Boolean(scId),
+    pause: Boolean(busy) || showVisit || Boolean(summary.trim()),
+    onChange: () => {
+      void load();
+    },
+  });
 
   if (!bundle?.support_call) return null;
 
@@ -172,10 +183,10 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
   const canContribute = isOpen && mine && (!latestContrib || latestContrib.status === 'draft' || latestContrib.status === 'returned');
 
   return (
-    <div className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+    <div id="technical-work" className="mb-4 scroll-mt-24 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-cyan-200">🛠️ Support call {sc.support_call_number}</span>
+          <span className="text-sm font-semibold text-cyan-200">Technical Work / Job Card · {sc.support_call_number}</span>
           <Badge tone={priorityTone(sc.priority)}>{sc.priority}</Badge>
           <StageBadge stage={bundle.workflow?.stage ?? sc.workflow_stage} />
           {sc.overall_status !== 'open' && <Badge tone="slate">{sc.overall_status}</Badge>}
@@ -189,9 +200,12 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
       {bundle.workflow?.next_action && isOpen && (
         <p className="mt-1 text-xs text-slate-400">Next: {bundle.workflow.next_action}</p>
       )}
-      <p className="mt-2 line-clamp-3 text-xs text-slate-400">
-        {[sc.client, sc.site_name].filter(Boolean).join(' · ')}
-      </p>
+      <div className="mt-2 grid gap-1 text-xs text-slate-300 sm:grid-cols-2">
+        <p><span className="text-slate-500">Client:</span> {sc.client || '—'}</p>
+        <p><span className="text-slate-500">Estate / Building:</span> {sc.estate_or_building || '—'}</p>
+        <p><span className="text-slate-500">CML Location:</span> {sc.cml_location || '—'}</p>
+        <p><span className="text-slate-500">On-site Location:</span> {sc.onsite_location || sc.site_name || '—'}</p>
+      </div>
 
       {error && <div className="mt-3"><Notice tone="error">{error}</Notice></div>}
       {message && <div className="mt-3"><Notice tone="success">{message}</Notice></div>}
@@ -333,10 +347,10 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
             )}
           </div>
 
-          {/* Contribution */}
+          {/* Formal technical submission */}
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">My contribution</p>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Submit technical work</p>
               {latestContrib && (
                 <Badge tone={latestContrib.status === 'approved' ? 'emerald' : latestContrib.status === 'returned' ? 'amber' : 'blue'}>
                   {latestContrib.status} · rev {latestContrib.revision}
@@ -359,7 +373,7 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
                 </Field>
                 <label className="flex items-start gap-2 text-sm text-slate-300">
                   <input type="checkbox" className="mt-1" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-                  I confirm this contribution (including my visits and hardware) is accurate.
+                  I confirm this technical work (including my visits and hardware) is accurate.
                 </label>
                 <button
                   type="button"
@@ -370,11 +384,14 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
                       await post('contributions', { summary, confirmed_accurate: true });
                       setSummary('');
                       setConfirmed(false);
-                    }, 'Contribution submitted for review')
+                    }, 'Technical work submitted for review')
                   }
                 >
-                  {busy === 'contrib' ? 'Submitting…' : 'Submit contribution'}
+                  {busy === 'contrib' ? 'Submitting…' : 'COMPLETE MY WORK'}
                 </button>
+                {rtStatus === 'error' && (
+                  <p className="text-[11px] text-amber-300">Live sync unavailable — refresh if data looks stale.</p>
+                )}
               </div>
             )}
           </div>

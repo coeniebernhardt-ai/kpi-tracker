@@ -57,8 +57,10 @@ export const STAGE_LABELS: Record<string, string> = {
   in_progress: 'In progress',
   awaiting_dependency: 'Awaiting dependency',
   awaiting_quote_decision: 'Awaiting quote decision',
-  contributions_pending: 'Contributions pending',
-  contributions_in_review: 'Contributions in review',
+  contributions_pending: 'Technical work pending',
+  contributions_in_review: 'Technical work in review',
+  technical_pending: 'Technical work pending',
+  technical_in_review: 'Technical work in review',
   job_card_pending: 'Job card pending',
   awaiting_signature: 'Awaiting signature',
   ready_for_finance: 'Ready for finance',
@@ -76,6 +78,8 @@ export function stageTone(stage: string): Tone {
       return 'violet';
     case 'contributions_pending':
     case 'contributions_in_review':
+    case 'technical_pending':
+    case 'technical_in_review':
     case 'job_card_pending':
     case 'awaiting_signature':
       return 'blue';

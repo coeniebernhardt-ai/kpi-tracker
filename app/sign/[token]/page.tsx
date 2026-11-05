@@ -50,7 +50,7 @@ const fmt = (v: string | null | undefined) => {
 };
 
 const inputCls =
-  'w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-white placeholder-slate-500 outline-none focus:border-cyan-500';
+  'w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 placeholder-slate-400 outline-none focus:border-cyan-600';
 
 export default function PublicSignPage() {
   const params = useParams<{ token: string }>();
@@ -169,37 +169,40 @@ export default function PublicSignPage() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen bg-slate-950 bg-grid-pattern bg-radial-gradient px-4 py-6 text-white">
+    <div className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
       <div className="mx-auto w-full max-w-xl space-y-4">
-        <header className="text-center">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Think-Q</p>
-          <h1 className="mt-1 bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-xl font-semibold text-transparent">
-            Job card sign-off
-          </h1>
+        <header className="rounded-2xl border border-slate-200 bg-white px-4 py-5 text-center shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/think-digital-logo.png"
+            alt="Think Digital"
+            className="mx-auto h-12 w-auto object-contain"
+          />
+          <h1 className="mt-3 text-xl font-semibold text-slate-900">Job card review & sign-off</h1>
+          <p className="mt-1 text-sm text-slate-500">Official Think Digital service document</p>
         </header>
         {children}
       </div>
     </div>
   );
 
-  if (state === 'loading') return shell(<p className="text-center text-slate-400">Loading job card…</p>);
+  if (state === 'loading') return shell(<p className="text-center text-slate-500">Loading job card…</p>);
 
   if (state === 'invalid') {
     return shell(
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 text-center">
-        <p className="text-lg font-medium text-white">This link cannot be used</p>
-        <p className="mt-2 text-sm text-slate-400">{message}</p>
-        <p className="mt-4 text-xs text-slate-500">Please contact your Think-Q representative for a new link.</p>
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-lg font-medium text-slate-900">This link cannot be used</p>
+        <p className="mt-2 text-sm text-slate-500">{message}</p>
+        <p className="mt-4 text-xs text-slate-500">Please contact your Think Digital representative for a new link.</p>
       </div>
     );
   }
 
   if (state === 'done') {
     return shell(
-      <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
-        <p className="text-3xl">✅</p>
-        <p className="mt-2 text-lg font-medium text-emerald-200">Thank you — job card signed</p>
-        <p className="mt-2 text-sm text-slate-300">Your signature has been recorded. You can close this page.</p>
+      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+        <p className="mt-2 text-lg font-medium text-emerald-800">Thank you — job card signed</p>
+        <p className="mt-2 text-sm text-slate-600">Your signature has been recorded. You can close this page.</p>
       </div>
     );
   }
@@ -209,25 +212,25 @@ export default function PublicSignPage() {
 
   return shell(
     <>
-      <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
-        <p className="text-sm font-semibold text-cyan-200">{sc.support_call_number}</p>
-        <p className="mt-1 text-sm text-slate-300">{[sc.client, sc.site_name, sc.estate_or_building].filter(Boolean).join(' · ')}</p>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm font-semibold text-cyan-800">{sc.support_call_number}</p>
+        <p className="mt-1 text-sm text-slate-600">{[sc.client, sc.site_name, sc.estate_or_building].filter(Boolean).join(' · ')}</p>
         <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-slate-500">Reported issue ({fmt(sc.reported_at)})</p>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{sc.original_description}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{sc.original_description}</p>
         {data.pdf_url && (
-          <a href={data.pdf_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm text-cyan-300 underline">
+          <a href={data.pdf_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm text-cyan-700 underline">
             Open full job card PDF
           </a>
         )}
       </section>
 
-      <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
-        <h2 className="mb-3 text-base font-semibold text-white">Work carried out</h2>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Work carried out</h2>
         {data.visits.length === 0 && <p className="text-sm text-slate-500">No visits recorded.</p>}
         <div className="space-y-3">
           {data.visits.map((v) => (
-            <div key={v.visit_number} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-sm">
-              <p className="font-medium text-white">
+            <div key={v.visit_number} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-medium text-slate-900">
                 Visit {v.visit_number}
                 {v.technician ? ` · ${v.technician}` : ''}
               </p>
@@ -235,17 +238,17 @@ export default function PublicSignPage() {
                 {fmt(v.arrived_at)} → {fmt(v.departed_at)}
                 {v.labour ? ` · ${v.labour}` : ''}
               </p>
-              {v.diagnosis && <p className="mt-1 text-slate-300"><span className="text-slate-500">Diagnosis: </span>{v.diagnosis}</p>}
-              {v.work_performed && <p className="text-slate-300"><span className="text-slate-500">Work: </span>{v.work_performed}</p>}
-              {v.test_results && <p className="text-slate-300"><span className="text-slate-500">Tests: </span>{v.test_results}</p>}
-              {v.incomplete && <p className="text-amber-300">Work not yet complete</p>}
+              {v.diagnosis && <p className="mt-1 text-slate-700"><span className="text-slate-500">Diagnosis: </span>{v.diagnosis}</p>}
+              {v.work_performed && <p className="text-slate-700"><span className="text-slate-500">Work: </span>{v.work_performed}</p>}
+              {v.test_results && <p className="text-slate-700"><span className="text-slate-500">Tests: </span>{v.test_results}</p>}
+              {v.incomplete && <p className="text-amber-700">Work not yet complete</p>}
             </div>
           ))}
         </div>
         {data.hardware.length > 0 && (
           <>
-            <h3 className="mb-2 mt-4 text-sm font-semibold text-white">Hardware</h3>
-            <ul className="space-y-1 text-sm text-slate-300">
+            <h3 className="mb-2 mt-4 text-sm font-semibold text-slate-900">Hardware</h3>
+            <ul className="space-y-1 text-sm text-slate-700">
               {data.hardware.map((h, i) => (
                 <li key={i}>
                   {h.quantity ?? 1} × {h.description}
@@ -258,8 +261,8 @@ export default function PublicSignPage() {
         )}
       </section>
 
-      <section className="space-y-4 rounded-3xl border border-cyan-500/20 bg-slate-900/80 p-5">
-        <h2 className="text-base font-semibold text-white">Your signature</h2>
+      <section className="space-y-4 rounded-3xl border border-cyan-200 bg-white p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900">Your signature</h2>
         <label className="block">
           <span className="mb-1 block text-xs uppercase tracking-[0.14em] text-slate-500">Full name *</span>
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />

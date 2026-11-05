@@ -212,7 +212,7 @@ export async function scContext(
   request: NextRequest,
   id: string,
   mode: 'manager' | 'manager_or_assignee' | 'read',
-  opts: { requireOpen?: boolean } = {}
+  opts: { requireOpen?: boolean; allowDraft?: boolean } = {}
 ): Promise<ScContext | GuardFail> {
   const a = await authenticate(request);
   if (!a.ok) return a;
@@ -232,11 +232,15 @@ export async function scContext(
     return { ok: false, response: jsonError('Support call not found', 404) };
   }
 
-  if (opts.requireOpen && sc.overall_status !== 'open') {
-    return {
-      ok: false,
-      response: jsonError(`Support call is ${sc.overall_status}; no further changes allowed`, 409),
-    };
+  if (opts.requireOpen) {
+    const okStatus =
+      sc.overall_status === 'open' || (opts.allowDraft === true && sc.overall_status === 'draft');
+    if (!okStatus) {
+      return {
+        ok: false,
+        response: jsonError(`Support call is ${sc.overall_status}; no further changes allowed`, 409),
+      };
+    }
   }
 
   const audit: ScContext['audit'] = (event_type, extra = {}) =>
@@ -328,6 +332,7 @@ export type PendingTicketInput = {
   estate_or_building?: string | null;
   cml_location?: string | null;
   client_email?: string | null;
+  onsite_location?: string | null;
 };
 
 /**
@@ -355,6 +360,7 @@ export async function createPendingTicket(
       created_by: input.created_by,
       estate_or_building: input.estate_or_building ?? null,
       cml_location: input.cml_location ?? null,
+      onsite_location: input.onsite_location ?? null,
       updates: [],
       time_logs: [
         {
@@ -496,6 +502,9 @@ export async function syncAssignments(
     }
   }
 
+  if (!sc.ticket_id) {
+    return { ok: false, status: 400, error: 'Support call has no linked ticket yet — submit the draft first' };
+  }
   await syncTicketAssignees(supabase, sc.ticket_id, sc.hto_owner_id, memberIds);
 
   return {
@@ -640,11 +649,13 @@ export async function loadSupportCallBundle(
     exceptions,
     finance,
   ] = await Promise.all([
-    supabase
-      .from('tickets')
-      .select('id, ticket_number, status, severity, issue, assigned_to_array, created_at, closed_at, resolution')
-      .eq('id', sc.ticket_id)
-      .maybeSingle(),
+    sc.ticket_id
+      ? supabase
+          .from('tickets')
+          .select('id, ticket_number, status, severity, issue, assigned_to_array, created_at, closed_at, resolution')
+          .eq('id', sc.ticket_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     q('support_call_assignments', 'assigned_at'),
     view.manage ? q('support_call_partners', 'assigned_at') : Promise.resolve({ data: [] }),
     view.manage ? q('support_call_communications', 'communicated_at') : Promise.resolve({ data: [] }),

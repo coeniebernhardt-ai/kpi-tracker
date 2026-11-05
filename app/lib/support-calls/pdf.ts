@@ -1,7 +1,23 @@
+import fs from 'fs';
+import path from 'path';
 import { excessMinutes, formatLabourDisplay } from './labour';
 import { INTERNAL_TRAVEL_RATE_ZAR } from './constants';
 
-/* Server-side PDF builders for job cards and finance reports (jsPDF, text layout only). */
+/* Server-side PDF builders for job cards and finance reports (jsPDF + Think Digital logo). */
+
+let cachedLogoDataUrl: string | null | undefined;
+
+function thinkDigitalLogoDataUrl(): string | null {
+  if (cachedLogoDataUrl !== undefined) return cachedLogoDataUrl;
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'think-digital-logo.png');
+    const buf = fs.readFileSync(logoPath);
+    cachedLogoDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+  } catch {
+    cachedLogoDataUrl = null;
+  }
+  return cachedLogoDataUrl;
+}
 
 type Row = Record<string, unknown>;
 
@@ -41,7 +57,22 @@ class Writer {
     }
   }
 
-  title(text: string, sub?: string) {
+  brandHeader(text: string, sub?: string) {
+    const logo = thinkDigitalLogoDataUrl();
+    if (logo) {
+      try {
+        this.doc.addImage(logo, 'PNG', MARGIN, this.y, 48, 14);
+      } catch {
+        /* ignore logo embed failure */
+      }
+      this.y += 16;
+    }
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(11);
+    this.doc.setTextColor(30, 58, 95);
+    this.doc.text('Think Digital', MARGIN, this.y + 4);
+    this.doc.setTextColor(0);
+    this.y += 8;
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(16);
     this.doc.text(s(text), MARGIN, this.y + 6);
@@ -57,6 +88,10 @@ class Writer {
     this.doc.setDrawColor(14, 165, 233);
     this.doc.line(MARGIN, this.y, PAGE_W - MARGIN, this.y);
     this.y += 4;
+  }
+
+  title(text: string, sub?: string) {
+    this.brandHeader(text, sub);
   }
 
   heading(text: string) {
@@ -190,8 +225,9 @@ export async function buildJobCardPdf(input: JobCardPdfInput): Promise<Buffer> {
 
   w.heading('Customer & site');
   w.kv('Client', sc.client);
-  w.kv('Site', sc.site_name);
   w.kv('Estate / building', sc.estate_or_building);
+  w.kv('CML location', sc.cml_location);
+  w.kv('On-site location', sc.onsite_location || sc.site_name);
   w.kv('Location type', sc.location);
   w.kv('Responsible person', [sc.responsible_name, sc.responsible_position, sc.responsible_organisation].filter(Boolean).join(', ') || '-');
 

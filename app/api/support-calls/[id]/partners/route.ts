@@ -26,6 +26,11 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     const supabase = auth.supabase;
     const body = await readJson(request);
 
+    const onsite = (sc as { onsite_location?: string | null }).onsite_location || sc.site_name;
+    if (body.action !== 'confirm_arrival' && (!onsite || !String(onsite).trim())) {
+      return jsonError('On-site location is required before dispatching a partner', 400);
+    }
+
     if (body.action === 'confirm_arrival') {
       if (!isUuid(body.partner_assignment_id)) return jsonError('partner_assignment_id is required', 400);
       const { data, error } = await supabase

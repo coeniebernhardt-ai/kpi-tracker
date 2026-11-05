@@ -44,6 +44,8 @@ import {
   textareaCls,
 } from '../../../components/support-calls/sc-ui';
 import { EmptyState } from '../../admin-ui';
+import LocationCascade, { emptyLocationSelection, type LocationSelection } from '../../../components/support-calls/LocationCascade';
+import { useSupportCallRealtime } from '../../../lib/support-calls/useSupportCallRealtime';
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -150,7 +152,7 @@ function Locked({ locked }: { locked: boolean }) {
 
 const INTAKE_KEYS = [
   'report_method', 'reporter_name', 'reporter_organisation', 'reporter_email', 'reporter_phone',
-  'client', 'site_name', 'estate_or_building', 'cml_location', 'location',
+  'location',
   'responsible_name', 'responsible_position', 'responsible_organisation', 'responsible_email', 'responsible_phone',
   'priority', 'operational_description',
   'supplier_invoice_number', 'third_party_job_card_number', 'po_number', 'external_quote_reference',
@@ -163,6 +165,18 @@ function IntakeSection(p: SectionProps) {
     for (const k of INTAKE_KEYS) o[k] = ((sc as unknown as Record<string, unknown>)[k] as string | null) ?? '';
     return o;
   });
+  const [loc, setLoc] = useState<LocationSelection>(() => ({
+    ...emptyLocationSelection(),
+    client_id: sc.client_id ?? '',
+    estate_id: sc.estate_id ?? '',
+    cml_location_id: sc.cml_location_id ?? '',
+    onsite_location_id: sc.onsite_location_id ?? '',
+    client: sc.client ?? '',
+    estate_or_building: sc.estate_or_building ?? '',
+    cml_location: sc.cml_location ?? '',
+    onsite_location: sc.onsite_location ?? sc.site_name ?? '',
+    site_name: sc.onsite_location ?? sc.site_name ?? '',
+  }));
   const set = (k: string, v: string) => setF((cur) => ({ ...cur, [k]: v }));
   const text = (k: string, label: string, type = 'text') => (
     <Field label={label}>
@@ -170,7 +184,16 @@ function IntakeSection(p: SectionProps) {
     </Field>
   );
 
-  const dirty = INTAKE_KEYS.some((k) => (f[k] || '') !== (((sc as unknown as Record<string, unknown>)[k] as string | null) ?? ''));
+  const locDirty =
+    (loc.client_id || '') !== (sc.client_id ?? '') ||
+    (loc.estate_id || '') !== (sc.estate_id ?? '') ||
+    (loc.cml_location_id || '') !== (sc.cml_location_id ?? '') ||
+    (loc.onsite_location_id || '') !== (sc.onsite_location_id ?? '') ||
+    (loc.client || '') !== (sc.client ?? '') ||
+    (loc.estate_or_building || '') !== (sc.estate_or_building ?? '') ||
+    (loc.cml_location || '') !== (sc.cml_location ?? '') ||
+    (loc.onsite_location || '') !== (sc.onsite_location ?? sc.site_name ?? '');
+  const dirty = INTAKE_KEYS.some((k) => (f[k] || '') !== (((sc as unknown as Record<string, unknown>)[k] as string | null) ?? '')) || locDirty;
 
   return (
     <>
@@ -181,6 +204,19 @@ function IntakeSection(p: SectionProps) {
           Reported {fmtDateTime(sc.reported_at)} via {sc.report_method || '—'} · logged by {nameOf(p.b, sc.created_by)}
         </p>
       </Card>
+      {sc.overall_status === 'draft' && !p.locked && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+          This is a draft — no ticket yet.{' '}
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={p.busy === 'submit'}
+            onClick={() => void p.call('submit', () => api(p, 'submit', {}), 'Support call submitted — Pending ticket created')}
+          >
+            {p.busy === 'submit' ? 'Submitting…' : 'Submit support call'}
+          </button>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-4">
         <Field label="Reported via">
           <input className={inputCls} value={f.report_method} disabled={p.locked} onChange={(e) => set('report_method', e.target.value)} />
@@ -202,12 +238,7 @@ function IntakeSection(p: SectionProps) {
           </select>
         </Field>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
-        {text('client', 'Client')}
-        {text('site_name', 'Site')}
-        {text('estate_or_building', 'Estate / building')}
-        {text('cml_location', 'CML location')}
-      </div>
+      <LocationCascade token={p.token} value={loc} onChange={setLoc} disabled={p.locked} requireOnsite />
       <div className="grid gap-3 md:grid-cols-5">
         {text('responsible_name', 'Responsible person')}
         {text('responsible_position', 'Position')}
@@ -229,7 +260,30 @@ function IntakeSection(p: SectionProps) {
           type="button"
           className={btnPrimary}
           disabled={!dirty || p.busy === 'intake'}
-          onClick={() => void p.call('intake', () => api(p, '', Object.fromEntries(INTAKE_KEYS.map((k) => [k, f[k] === '' ? null : f[k]])), 'PATCH'), 'Details saved')}
+          onClick={() =>
+            void p.call(
+              'intake',
+              () =>
+                api(
+                  p,
+                  '',
+                  {
+                    ...Object.fromEntries(INTAKE_KEYS.map((k) => [k, f[k] === '' ? null : f[k]])),
+                    client: loc.client || null,
+                    client_id: loc.client_id || null,
+                    estate_id: loc.estate_id || null,
+                    estate_or_building: loc.estate_or_building || null,
+                    cml_location_id: loc.cml_location_id || null,
+                    cml_location: loc.cml_location || null,
+                    onsite_location_id: loc.onsite_location_id || null,
+                    onsite_location: loc.onsite_location || null,
+                    site_name: loc.onsite_location || loc.site_name || null,
+                  },
+                  'PATCH'
+                ),
+              'Details saved'
+            )
+          }
         >
           {p.busy === 'intake' ? 'Saving…' : 'Save changes'}
         </button>
@@ -761,19 +815,22 @@ function VisitsSection(p: SectionProps) {
           )}
         </div>
       )}
+      <TechnicalReviewBlock {...p} />
     </>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* 7. Contributions                                                           */
+/* Technical submission review (inside Technical Work)                        */
 /* -------------------------------------------------------------------------- */
 
-function ContributionsSection(p: SectionProps) {
+function TechnicalReviewBlock(p: SectionProps) {
   const [notes, setNotes] = useState<Record<string, string>>({});
+  if (p.b.assignments.length === 0) return null;
   return (
-    <>
-      {p.b.assignments.length === 0 && <p className="text-sm text-slate-500">Assign someone first.</p>}
+    <div className="space-y-3 border-t border-slate-800 pt-4">
+      <p className="text-sm font-medium text-white">Technical work submissions</p>
+      <p className="text-xs text-slate-500">Technicians submit from their ticket Technical Work / Job Card. Review here.</p>
       {p.b.assignments.map((a) => {
         const mine = p.b.contributions.filter((c) => c.assignment_id === a.id).sort((x, y) => y.revision - x.revision);
         const latest = mine[0];
@@ -796,7 +853,7 @@ function ContributionsSection(p: SectionProps) {
                 <input className={inputCls} placeholder="Correction notes (required when returning)" value={notes[latest.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [latest.id]: e.target.value }))} />
                 <div className="flex gap-2">
                   <button type="button" className={btnPrimary} disabled={p.busy === `rev-${latest.id}`}
-                    onClick={() => void p.call(`rev-${latest.id}`, () => api(p, 'contributions/review', { contribution_id: latest.id, action: 'accept' }), 'Contribution accepted')}>
+                    onClick={() => void p.call(`rev-${latest.id}`, () => api(p, 'contributions/review', { contribution_id: latest.id, action: 'accept' }), 'Technical work accepted')}>
                     Accept
                   </button>
                   <button type="button" className={btnDanger} disabled={!(notes[latest.id] ?? '').trim() || p.busy === `rev-${latest.id}`}
@@ -809,7 +866,7 @@ function ContributionsSection(p: SectionProps) {
           </Card>
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -1261,6 +1318,13 @@ export default function SupportCallDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [newLink, setNewLink] = useState<{ url: string; expires_at: string } | null>(null);
+  const [toast, setToast] = useState<{ tone: 'success' | 'error' | 'warning'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const reload = useCallback(async () => {
     if (!token || !id) return;
@@ -1293,11 +1357,16 @@ export default function SupportCallDetailPage() {
       setMessage(null);
       try {
         await fn();
-        if (ok) setMessage(ok);
+        if (ok) {
+          setMessage(ok);
+          setToast({ tone: 'success', text: ok });
+        }
         await reload();
         return true;
       } catch (e) {
-        setError(errorMessage(e));
+        const msg = errorMessage(e);
+        setError(msg);
+        setToast({ tone: 'error', text: msg });
         return false;
       } finally {
         setBusy(null);
@@ -1307,6 +1376,16 @@ export default function SupportCallDetailPage() {
   );
 
   const version = useMemo(() => b?.support_call.updated_at ?? '', [b]);
+
+  const { status: rtStatus } = useSupportCallRealtime({
+    supportCallId: id,
+    ticketId: b?.support_call?.ticket_id ?? null,
+    enabled: Boolean(id && canManageSupportCalls),
+    pause: Boolean(busy),
+    onChange: () => {
+      void reload();
+    },
+  });
 
   if (!canManageSupportCalls) {
     return (
@@ -1328,14 +1407,14 @@ export default function SupportCallDetailPage() {
   }
 
   const sc = b.support_call;
-  const locked = sc.overall_status !== 'open';
+  const locked = sc.overall_status === 'closed' || sc.overall_status === 'cancelled';
   const sp: SectionProps = { b, id: sc.id, token, call, busy, members, locked };
   const f = b.flags;
 
   const chip = (ok: boolean, yes: string, no: string) => <Badge tone={ok ? 'emerald' : 'amber'}>{ok ? yes : no}</Badge>;
 
   return (
-    <main className="mx-auto max-w-5xl space-y-4 px-6 py-8">
+    <main className="mx-auto max-w-7xl space-y-4 px-6 py-8">
       <Link href="/admin/support-calls" className="text-sm text-cyan-300 hover:underline">← All support calls</Link>
 
       <section className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-950 p-6 shadow-lg shadow-blue-950/30">
@@ -1345,12 +1424,20 @@ export default function SupportCallDetailPage() {
               <h1 className="text-2xl font-semibold text-white">{sc.support_call_number}</h1>
               <Badge tone={priorityTone(sc.priority)}>{sc.priority}</Badge>
               <StageBadge stage={b.workflow.stage} />
-              {locked && <Badge tone="slate">{sc.overall_status}</Badge>}
+              {(locked || sc.overall_status === 'draft') && <Badge tone={sc.overall_status === 'draft' ? 'amber' : 'slate'}>{sc.overall_status}</Badge>}
             </div>
-            <p className="mt-2 text-sm text-slate-300">{[sc.client, sc.site_name, sc.estate_or_building].filter(Boolean).join(' · ') || '—'}</p>
+            <p className="mt-2 text-sm text-slate-300">
+              {[sc.client, sc.estate_or_building, sc.cml_location ? `CML: ${sc.cml_location}` : null, sc.onsite_location || sc.site_name]
+                .filter(Boolean)
+                .join(' · ') || '—'}
+            </p>
             <p className="mt-1 text-xs text-slate-500">
               HTO owner {nameOf(b, sc.hto_owner_id)} · created {fmtDateTime(sc.created_at)}
               {b.ticket && <> · Ticket <span className="text-slate-300">{b.ticket.ticket_number}</span> <Badge tone={b.ticket.status === 'pending' ? 'amber' : b.ticket.status === 'closed' ? 'slate' : 'cyan'}>{b.ticket.status}</Badge></>}
+              {' · '}
+              <span className={rtStatus === 'live' ? 'text-emerald-400' : rtStatus === 'error' ? 'text-amber-300' : 'text-slate-500'}>
+                {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Sync offline' : rtStatus === 'connecting' ? 'Connecting…' : 'Manual refresh'}
+              </span>
             </p>
           </div>
           <button type="button" className={btnGhost} onClick={() => void reload()}>Refresh</button>
@@ -1365,8 +1452,20 @@ export default function SupportCallDetailPage() {
         )}
       </section>
 
-      {error && <Notice tone="error">{error}</Notice>}
-      {message && <Notice tone="success">{message}</Notice>}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-xl ${
+            toast.tone === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/95 text-emerald-100'
+              : toast.tone === 'warning'
+                ? 'border-amber-500/40 bg-amber-950/95 text-amber-100'
+                : 'border-rose-500/40 bg-rose-950/95 text-rose-100'
+          }`}
+          role="status"
+        >
+          {toast.text}
+        </div>
+      )}
       <Locked locked={locked} />
 
       <Section n={1} title="Intake & site" defaultOpen chip={<Badge tone="slate">{sc.reporter_name || 'Reporter n/a'}</Badge>}>
@@ -1384,28 +1483,25 @@ export default function SupportCallDetailPage() {
       <Section n={5} title="Partners" chip={<Badge tone="slate">{b.partners.length}</Badge>}>
         <PartnersSection {...sp} />
       </Section>
-      <Section n={6} title="Visits & hardware" defaultOpen={Boolean(f.hasAssignments) && !f.hasVisits} chip={<Badge tone="slate">{b.visits.length} visit(s)</Badge>}>
+      <Section n={6} title="Technical Work / Job Card" defaultOpen={Boolean(f.hasAssignments) && !f.hasVisits} chip={chip(!f.contributionsOutstanding && !f.contributionsAwaitingReview && Boolean(f.hasAssignments), `${b.visits.length} visit(s) · approved`, f.contributionsAwaitingReview ? 'Needs review' : `${b.visits.length} visit(s)`)}>
         <VisitsSection {...sp} />
       </Section>
-      <Section n={7} title="Contributions" chip={chip(!f.contributionsOutstanding && !f.contributionsAwaitingReview && Boolean(f.hasAssignments), 'All approved', f.contributionsAwaitingReview ? 'Needs review' : 'Outstanding')}>
-        <ContributionsSection {...sp} />
-      </Section>
-      <Section n={8} title="Quotes" chip={<Badge tone={f.hasPendingQuote ? 'amber' : 'slate'}>{f.hasPendingQuote ? 'Decision pending' : `${b.quotes.length} quote(s)`}</Badge>}>
+      <Section n={7} title="Quotes" chip={<Badge tone={f.hasPendingQuote ? 'amber' : 'slate'}>{f.hasPendingQuote ? 'Decision pending' : `${b.quotes.length} quote(s)`}</Badge>}>
         <QuotesSection {...sp} />
       </Section>
-      <Section n={9} title="Documents" chip={<Badge tone="slate">{b.documents.length}</Badge>}>
+      <Section n={8} title="Documents" chip={<Badge tone="slate">{b.documents.length}</Badge>}>
         <DocumentsSection {...sp} />
       </Section>
-      <Section n={10} title="Job card & signature" chip={chip(f.jobCardStatus === 'signed' || Boolean(f.hasSignatureException), 'Signed / excepted', f.hasJobCard ? 'Awaiting signature' : 'Not generated')}>
+      <Section n={9} title="Job card & signature" chip={chip(f.jobCardStatus === 'signed' || Boolean(f.hasSignatureException), 'Signed / excepted', f.hasJobCard ? 'Awaiting signature' : 'Not generated')}>
         <JobCardSection {...sp} newLink={newLink} setNewLink={setNewLink} />
       </Section>
-      <Section n={11} title="Finance handover" chip={chip(Boolean(f.financeSent), 'Sent', 'Not sent')}>
+      <Section n={10} title="Finance handover" chip={chip(Boolean(f.financeSent), 'Sent', 'Not sent')}>
         <FinanceSection {...sp} />
       </Section>
-      <Section n={12} title="Close or cancel" defaultOpen={b.workflow.stage === 'ready_for_finance' && Boolean(f.financeSent)}>
+      <Section n={11} title="Close or cancel" defaultOpen={b.workflow.stage === 'ready_for_finance' && Boolean(f.financeSent)}>
         <CloseSection {...sp} />
       </Section>
-      <Section n={13} title="Audit trail">
+      <Section n={12} title="Audit trail">
         <AuditSection id={sc.id} token={token} version={version} />
       </Section>
 

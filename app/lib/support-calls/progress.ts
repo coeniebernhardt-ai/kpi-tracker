@@ -7,6 +7,9 @@ export type WorkflowStage =
   | 'in_progress'
   | 'awaiting_dependency'
   | 'awaiting_quote_decision'
+  | 'technical_pending'
+  | 'technical_in_review'
+  /** @deprecated kept for existing DB rows */
   | 'contributions_pending'
   | 'contributions_in_review'
   | 'job_card_pending'
@@ -71,10 +74,10 @@ export function resolveWorkflowStage(
     return { stage: 'awaiting_dependency', nextAction: 'Follow up on the outstanding dependency' };
   }
   if (flags.contributionsOutstanding) {
-    return { stage: 'contributions_pending', nextAction: 'Assignees to submit their contributions' };
+    return { stage: 'technical_pending', nextAction: 'Assignees to submit Technical Work / Job Card' };
   }
   if (flags.contributionsAwaitingReview) {
-    return { stage: 'contributions_in_review', nextAction: 'Review submitted contributions' };
+    return { stage: 'technical_in_review', nextAction: 'Review submitted technical work' };
   }
   if (!flags.hasJobCard || flags.jobCardStatus === 'draft' || flags.jobCardStatus === 'superseded') {
     return { stage: 'job_card_pending', nextAction: 'Generate the job card' };

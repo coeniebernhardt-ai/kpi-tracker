@@ -24,6 +24,14 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     const { auth, sc } = ctx;
     const body = await readJson(request);
 
+    if (sc.overall_status === 'draft' || !sc.ticket_id) {
+      return jsonError('Submit the support call (create the linked ticket) before assigning technicians', 400);
+    }
+    const onsite = (sc as { onsite_location?: string | null }).onsite_location || sc.site_name;
+    if (!onsite || !String(onsite).trim()) {
+      return jsonError('On-site location is required before dispatch', 400);
+    }
+
     if (!Array.isArray(body.member_ids)) return jsonError('member_ids must be an array', 400);
     const memberIds = (body.member_ids as unknown[]).filter(isUuid);
     const leadId = isUuid(body.lead_id) ? body.lead_id : null;
