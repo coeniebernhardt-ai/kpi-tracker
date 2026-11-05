@@ -9,5 +9,8 @@ It adds:
 - Partner-required flags on the support call
 - Contribution/assignment referral + completion category
 - Visit `client_idempotency_key` (unique per call) for offline retries
+- Optional `support_call_hardware_items.document_id` for hardware photos
 
 Do **not** wipe existing data.
+
+If you already ran an earlier V4 draft, re-run the file — remaining statements use `IF NOT EXISTS` / exception guards.

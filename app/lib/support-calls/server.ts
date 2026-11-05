@@ -26,7 +26,7 @@ export function handleRouteError(context: string, err: unknown) {
 }
 
 /** Translate a Postgres unique violation to a friendly 409, otherwise 500. */
-export function dbError(context: string, error: { message: string; code?: string }) {
+export function dbError(context: string, error: { message: string; code?: string; details?: string; hint?: string }) {
   if (error.code === '23505') {
     return jsonError('A record with the same unique value already exists (possible duplicate).', 409, {
       code: 'DUPLICATE',
@@ -38,8 +38,26 @@ export function dbError(context: string, error: { message: string; code?: string
   if (error.code === '23514') {
     return jsonError('A value is not allowed for one of the fields.', 400, { code: 'CHECK_VIOLATION' });
   }
+  // PostgREST unknown column / schema cache (often surfaces as 400/406 to the API client)
+  const msg = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+  if (/column .* does not exist|Could not find .* column|PGRST204/i.test(msg)) {
+    logSafeError(`[support-calls] ${context}`, new Error(error.message));
+    return jsonError(
+      `This action cannot be saved because the database is missing a required column (${error.message}). Run the latest Support Calls SQL (V4) in Supabase, then try again.`,
+      409,
+      { code: 'SCHEMA_MISMATCH' }
+    );
+  }
   logSafeError(`[support-calls] ${context}`, new Error(error.message));
-  return NextResponse.json({ error: getSafeErrorMessage(new Error(error.message)) }, { status: 500 });
+  return NextResponse.json(
+    {
+      error:
+        error.message && !/internal server error/i.test(error.message)
+          ? error.message
+          : getSafeErrorMessage(new Error(error.message)),
+    },
+    { status: 500 }
+  );
 }
 
 /* -------------------------------------------------------------------------- */

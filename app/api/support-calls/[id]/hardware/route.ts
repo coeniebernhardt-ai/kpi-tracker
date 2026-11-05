@@ -54,8 +54,9 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       }
       visitIds.add(visit_id);
       const mac = cleanStr(item.mac ?? item.new_mac ?? item.old_mac, 50);
-      const document_id = isUuid(item.document_id) ? item.document_id : null;
-      rows.push({
+      // Only include columns that exist on support_call_hardware_items.
+      // document_id is optional (V4+) — omit when unset so older DBs still accept inserts.
+      const row: Record<string, unknown> = {
         support_call_id: sc.id,
         visit_id,
         description,
@@ -67,9 +68,10 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
         new_mac: mac,
         serial_number: cleanStr(item.serial_number, 100),
         replacement_reason: cleanStr(item.replacement_reason, 1000),
-        document_id,
         created_by: auth.userId,
-      });
+      };
+      if (isUuid(item.document_id)) row.document_id = item.document_id;
+      rows.push(row);
     }
 
     if (visitIds.size) {

@@ -53,3 +53,7 @@ ALTER TABLE support_call_visits
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sc_visits_idempotency
   ON support_call_visits(support_call_id, client_idempotency_key)
   WHERE client_idempotency_key IS NOT NULL;
+
+-- Optional photo link on hardware (was incorrectly assumed to already exist)
+ALTER TABLE support_call_hardware_items
+  ADD COLUMN IF NOT EXISTS document_id UUID REFERENCES support_call_documents(id) ON DELETE SET NULL;

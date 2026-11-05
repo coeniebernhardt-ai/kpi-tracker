@@ -202,7 +202,8 @@ export type SupportCallHardwareItem = {
   new_mac: string | null;
   serial_number: string | null;
   replacement_reason: string | null;
-  document_id: string | null;
+  /** Optional photo — requires V4 column on support_call_hardware_items */
+  document_id?: string | null;
   created_by: string | null;
   created_at: string;
 };
