@@ -74,11 +74,9 @@ export function resolveWorkflowStage(
     return { stage: 'awaiting_dependency', nextAction: 'Follow up on the outstanding dependency' };
   }
   if (flags.contributionsOutstanding) {
-    return { stage: 'technical_pending', nextAction: 'Assignees to submit Technical Work / Job Card' };
+    return { stage: 'technical_pending', nextAction: 'Assignees to COMPLETE MY WORK (Technical Work / Job Card)' };
   }
-  if (flags.contributionsAwaitingReview) {
-    return { stage: 'technical_in_review', nextAction: 'Review submitted technical work' };
-  }
+  // submitted contributions are informational only — do not block job card / ticket close
   if (!flags.hasJobCard || flags.jobCardStatus === 'draft' || flags.jobCardStatus === 'superseded') {
     return { stage: 'job_card_pending', nextAction: 'Generate the job card' };
   }

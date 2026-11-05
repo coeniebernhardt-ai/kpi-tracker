@@ -29,7 +29,8 @@ async function getCurrentUser(request: NextRequest): Promise<{ id: string } | nu
   return tokenUser ? { id: tokenUser.id } : null;
 }
 
-const TICKET_LIST_COLUMNS = 'id, ticket_number, display_id, user_id, client, client_email, ticket_mailbox, issue, status, created_at';
+const TICKET_LIST_COLUMNS =
+  'id, ticket_number, display_id, user_id, client, client_email, ticket_mailbox, issue, status, created_at, location, estate_or_building, cml_location, onsite_location';
 
 export async function GET(request: NextRequest) {
   try {

@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { scFetch } from '../../lib/support-calls/client';
 import { useSupportCallRealtime } from '../../lib/support-calls/useSupportCallRealtime';
+import {
+  enqueueOutbox,
+  flushOutbox,
+  isNetworkError,
+  listOutbox,
+} from '../../lib/support-calls/offlineOutbox';
 import { INTERNAL_TRAVEL_RATE_ZAR } from '../../lib/support-calls/constants';
 import { formatLabourDisplay, minutesBetween, travelAmountZar } from '../../lib/support-calls/labour';
 import type {
@@ -74,6 +80,8 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
 
   const [summary, setSummary] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncLabel, setSyncLabel] = useState<'Synced' | 'Sync Pending' | 'Sync Failed' | 'Conflict Requires Review'>('Synced');
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -90,10 +98,67 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
   }, [load]);
 
   const scId = bundle?.support_call?.id ?? null;
+
+  const refreshOutbox = useCallback(() => {
+    if (!scId) return;
+    const items = listOutbox(scId);
+    setPendingCount(items.filter((i) => i.status === 'pending' || i.status === 'failed' || i.status === 'syncing').length);
+    if (items.some((i) => i.status === 'conflict')) setSyncLabel('Conflict Requires Review');
+    else if (items.some((i) => i.status === 'failed')) setSyncLabel('Sync Failed');
+    else if (items.some((i) => i.status === 'pending' || i.status === 'syncing')) setSyncLabel('Sync Pending');
+    else setSyncLabel('Synced');
+  }, [scId]);
+
+  useEffect(() => {
+    refreshOutbox();
+  }, [refreshOutbox]);
+
+  const tryFlush = useCallback(async () => {
+    if (!token || !scId) return;
+    const result = await flushOutbox({
+      accessToken: token,
+      supportCallId: scId,
+      post: async (path, body, headers) => {
+        await scFetch(`/api/support-calls/${scId}/${path}`, {
+          method: 'POST',
+          accessToken: token,
+          body: JSON.stringify(body),
+          headers,
+        });
+      },
+      onConflict: async (item) => {
+        try {
+          await scFetch(`/api/support-calls/${scId}/sync-conflicts`, {
+            method: 'POST',
+            accessToken: token,
+            body: JSON.stringify({
+              entity_type: item.path,
+              client_payload: item.body,
+              idempotency_key: item.idempotencyKey,
+            }),
+          });
+        } catch {
+          /* best-effort */
+        }
+      },
+    });
+    refreshOutbox();
+    if (result.synced > 0) await load();
+  }, [token, scId, refreshOutbox, load]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      void tryFlush();
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [tryFlush]);
+
   const { status: rtStatus } = useSupportCallRealtime({
     supportCallId: scId,
     ticketId,
     enabled: Boolean(scId),
+    role: 'member',
     pause: Boolean(busy) || showVisit || Boolean(summary.trim()),
     onChange: () => {
       void load();
@@ -125,6 +190,7 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
       await fn();
       if (ok) setMessage(ok);
       await load();
+      refreshOutbox();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -132,8 +198,29 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
     }
   };
 
-  const post = (path: string, body: unknown) =>
-    scFetch(`/api/support-calls/${sc.id}/${path}`, { method: 'POST', accessToken: token, body: JSON.stringify(body) });
+  const post = async (path: string, body: unknown) => {
+    try {
+      return await scFetch(`/api/support-calls/${sc.id}/${path}`, {
+        method: 'POST',
+        accessToken: token,
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      if ((path === 'visits' || path === 'contributions') && isNetworkError(e)) {
+        enqueueOutbox({
+          supportCallId: sc.id,
+          path,
+          body,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        refreshOutbox();
+        setSyncLabel('Sync Pending');
+        setMessage('Saved offline — will sync when connectivity returns');
+        return { queued: true };
+      }
+      throw e;
+    }
+  };
 
   const submitVisit = () =>
     run(
@@ -180,7 +267,12 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
       'Visit logged'
     );
 
-  const canContribute = isOpen && mine && (!latestContrib || latestContrib.status === 'draft' || latestContrib.status === 'returned');
+  const workDone = Boolean(mine?.work_completed_at);
+  const canContribute =
+    isOpen &&
+    mine &&
+    !workDone &&
+    (!latestContrib || latestContrib.status === 'draft' || latestContrib.status === 'returned');
 
   return (
     <div id="technical-work" className="mb-4 scroll-mt-24 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
@@ -206,6 +298,25 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
         <p><span className="text-slate-500">CML Location:</span> {sc.cml_location || '—'}</p>
         <p><span className="text-slate-500">On-site Location:</span> {sc.onsite_location || sc.site_name || '—'}</p>
       </div>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Sync:{' '}
+        <span
+          className={
+            syncLabel === 'Synced' && rtStatus === 'synced'
+              ? 'text-emerald-400'
+              : syncLabel === 'Conflict Requires Review'
+                ? 'text-rose-300'
+                : 'text-amber-300'
+          }
+        >
+          {pendingCount > 0 ? `${syncLabel} (${pendingCount})` : rtStatus === 'synced' ? 'Synced' : rtStatus === 'failed' ? 'Sync Failed — retrying…' : syncLabel}
+        </span>
+        {pendingCount > 0 && (
+          <button type="button" className="ml-2 text-cyan-300 underline" onClick={() => void tryFlush()}>
+            Retry sync
+          </button>
+        )}
+      </p>
 
       {error && <div className="mt-3"><Notice tone="error">{error}</Notice></div>}
       {message && <div className="mt-3"><Notice tone="success">{message}</Notice></div>}
@@ -358,13 +469,13 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
               )}
             </div>
             {latestContrib?.status === 'returned' && latestContrib.correction_notes && (
-              <div className="mt-2"><Notice tone="error">Returned for correction: {latestContrib.correction_notes}</Notice></div>
+              <div className="mt-2"><Notice tone="error">Correction requested: {latestContrib.correction_notes}</Notice></div>
             )}
-            {latestContrib?.status === 'submitted' && (
-              <p className="mt-2 text-xs text-slate-400">Submitted {fmtDateTime(latestContrib.submitted_at)} — awaiting review.</p>
-            )}
-            {latestContrib?.status === 'approved' && (
-              <p className="mt-2 text-xs text-emerald-300">Approved {fmtDateTime(latestContrib.reviewed_at)}.</p>
+            {workDone && (
+              <p className="mt-2 text-xs text-emerald-300">
+                Work completed {fmtDateTime(mine?.work_completed_at)}
+                {latestContrib?.status === 'approved' ? ' · HTO acknowledged' : ''}.
+              </p>
             )}
             {canContribute && (
               <div className="mt-3 space-y-3">
@@ -384,12 +495,13 @@ export default function SupportCallMemberPanel({ ticketId }: { ticketId: string 
                       await post('contributions', { summary, confirmed_accurate: true });
                       setSummary('');
                       setConfirmed(false);
-                    }, 'Technical work submitted for review')
+                    }, 'Your work is marked complete')
                   }
                 >
                   {busy === 'contrib' ? 'Submitting…' : 'COMPLETE MY WORK'}
                 </button>
-                {rtStatus === 'error' && (
+                <p className="text-[11px] text-slate-500">Requires at least one visit with arrival and departure times. No HTO approval needed.</p>
+                {rtStatus === 'failed' && (
                   <p className="text-[11px] text-amber-300">Live sync unavailable — refresh if data looks stale.</p>
                 )}
               </div>

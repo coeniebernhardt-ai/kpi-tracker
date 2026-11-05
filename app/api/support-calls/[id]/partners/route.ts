@@ -47,6 +47,23 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       return NextResponse.json({ partner: data });
     }
 
+    if (body.action === 'complete_work') {
+      if (!isUuid(body.partner_assignment_id)) return jsonError('partner_assignment_id is required', 400);
+      const { data, error } = await supabase
+        .from('support_call_partners')
+        .update({ work_completed_at: new Date().toISOString(), work_completed_by: auth.userId })
+        .eq('id', body.partner_assignment_id)
+        .eq('support_call_id', sc.id)
+        .is('work_completed_at', null)
+        .select('*')
+        .maybeSingle();
+      if (error) return dbError('partners.complete', error);
+      if (!data) return jsonError('Partner not found or work already marked complete', 409);
+      await ctx.audit('partner_work_completed', { related_id: data.id, new_value: { company_name: data.company_name } });
+      await recomputeWorkflowStage(supabase, sc.id);
+      return NextResponse.json({ partner: data });
+    }
+
     let snapshot: Record<string, unknown>;
     let isOnceOff = false;
 

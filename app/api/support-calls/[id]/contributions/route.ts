@@ -14,8 +14,8 @@ import { notifySupportCallUsers } from '@/app/lib/support-calls/notify';
 
 /**
  * POST /api/support-calls/[id]/contributions
- * An assignee submits their contribution. confirmed_accurate must be true.
- * A returned (or first) contribution creates a new revision; submitted/approved ones are locked.
+ * COMPLETE MY WORK: submit technical summary + mark assignment work_completed_at.
+ * HTO approval is NOT required for completion. HTO may later Request correction (return).
  */
 export async function POST(request: NextRequest, { params }: RouteCtx) {
   try {
@@ -26,15 +26,32 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     const supabase = auth.supabase;
 
     if (!assignment) {
-      return jsonError('Only assigned team members can submit a contribution', 403);
+      return jsonError('Only assigned team members can complete their work', 403);
+    }
+
+    if ((assignment as { work_completed_at?: string | null }).work_completed_at) {
+      return jsonError('Your work is already marked complete', 409);
     }
 
     const body = await readJson(request);
     const summary = cleanStr(body.summary, 20000);
     if (!summary) return jsonError('A summary of your work is required', 400);
     if (body.confirmed_accurate !== true) {
-      return jsonError('You must confirm that your contribution is accurate', 400);
+      return jsonError('You must confirm that your technical work is accurate', 400);
     }
+
+    // Require at least one internal visit with arrival/departure for this assignment
+    const { data: visits } = await supabase
+      .from('support_call_visits')
+      .select('id, arrived_at, departed_at, work_performed')
+      .eq('support_call_id', sc.id)
+      .eq('assignment_id', assignment.id)
+      .eq('party_type', 'internal');
+    const validVisits = (visits || []).filter((v: { arrived_at: string | null; departed_at: string | null }) => v.arrived_at && v.departed_at);
+    if (!validVisits.length) {
+      return jsonError('Log at least one visit with arrival and departure times before completing your work', 400);
+    }
+
     const payload_json =
       body.payload_json && typeof body.payload_json === 'object' && !Array.isArray(body.payload_json)
         ? body.payload_json
@@ -50,11 +67,8 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       | { id: string; revision: number; status: string }
       | undefined;
 
-    if (latest?.status === 'submitted') {
-      return jsonError('Your contribution is already awaiting review', 409);
-    }
-    if (latest?.status === 'approved') {
-      return jsonError('Your contribution has already been approved', 409);
+    if (latest?.status === 'submitted' || latest?.status === 'approved') {
+      return jsonError('Your work is already submitted', 409);
     }
 
     const now = new Date().toISOString();
@@ -79,6 +93,7 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       if (error) return dbError('contributions.update', error);
       contribution = data;
     } else {
+      // draft missing, returned, or first submit — new revision preserves history
       const { data, error } = await supabase
         .from('support_call_contributions')
         .insert({
@@ -93,30 +108,46 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       contribution = data;
     }
 
-    if (!assignment.first_submitted_at) {
-      await supabase
-        .from('support_call_assignments')
-        .update({ first_submitted_at: now, first_update_at: assignment.first_update_at ?? now })
-        .eq('id', assignment.id);
-    }
+    const { error: doneErr } = await supabase
+      .from('support_call_assignments')
+      .update({
+        work_completed_at: now,
+        work_completed_by: auth.userId,
+        first_submitted_at: assignment.first_submitted_at ?? now,
+        first_update_at: assignment.first_update_at ?? now,
+      })
+      .eq('id', assignment.id);
+    if (doneErr) return dbError('assignments.complete', doneErr);
 
-    await ctx.audit('contribution_submitted', {
+    await ctx.audit('member_work_completed', {
       related_id: contribution!.id as string,
-      new_value: { revision: contribution!.revision, status: 'submitted', confirmed_accurate: true },
+      new_value: {
+        revision: contribution!.revision,
+        status: 'submitted',
+        work_completed_at: now,
+        confirmed_accurate: true,
+      },
     });
 
     await notifySupportCallUsers(supabase, {
       userIds: [sc.hto_owner_id].filter((u) => u !== auth.userId),
       type: 'support_call_contribution_submitted',
-      title: `Contribution submitted on ${sc.support_call_number}`,
-      message: 'A team member submitted their contribution for review.',
+      title: `Work completed on ${sc.support_call_number}`,
+      message: 'A team member completed their technical work.',
       ticket_id: sc.ticket_id,
       triggering_user_id: auth.userId,
       triggering_user_role: notifyRole(auth),
     });
 
     const stage = await recomputeWorkflowStage(supabase, sc.id);
-    return NextResponse.json({ contribution, workflow: stage }, { status: 201 });
+    return NextResponse.json(
+      {
+        contribution,
+        assignment: { id: assignment.id, work_completed_at: now },
+        workflow: stage,
+      },
+      { status: 201 }
+    );
   } catch (e) {
     return handleRouteError('POST /support-calls/[id]/contributions', e);
   }

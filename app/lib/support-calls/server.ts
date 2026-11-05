@@ -522,7 +522,8 @@ export async function syncAssignments(
 /* -------------------------------------------------------------------------- */
 
 type FlagRows = {
-  assignments: { id: string; acknowledged_at: string | null }[];
+  assignments: { id: string; acknowledged_at: string | null; work_completed_at: string | null }[];
+  partners: { work_completed_at: string | null }[];
   visits: { visit_number: number; incomplete: boolean }[];
   quotes: { status: string }[];
   contributions: { assignment_id: string; revision: number; status: string }[];
@@ -544,13 +545,26 @@ export function computeWorkflowFlags(rows: FlagRows): WorkflowFlags {
       latestContribByAssignment.set(c.assignment_id, { revision: c.revision, status: c.status });
     }
   }
+
+  // Member work is complete when work_completed_at is set. HTO accept is optional oversight only.
   let contributionsOutstanding = false;
   let contributionsAwaitingReview = false;
   for (const a of rows.assignments) {
     const latest = latestContribByAssignment.get(a.id);
-    if (!latest || latest.status === 'draft' || latest.status === 'returned') contributionsOutstanding = true;
-    else if (latest.status === 'submitted') contributionsAwaitingReview = true;
+    if (!a.work_completed_at) {
+      contributionsOutstanding = true;
+      if (latest?.status === 'returned') {
+        /* still outstanding until they resubmit + complete */
+      }
+    }
+    // Informational only — does not block job card / ticket close
+    if (latest?.status === 'submitted' && a.work_completed_at) {
+      contributionsAwaitingReview = true;
+    }
   }
+
+  const partnersOutstanding =
+    rows.partners.length > 0 && rows.partners.some((p) => !p.work_completed_at);
 
   const lastVisit = [...rows.visits].sort((a, b) => b.visit_number - a.visit_number)[0];
 
@@ -560,7 +574,7 @@ export function computeWorkflowFlags(rows: FlagRows): WorkflowFlags {
     hasVisits: rows.visits.length > 0,
     hasOpenDependency: Boolean(lastVisit?.incomplete),
     hasPendingQuote: rows.quotes.some((q) => q.status === 'pending'),
-    contributionsOutstanding,
+    contributionsOutstanding: contributionsOutstanding || partnersOutstanding,
     contributionsAwaitingReview,
     hasJobCard: Boolean(latestJobCard),
     jobCardStatus: (latestJobCard?.status as WorkflowFlags['jobCardStatus']) ?? null,
@@ -572,8 +586,12 @@ export function computeWorkflowFlags(rows: FlagRows): WorkflowFlags {
 }
 
 export async function loadFlagRows(supabase: SupabaseClient, scId: string): Promise<FlagRows> {
-  const [assignments, visits, quotes, contributions, jobCards, exceptions, finance] = await Promise.all([
-    supabase.from('support_call_assignments').select('id, acknowledged_at').eq('support_call_id', scId),
+  const [assignments, partners, visits, quotes, contributions, jobCards, exceptions, finance] = await Promise.all([
+    supabase
+      .from('support_call_assignments')
+      .select('id, acknowledged_at, work_completed_at')
+      .eq('support_call_id', scId),
+    supabase.from('support_call_partners').select('work_completed_at').eq('support_call_id', scId),
     supabase.from('support_call_visits').select('visit_number, incomplete').eq('support_call_id', scId),
     supabase.from('support_call_quotes').select('status').eq('support_call_id', scId),
     supabase.from('support_call_contributions').select('assignment_id, revision, status').eq('support_call_id', scId),
@@ -583,6 +601,7 @@ export async function loadFlagRows(supabase: SupabaseClient, scId: string): Prom
   ]);
   return {
     assignments: (assignments.data || []) as FlagRows['assignments'],
+    partners: (partners.data || []) as FlagRows['partners'],
     visits: (visits.data || []) as FlagRows['visits'],
     quotes: (quotes.data || []) as FlagRows['quotes'],
     contributions: (contributions.data || []) as FlagRows['contributions'],

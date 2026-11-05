@@ -2187,7 +2187,15 @@ export default function DashboardPage() {
                             </span>
                           </div>
                           <p className="text-white font-medium truncate" title={ticket.issue}>{ticket.issue}</p>
-                          <p className="text-sm text-slate-400 truncate">{ticket.client_email ?? ticket.client ?? '—'}</p>
+                          <div className="mt-2 grid gap-0.5 text-xs text-slate-300 sm:grid-cols-2">
+                            <p><span className="text-slate-500">Client:</span> {ticket.client || '—'}</p>
+                            <p><span className="text-slate-500">Estate / Building:</span> {ticket.estate_or_building || '—'}</p>
+                            <p><span className="text-slate-500">CML Location:</span> {ticket.cml_location || '—'}</p>
+                            <p><span className="text-slate-500">On-site Location:</span> {ticket.onsite_location || '—'}</p>
+                          </div>
+                          {ticket.client_email && (
+                            <p className="mt-1 text-sm text-slate-400 truncate">{ticket.client_email}</p>
+                          )}
                           <p className="text-xs text-slate-500">
                             {ticket.created_at ? new Date(ticket.created_at).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : ''}
                           </p>
@@ -2300,23 +2308,15 @@ export default function DashboardPage() {
                         <span className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs">
                           {ticket.client}
                         </span>
-                        {ticket.estate_or_building ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
-                            {ticket.estate_or_building}
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs opacity-50">
-                            No Estate/Building
-                          </span>
-                        )}
-                        {ticket.cml_location ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">CML: {ticket.cml_location}</span>
-                        ) : null}
-                        {(ticket.onsite_location || (ticket.location === 'on-site' && ticket.estate_or_building)) ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
-                            On-site: {ticket.onsite_location || '—'}
-                          </span>
-                        ) : null}
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
+                          Estate: {ticket.estate_or_building || '—'}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">
+                          CML: {ticket.cml_location || '—'}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700/70 text-slate-300 text-xs">
+                          On-site: {ticket.onsite_location || '—'}
+                        </span>
                         {ticket.severity && (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
                             {ticket.severity}
@@ -2979,21 +2979,15 @@ export default function DashboardPage() {
                         <span className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-400 text-xs">
                           {ticket.client}
                         </span>
-                        {ticket.estate_or_building ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
-                            {ticket.estate_or_building}
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/30 text-slate-500 text-xs opacity-50">
-                            No Estate/Building
-                          </span>
-                        )}
-                        {ticket.cml_location ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">CML: {ticket.cml_location}</span>
-                        ) : null}
-                        {ticket.onsite_location ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">On-site: {ticket.onsite_location}</span>
-                        ) : null}
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
+                          Estate: {ticket.estate_or_building || '—'}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs">
+                          CML: {ticket.cml_location || '—'}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 text-xs">
+                          On-site: {ticket.onsite_location || '—'}
+                        </span>
                         {ticket.severity && (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${getSeverityColor(ticket.severity)}`}>
                             {ticket.severity}

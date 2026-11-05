@@ -66,8 +66,7 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     if (!flags.hasVisits) blockers.push('No visit has been logged');
     if (flags.hasOpenDependency) blockers.push('The latest visit is marked incomplete (open dependency)');
     if (flags.hasPendingQuote) blockers.push('A quote decision is pending');
-    if (flags.contributionsOutstanding) blockers.push('Not every assignee has submitted a contribution');
-    if (flags.contributionsAwaitingReview) blockers.push('A submitted contribution still needs review');
+    if (flags.contributionsOutstanding) blockers.push('Not every assignee (and partner, if any) has completed their work');
     if (blockers.length) {
       return jsonError('Job card cannot be generated yet', 409, { code: 'GATE_BLOCKED', blockers });
     }

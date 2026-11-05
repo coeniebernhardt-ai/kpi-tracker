@@ -32,8 +32,7 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
     if (!f.hasVisits) blockers.push('No visit has been logged');
     if (f.hasOpenDependency) blockers.push('The latest visit is marked incomplete (open dependency)');
     if (f.hasPendingQuote) blockers.push('A quote decision is still pending');
-    if (f.contributionsOutstanding) blockers.push('Not every assignee has an accepted contribution');
-    if (f.contributionsAwaitingReview) blockers.push('A submitted contribution still needs review');
+    if (f.contributionsOutstanding) blockers.push('Not every assignee (and partner, if any) has completed their work');
     if (!f.hasJobCard) blockers.push('No job card has been generated');
     else if (f.jobCardStatus !== 'signed' && !f.hasSignatureException) {
       blockers.push('Job card is not signed and no Signature Not Obtained exception is recorded');

@@ -90,6 +90,8 @@ export type SupportCallAssignment = {
   started_work_at: string | null;
   first_update_at: string | null;
   first_submitted_at: string | null;
+  work_completed_at: string | null;
+  work_completed_by: string | null;
 };
 
 export type SupportCallPartner = {
@@ -106,6 +108,8 @@ export type SupportCallPartner = {
   assigned_by: string | null;
   assigned_at: string;
   arrival_confirmed_at: string | null;
+  work_completed_at: string | null;
+  work_completed_by: string | null;
   arrival_confirmed_by: string | null;
 };
 

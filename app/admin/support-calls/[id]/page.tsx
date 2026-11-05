@@ -107,33 +107,66 @@ const assigneeName = (b: Bundle, assignmentId: string | null) => {
 /* Layout helpers                                                             */
 /* -------------------------------------------------------------------------- */
 
+type StepMode = 'completed' | 'current' | 'future' | 'optional';
+
 function Section({
   n,
   title,
   chip,
-  defaultOpen = false,
+  mode = 'optional',
+  meta,
   children,
 }: {
   n: number;
   title: string;
   chip?: ReactNode;
-  defaultOpen?: boolean;
+  mode?: StepMode;
+  meta?: string | null;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(mode === 'current' || mode === 'optional');
+  useEffect(() => {
+    if (mode === 'current') setOpen(true);
+    else if (mode === 'future') setOpen(false);
+  }, [mode]);
+
+  const border =
+    mode === 'current'
+      ? 'border-cyan-500/40 bg-slate-900'
+      : mode === 'completed'
+        ? 'border-emerald-500/25 bg-slate-900/80'
+        : 'border-slate-800 bg-slate-900/60';
+  const badge =
+    mode === 'completed' ? (
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-sm text-emerald-300">✓</span>
+    ) : mode === 'current' ? (
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-slate-950">{n}</span>
+    ) : (
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-500">{n}</span>
+    );
+
   return (
-    <section className="rounded-3xl border border-slate-800 bg-slate-900/80">
+    <section className={`rounded-3xl border ${border}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left">
-        <span className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/15 text-xs font-semibold text-cyan-300">{n}</span>
-          <span className="text-base font-semibold text-white">{title}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          {badge}
+          <span className="min-w-0">
+            <span className="block text-base font-semibold text-white">{title}</span>
+            {meta && <span className="block text-xs text-slate-500">{meta}</span>}
+            {mode === 'future' && <span className="block text-xs text-slate-600">Locked — complete the current step first</span>}
+            {mode === 'current' && <span className="block text-xs text-cyan-300">Current step — action required</span>}
+          </span>
         </span>
         <span className="flex items-center gap-3">
           {chip}
           <span className="text-slate-500">{open ? '▾' : '▸'}</span>
         </span>
       </button>
-      {open && <div className="space-y-4 border-t border-slate-800 px-5 py-5">{children}</div>}
+      {open && (
+        <div className={`space-y-4 border-t border-slate-800 px-5 py-5 ${mode === 'future' ? 'pointer-events-none opacity-50' : ''}`}>
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -564,16 +597,28 @@ function PartnersSection(p: SectionProps) {
             <span className="font-medium text-white">
               {x.company_name} {x.is_once_off && <Badge tone="violet">Once-off</Badge>}
             </span>
-            {x.arrival_confirmed_at ? (
-              <Badge tone="emerald">Arrived {fmtDateTime(x.arrival_confirmed_at)}</Badge>
-            ) : (
-              !p.locked && (
-                <button type="button" className={btnGhost} disabled={p.busy === `arr-${x.id}`}
-                  onClick={() => void p.call(`arr-${x.id}`, () => api(p, 'partners', { action: 'confirm_arrival', partner_assignment_id: x.id }), 'Arrival confirmed')}>
-                  Confirm arrival
-                </button>
-              )
-            )}
+            <span className="flex flex-wrap gap-2">
+              {x.arrival_confirmed_at ? (
+                <Badge tone="emerald">Arrived {fmtDateTime(x.arrival_confirmed_at)}</Badge>
+              ) : (
+                !p.locked && (
+                  <button type="button" className={btnGhost} disabled={p.busy === `arr-${x.id}`}
+                    onClick={() => void p.call(`arr-${x.id}`, () => api(p, 'partners', { action: 'confirm_arrival', partner_assignment_id: x.id }), 'Arrival confirmed')}>
+                    Confirm arrival
+                  </button>
+                )
+              )}
+              {x.work_completed_at ? (
+                <Badge tone="emerald">Work complete {fmtDateTime(x.work_completed_at)}</Badge>
+              ) : (
+                !p.locked && x.arrival_confirmed_at && (
+                  <button type="button" className={btnGhost} disabled={p.busy === `pwd-${x.id}`}
+                    onClick={() => void p.call(`pwd-${x.id}`, () => api(p, 'partners', { action: 'complete_work', partner_assignment_id: x.id }), 'Partner work marked complete')}>
+                    Mark partner work complete
+                  </button>
+                )
+              )}
+            </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
             {[x.contact_person, x.telephone, x.email, x.category].filter(Boolean).join(' · ') || 'No contact details'}
@@ -827,10 +872,17 @@ function VisitsSection(p: SectionProps) {
 function TechnicalReviewBlock(p: SectionProps) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   if (p.b.assignments.length === 0) return null;
+  const allDone = p.b.assignments.every((a) => a.work_completed_at);
+  const partnersDone = p.b.partners.length === 0 || p.b.partners.every((x) => (x as { work_completed_at?: string | null }).work_completed_at);
   return (
     <div className="space-y-3 border-t border-slate-800 pt-4">
       <p className="text-sm font-medium text-white">Technical work submissions</p>
-      <p className="text-xs text-slate-500">Technicians submit from their ticket Technical Work / Job Card. Review here.</p>
+      <p className="text-xs text-slate-500">
+        Technicians COMPLETE MY WORK from their ticket. No HTO approval is required for completion — use Request correction only if needed.
+      </p>
+      {allDone && partnersDone && (
+        <Notice tone="success">READY FOR HTO TICKET CLOSURE — all applicable work is complete. Close the ticket when ready; the Support Call stays open for job card / finance.</Notice>
+      )}
       {p.b.assignments.map((a) => {
         const mine = p.b.contributions.filter((c) => c.assignment_id === a.id).sort((x, y) => y.revision - x.revision);
         const latest = mine[0];
@@ -838,29 +890,28 @@ function TechnicalReviewBlock(p: SectionProps) {
           <Card key={a.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-white">{nameOf(p.b, a.member_id)}</span>
-              {latest ? (
-                <Badge tone={latest.status === 'approved' ? 'emerald' : latest.status === 'returned' ? 'amber' : latest.status === 'submitted' ? 'blue' : 'slate'}>
-                  {latest.status} · rev {latest.revision}
-                </Badge>
-              ) : (
-                <Badge tone="slate">Not submitted</Badge>
-              )}
+              <span className="flex flex-wrap gap-2">
+                {a.work_completed_at ? (
+                  <Badge tone="emerald">Completed {fmtDateTime(a.work_completed_at)}</Badge>
+                ) : (
+                  <Badge tone="amber">Not completed</Badge>
+                )}
+                {latest && (
+                  <Badge tone={latest.status === 'approved' ? 'emerald' : latest.status === 'returned' ? 'amber' : latest.status === 'submitted' ? 'blue' : 'slate'}>
+                    {latest.status} · rev {latest.revision}
+                  </Badge>
+                )}
+              </span>
             </div>
             {latest?.summary && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-300">{latest.summary}</p>}
             {latest?.correction_notes && <p className="mt-1 text-xs text-amber-300">Correction notes: {latest.correction_notes}</p>}
-            {latest?.status === 'submitted' && !p.locked && (
+            {latest && (latest.status === 'submitted' || latest.status === 'approved') && a.work_completed_at && !p.locked && (
               <div className="mt-3 space-y-2">
-                <input className={inputCls} placeholder="Correction notes (required when returning)" value={notes[latest.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [latest.id]: e.target.value }))} />
-                <div className="flex gap-2">
-                  <button type="button" className={btnPrimary} disabled={p.busy === `rev-${latest.id}`}
-                    onClick={() => void p.call(`rev-${latest.id}`, () => api(p, 'contributions/review', { contribution_id: latest.id, action: 'accept' }), 'Technical work accepted')}>
-                    Accept
-                  </button>
-                  <button type="button" className={btnDanger} disabled={!(notes[latest.id] ?? '').trim() || p.busy === `rev-${latest.id}`}
-                    onClick={() => void p.call(`rev-${latest.id}`, () => api(p, 'contributions/review', { contribution_id: latest.id, action: 'return', correction_notes: notes[latest.id] }), 'Returned to technician')}>
-                    Return
-                  </button>
-                </div>
+                <input className={inputCls} placeholder="Correction notes (required)" value={notes[latest.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [latest.id]: e.target.value }))} />
+                <button type="button" className={btnDanger} disabled={!(notes[latest.id] ?? '').trim() || p.busy === `rev-${latest.id}`}
+                  onClick={() => void p.call(`rev-${latest.id}`, () => api(p, 'contributions/review', { contribution_id: latest.id, action: 'return', correction_notes: notes[latest.id] }), 'Correction requested')}>
+                  Request correction
+                </button>
               </div>
             )}
           </Card>
@@ -1315,7 +1366,6 @@ export default function SupportCallDetailPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [newLink, setNewLink] = useState<{ url: string; expires_at: string } | null>(null);
   const [toast, setToast] = useState<{ tone: 'success' | 'error' | 'warning'; text: string } | null>(null);
@@ -1353,20 +1403,13 @@ export default function SupportCallDetailPage() {
   const call: CallFn = useCallback(
     async (key, fn, ok) => {
       setBusy(key);
-      setError(null);
-      setMessage(null);
       try {
         await fn();
-        if (ok) {
-          setMessage(ok);
-          setToast({ tone: 'success', text: ok });
-        }
+        if (ok) setToast({ tone: 'success', text: ok });
         await reload();
         return true;
       } catch (e) {
-        const msg = errorMessage(e);
-        setError(msg);
-        setToast({ tone: 'error', text: msg });
+        setToast({ tone: 'error', text: errorMessage(e) });
         return false;
       } finally {
         setBusy(null);
@@ -1381,6 +1424,7 @@ export default function SupportCallDetailPage() {
     supportCallId: id,
     ticketId: b?.support_call?.ticket_id ?? null,
     enabled: Boolean(id && canManageSupportCalls),
+    role: 'manager',
     pause: Boolean(busy),
     onChange: () => {
       void reload();
@@ -1435,8 +1479,8 @@ export default function SupportCallDetailPage() {
               HTO owner {nameOf(b, sc.hto_owner_id)} · created {fmtDateTime(sc.created_at)}
               {b.ticket && <> · Ticket <span className="text-slate-300">{b.ticket.ticket_number}</span> <Badge tone={b.ticket.status === 'pending' ? 'amber' : b.ticket.status === 'closed' ? 'slate' : 'cyan'}>{b.ticket.status}</Badge></>}
               {' · '}
-              <span className={rtStatus === 'live' ? 'text-emerald-400' : rtStatus === 'error' ? 'text-amber-300' : 'text-slate-500'}>
-                {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Sync offline' : rtStatus === 'connecting' ? 'Connecting…' : 'Manual refresh'}
+              <span className={rtStatus === 'synced' ? 'text-emerald-400' : rtStatus === 'failed' ? 'text-amber-300' : rtStatus === 'pending' || rtStatus === 'connecting' ? 'text-cyan-300' : 'text-slate-500'}>
+                {rtStatus === 'synced' ? 'Synced' : rtStatus === 'failed' ? 'Sync failed — retrying…' : rtStatus === 'pending' ? 'Sync pending…' : rtStatus === 'connecting' ? 'Connecting…' : 'Manual refresh'}
               </span>
             </p>
           </div>
@@ -1454,7 +1498,7 @@ export default function SupportCallDetailPage() {
 
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-xl ${
+          className={`fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-xl ${
             toast.tone === 'success'
               ? 'border-emerald-500/40 bg-emerald-950/95 text-emerald-100'
               : toast.tone === 'warning'
@@ -1463,47 +1507,107 @@ export default function SupportCallDetailPage() {
           }`}
           role="status"
         >
-          {toast.text}
+          <p className="flex-1 whitespace-pre-line">{toast.text}</p>
+          <button type="button" className="shrink-0 text-xs opacity-70 hover:opacity-100" onClick={() => setToast(null)}>
+            Dismiss
+          </button>
         </div>
       )}
       <Locked locked={locked} />
 
-      <Section n={1} title="Intake & site" defaultOpen chip={<Badge tone="slate">{sc.reporter_name || 'Reporter n/a'}</Badge>}>
-        <IntakeSection key={sc.updated_at} {...sp} />
-      </Section>
-      <Section n={2} title="Assignment" defaultOpen={!f.hasAssignments} chip={chip(Boolean(f.hasAssignments), `${b.assignments.length} assigned`, 'Unassigned')}>
-        <AssignSection key={b.assignments.map((a) => `${a.member_id}${a.is_lead}`).join('|')} {...sp} />
-      </Section>
-      <Section n={3} title="Customer communication" chip={chip(sc.initial_notification_status === 'complete', 'Customer notified', `Initial: ${sc.initial_notification_status}`)}>
-        <CommunicationsSection {...sp} />
-      </Section>
-      <Section n={4} title="ETA" chip={<Badge tone={sc.eta_notification_status === 'complete' ? 'emerald' : 'slate'}>ETA notice: {sc.eta_notification_status}</Badge>}>
-        <EtaSection {...sp} />
-      </Section>
-      <Section n={5} title="Partners" chip={<Badge tone="slate">{b.partners.length}</Badge>}>
-        <PartnersSection {...sp} />
-      </Section>
-      <Section n={6} title="Technical Work / Job Card" defaultOpen={Boolean(f.hasAssignments) && !f.hasVisits} chip={chip(!f.contributionsOutstanding && !f.contributionsAwaitingReview && Boolean(f.hasAssignments), `${b.visits.length} visit(s) · approved`, f.contributionsAwaitingReview ? 'Needs review' : `${b.visits.length} visit(s)`)}>
-        <VisitsSection {...sp} />
-      </Section>
-      <Section n={7} title="Quotes" chip={<Badge tone={f.hasPendingQuote ? 'amber' : 'slate'}>{f.hasPendingQuote ? 'Decision pending' : `${b.quotes.length} quote(s)`}</Badge>}>
-        <QuotesSection {...sp} />
-      </Section>
-      <Section n={8} title="Documents" chip={<Badge tone="slate">{b.documents.length}</Badge>}>
-        <DocumentsSection {...sp} />
-      </Section>
-      <Section n={9} title="Job card & signature" chip={chip(f.jobCardStatus === 'signed' || Boolean(f.hasSignatureException), 'Signed / excepted', f.hasJobCard ? 'Awaiting signature' : 'Not generated')}>
-        <JobCardSection {...sp} newLink={newLink} setNewLink={setNewLink} />
-      </Section>
-      <Section n={10} title="Finance handover" chip={chip(Boolean(f.financeSent), 'Sent', 'Not sent')}>
-        <FinanceSection {...sp} />
-      </Section>
-      <Section n={11} title="Close or cancel" defaultOpen={b.workflow.stage === 'ready_for_finance' && Boolean(f.financeSent)}>
-        <CloseSection {...sp} />
-      </Section>
-      <Section n={12} title="Audit trail">
-        <AuditSection id={sc.id} token={token} version={version} />
-      </Section>
+      {(() => {
+        const intakeDone = sc.overall_status !== 'draft';
+        const commsDone = sc.initial_notification_status !== 'pending';
+        const assignDone = Boolean(f.hasAssignments);
+        const techDone = assignDone && !f.contributionsOutstanding;
+        const quotesDone = !f.hasPendingQuote;
+        const signDone = f.jobCardStatus === 'signed' || Boolean(f.hasSignatureException);
+        const financeDone = Boolean(f.financeSent);
+        const closeDone = sc.overall_status === 'closed' || sc.overall_status === 'cancelled';
+
+        const ordered: { key: string; done: boolean; skip?: boolean }[] = [
+          { key: 'intake', done: intakeDone },
+          { key: 'comms', done: commsDone },
+          { key: 'assign', done: assignDone },
+          { key: 'partners', done: true, skip: true }, // optional support step
+          { key: 'tech', done: techDone },
+          { key: 'quotes', done: quotesDone, skip: b.quotes.length === 0 && !f.hasPendingQuote },
+          { key: 'docs', done: true, skip: true },
+          { key: 'jobcard', done: signDone },
+          { key: 'finance', done: financeDone },
+          { key: 'close', done: closeDone },
+          { key: 'audit', done: true, skip: true },
+        ];
+
+        let foundCurrent = false;
+        const modeOf = (key: string, done: boolean, skip?: boolean): StepMode => {
+          if (skip) return 'optional';
+          if (locked || closeDone) return done ? 'completed' : 'optional';
+          if (done) return 'completed';
+          if (!foundCurrent) {
+            foundCurrent = true;
+            return 'current';
+          }
+          return 'future';
+        };
+
+        const modes: Record<string, StepMode> = {};
+        for (const s of ordered) modes[s.key] = modeOf(s.key, s.done, s.skip);
+
+        const lockedSp = (key: string): SectionProps => ({
+          ...sp,
+          locked: locked || modes[key] === 'future',
+        });
+
+        return (
+          <>
+            <Section n={1} title="Intake & site" mode={modes.intake} meta={intakeDone ? `Updated ${fmtDateTime(sc.updated_at)}` : null} chip={<Badge tone="slate">{sc.reporter_name || 'Reporter n/a'}</Badge>}>
+              <IntakeSection key={sc.updated_at} {...lockedSp('intake')} />
+            </Section>
+            <Section n={2} title="Customer communication" mode={modes.comms} meta={`Initial: ${sc.initial_notification_status}`} chip={chip(sc.initial_notification_status === 'complete', 'Customer notified', `Initial: ${sc.initial_notification_status}`)}>
+              <CommunicationsSection {...lockedSp('comms')} />
+            </Section>
+            <Section n={3} title="Assignment" mode={modes.assign} meta={assignDone ? `${b.assignments.length} assigned` : 'Unassigned'} chip={chip(Boolean(f.hasAssignments), `${b.assignments.length} assigned`, 'Unassigned')}>
+              <AssignSection key={b.assignments.map((a) => `${a.member_id}${a.is_lead}`).join('|')} {...lockedSp('assign')} />
+            </Section>
+            <Section n={4} title="Partners" mode={modes.partners} chip={<Badge tone="slate">{b.partners.length}</Badge>}>
+              <PartnersSection {...sp} />
+            </Section>
+            <Section n={5} title="ETA" mode="optional" chip={<Badge tone={sc.eta_notification_status === 'complete' ? 'emerald' : 'slate'}>ETA notice: {sc.eta_notification_status}</Badge>}>
+              <EtaSection {...sp} />
+            </Section>
+            <Section
+              n={6}
+              title="Technical Work / Job Card"
+              mode={modes.tech}
+              meta={techDone ? 'All applicable work complete — READY FOR HTO TICKET CLOSURE' : 'Awaiting COMPLETE MY WORK'}
+              chip={chip(techDone, `${b.visits.length} visit(s) · complete`, `${b.visits.length} visit(s)`)}
+            >
+              <VisitsSection {...lockedSp('tech')} />
+            </Section>
+            {(b.quotes.length > 0 || f.hasPendingQuote) && (
+              <Section n={7} title="Quotes" mode={modes.quotes} chip={<Badge tone={f.hasPendingQuote ? 'amber' : 'slate'}>{f.hasPendingQuote ? 'Decision pending' : `${b.quotes.length} quote(s)`}</Badge>}>
+                <QuotesSection {...lockedSp('quotes')} />
+              </Section>
+            )}
+            <Section n={8} title="Documents" mode={modes.docs} chip={<Badge tone="slate">{b.documents.length}</Badge>}>
+              <DocumentsSection {...sp} />
+            </Section>
+            <Section n={9} title="Job card & signature" mode={modes.jobcard} chip={chip(signDone, 'Signed / excepted', f.hasJobCard ? 'Awaiting signature' : 'Not generated')}>
+              <JobCardSection {...lockedSp('jobcard')} newLink={newLink} setNewLink={setNewLink} />
+            </Section>
+            <Section n={10} title="Finance handover" mode={modes.finance} chip={chip(Boolean(f.financeSent), 'Sent', 'Not sent')}>
+              <FinanceSection {...lockedSp('finance')} />
+            </Section>
+            <Section n={11} title="Close or cancel" mode={modes.close} chip={chip(closeDone, sc.overall_status, 'Open')}>
+              <CloseSection {...lockedSp('close')} />
+            </Section>
+            <Section n={12} title="Audit trail" mode="optional">
+              <AuditSection id={sc.id} token={token} version={version} />
+            </Section>
+          </>
+        );
+      })()}
 
       <p className="pb-6 text-center text-[11px] text-slate-600">
         Internal travel is reimbursed at R{INTERNAL_TRAVEL_RATE_ZAR.toFixed(2)}/km. Labour is recorded in minutes only; no labour fee is calculated.

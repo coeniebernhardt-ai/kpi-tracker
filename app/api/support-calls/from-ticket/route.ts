@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     const { data: ticket } = await supabase
       .from('tickets')
       .select(
-        'id, ticket_number, status, client, issue, severity, location, estate_or_building, cml_location, client_email, assigned_to_array, user_id, created_at'
+        'id, ticket_number, status, client, issue, severity, location, estate_or_building, cml_location, onsite_location, client_email, assigned_to_array, user_id, created_at'
       )
       .eq('id', body.ticket_id)
       .maybeSingle();
@@ -121,6 +121,8 @@ export async function POST(request: NextRequest) {
           location,
           estate_or_building: (v.estate_or_building as string | null) ?? ticket.estate_or_building ?? null,
           cml_location: (v.cml_location as string | null) ?? ticket.cml_location ?? null,
+          onsite_location: (v.onsite_location as string | null) ?? (ticket as { onsite_location?: string | null }).onsite_location ?? null,
+          site_name: (v.onsite_location as string | null) ?? (ticket as { onsite_location?: string | null }).onsite_location ?? null,
           reporter_email: (v.reporter_email as string | null) ?? ticket.client_email ?? null,
           overall_status: 'open',
           workflow_stage: 'awaiting_assignment',

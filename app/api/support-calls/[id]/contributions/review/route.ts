@@ -35,7 +35,8 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       return jsonError('Explain what needs correcting (correction_notes)', 400);
     }
 
-    const { data: updated, error } = await auth.supabase
+    // Correction may be requested on submitted or previously approved work
+    let query = auth.supabase
       .from('support_call_contributions')
       .update({
         status: action === 'accept' ? 'approved' : 'returned',
@@ -44,16 +45,25 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
         correction_notes: action === 'return' ? notes : undefined,
       })
       .eq('id', body.contribution_id)
-      .eq('support_call_id', sc.id)
-      .eq('status', 'submitted')
-      .select('*')
-      .maybeSingle();
+      .eq('support_call_id', sc.id);
+    if (action === 'return') query = query.in('status', ['submitted', 'approved']);
+    else query = query.eq('status', 'submitted');
+
+    const { data: updated, error } = await query.select('*').maybeSingle();
     if (error) return jsonError(error.message, 500);
     if (!updated) {
-      return jsonError('Contribution not found or no longer awaiting review', 409);
+      return jsonError('Contribution not found or cannot be reviewed in its current state', 409);
     }
 
-    await ctx.audit(action === 'accept' ? 'contribution_approved' : 'contribution_returned', {
+    if (action === 'return') {
+      // Re-open member work so they can correct and COMPLETE MY WORK again
+      await auth.supabase
+        .from('support_call_assignments')
+        .update({ work_completed_at: null, work_completed_by: null })
+        .eq('id', updated.assignment_id);
+    }
+
+    await ctx.audit(action === 'accept' ? 'contribution_approved' : 'contribution_correction_requested', {
       related_id: updated.id,
       previous_value: { status: 'submitted' },
       new_value: { status: updated.status, revision: updated.revision },
@@ -70,8 +80,8 @@ export async function POST(request: NextRequest, { params }: RouteCtx) {
       await notifySupportCallUsers(auth.supabase, {
         userIds: [owner.member_id],
         type: 'support_call_contribution_returned',
-        title: `Contribution returned on ${sc.support_call_number}`,
-        message: notes || 'Your contribution needs corrections.',
+        title: `Correction requested on ${sc.support_call_number}`,
+        message: notes || 'Your technical work needs corrections. Please update and COMPLETE MY WORK again.',
         ticket_id: sc.ticket_id,
         triggering_user_id: auth.userId,
         triggering_user_role: notifyRole(auth),
